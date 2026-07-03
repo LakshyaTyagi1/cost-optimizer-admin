@@ -336,6 +336,14 @@ export async function deleteDataDictionaryTechStack(toolId: string) {
   return getId(tool);
 }
 
+export async function deleteAllDataDictionaryTechStack() {
+  const result = await fetchApi<{ deletedCount?: number }>(`${adminBasePath}/tech-stack`, {
+    method: "DELETE",
+  });
+
+  return Number(result.deletedCount || 0);
+}
+
 export async function updateDataDictionaryProcess(payload: {
   process: DictionaryProcess;
   values: DataDictionaryProcessPayload;

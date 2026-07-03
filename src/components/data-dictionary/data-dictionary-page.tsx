@@ -48,6 +48,7 @@ import {
   deleteDataDictionaryProcess,
   deleteDataDictionaryIndustry,
   deleteDataDictionaryProcessLibrary,
+  deleteAllDataDictionaryTechStack,
   deleteDataDictionaryTechStack,
   fetchDataDictionary,
   reorderDataDictionaryDomains,
@@ -195,8 +196,12 @@ export function DataDictionaryPage() {
   const [toolActionId, setToolActionId] = useState("");
   const [editingTool, setEditingTool] = useState<TechStackTool | null>(null);
   const [toolDeleteTarget, setToolDeleteTarget] = useState<TechStackTool | null>(null);
+  const [isDeleteAllToolsOpen, setIsDeleteAllToolsOpen] = useState(false);
+  const [techStackToasts, setTechStackToasts] = useState<ReorderToastState[]>([]);
   const [expandedProcessId, setExpandedProcessId] = useState(initialExpandedProcessId);
   const [dictionaryError, setDictionaryError] = useState("");
+  const techStackToastIdRef = useRef(0);
+  const techStackToastTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const {
     data: dictionaryData,
     error: dictionaryQueryError,
@@ -255,6 +260,9 @@ export function DataDictionaryPage() {
   });
   const deleteTechStackMutation = useMutation({
     mutationFn: deleteDataDictionaryTechStack,
+  });
+  const deleteAllTechStackMutation = useMutation({
+    mutationFn: deleteAllDataDictionaryTechStack,
   });
   const industries = dictionaryData?.industries ?? emptyIndustries;
   const domains = dictionaryData?.domains ?? emptyDomains;
@@ -350,6 +358,51 @@ export function DataDictionaryPage() {
       return matchesSearch && matchesScope;
     });
   }, [toolScopeFilter, toolSearch, tools]);
+
+  useEffect(() => {
+    const toastTimeouts = techStackToastTimeoutsRef.current;
+
+    return () => {
+      toastTimeouts.forEach((timeout) => clearTimeout(timeout));
+      toastTimeouts.clear();
+    };
+  }, []);
+
+  function clearTechStackToastTimeout(toastId: string) {
+    const toastTimeout = techStackToastTimeoutsRef.current.get(toastId);
+
+    if (toastTimeout) {
+      clearTimeout(toastTimeout);
+      techStackToastTimeoutsRef.current.delete(toastId);
+    }
+  }
+
+  function scheduleTechStackToastDismiss(toastId: string, tone: ReorderToastState["tone"]) {
+    clearTechStackToastTimeout(toastId);
+
+    if (tone === "processing") {
+      return;
+    }
+
+    const toastTimeout = setTimeout(() => {
+      setTechStackToasts((currentToasts) =>
+        currentToasts.filter((toast) => toast.id !== toastId),
+      );
+      techStackToastTimeoutsRef.current.delete(toastId);
+    }, 4400);
+
+    techStackToastTimeoutsRef.current.set(toastId, toastTimeout);
+  }
+
+  function showTechStackToast(message: string, tone: ReorderToastState["tone"]) {
+    techStackToastIdRef.current += 1;
+    const toastId = `tech-stack-toast-${techStackToastIdRef.current}`;
+
+    setTechStackToasts((currentToasts) =>
+      [{ id: toastId, message, tone }, ...currentToasts].slice(0, 3),
+    );
+    scheduleTechStackToastDismiss(toastId, tone);
+  }
 
   async function handleAddIndustry() {
     const name = toDisplayName(industryName);
@@ -683,6 +736,7 @@ export function DataDictionaryPage() {
     const vendor = toDisplayName(toolForm.vendor);
     const category = toDisplayName(toolForm.category);
     const selectedIndustryId = toolForm.industryId || industries[0]?.id || "";
+    const isUpdatingTool = Boolean(editingTool);
     if (!name || !vendor || !category) return;
 
     try {
@@ -737,8 +791,16 @@ export function DataDictionaryPage() {
       await queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey });
       setToolForm(emptyToolForm);
       setIsToolFormOpen(false);
+      showTechStackToast(
+        isUpdatingTool
+          ? `${name} updated in Technology Stack Library`
+          : `${name} added to Technology Stack Library`,
+        "success",
+      );
     } catch (error) {
-      setDictionaryError(getErrorMessage(error));
+      const message = getErrorMessage(error);
+      setDictionaryError(message);
+      showTechStackToast(message, "error");
       setToolActionId("");
     }
   }
@@ -781,10 +843,58 @@ export function DataDictionaryPage() {
       if (editingTool?.id === tool.id) {
         handleCloseToolForm();
       }
+      showTechStackToast(`${tool.name} deleted from Technology Stack Library`, "success");
     } catch (error) {
-      setDictionaryError(getErrorMessage(error));
+      const message = getErrorMessage(error);
+      setDictionaryError(message);
+      showTechStackToast(message, "error");
     } finally {
       setToolActionId("");
+    }
+  }
+
+  function handleDeleteAllTools() {
+    if (tools.length === 0 || deleteAllTechStackMutation.isPending) {
+      return;
+    }
+
+    setIsDeleteAllToolsOpen(true);
+  }
+
+  async function confirmDeleteAllTools() {
+    if (tools.length === 0 || deleteAllTechStackMutation.isPending) {
+      return;
+    }
+
+    const deletedToolCount = tools.length;
+
+    try {
+      setDictionaryError("");
+      await deleteAllTechStackMutation.mutateAsync();
+      queryClient.setQueryData(dataDictionaryQueryKey, (currentData: typeof dictionaryData) => {
+        if (!currentData) {
+          return currentData;
+        }
+
+        return {
+          ...currentData,
+          techStack: [],
+        };
+      });
+      setIsDeleteAllToolsOpen(false);
+      setToolPage(1);
+      setToolDeleteTarget(null);
+      handleCloseToolForm();
+      showTechStackToast(
+        `${deletedToolCount} ${
+          deletedToolCount === 1 ? "tool" : "tools"
+        } deleted from Technology Stack Library`,
+        "success",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setDictionaryError(message);
+      showTechStackToast(message, "error");
     }
   }
 
@@ -891,7 +1001,8 @@ export function DataDictionaryPage() {
           filteredTools={filteredTools}
           industries={industries}
           isCatalogLoading={isCatalogLoading}
-          isToolDeleting={deleteTechStackMutation.isPending}
+          isToolDeleting={deleteTechStackMutation.isPending || deleteAllTechStackMutation.isPending}
+          isDeletingAllTools={deleteAllTechStackMutation.isPending}
           isToolFormOpen={isToolFormOpen}
           isToolSaving={isToolSaving}
           setToolForm={setToolForm}
@@ -913,6 +1024,7 @@ export function DataDictionaryPage() {
           editingTool={editingTool}
           onAddTool={handleAddTool}
           onCloseToolForm={handleCloseToolForm}
+          onDeleteAllTools={handleDeleteAllTools}
           onDeleteTool={handleDeleteTool}
           onEditTool={handleEditTool}
           onOpenNewToolForm={handleOpenNewToolForm}
@@ -945,6 +1057,25 @@ export function DataDictionaryPage() {
             }}
           />
         ) : null}
+        {isDeleteAllToolsOpen ? (
+          <DeleteAllToolsConfirmationModal
+            isDeleting={deleteAllTechStackMutation.isPending}
+            toolCount={tools.length}
+            onCancel={() => {
+              if (!deleteAllTechStackMutation.isPending) {
+                setIsDeleteAllToolsOpen(false);
+              }
+            }}
+            onConfirm={() => {
+              void confirmDeleteAllTools();
+            }}
+          />
+        ) : null}
+        <ReorderToastStack
+          ariaLabel="Technology stack library notifications"
+          successDescription="Technology Stack Library"
+          toasts={techStackToasts}
+        />
       </div>
     </AdminShell>
   );
@@ -2332,6 +2463,89 @@ function DeleteToolConfirmationModal({
   );
 }
 
+function DeleteAllToolsConfirmationModal({
+  isDeleting,
+  onCancel,
+  onConfirm,
+  toolCount,
+}: {
+  isDeleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  toolCount: number;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 px-4 backdrop-blur-[2px]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-all-tools-title"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !isDeleting) {
+          onCancel();
+        }
+      }}
+    >
+      <div className="w-full max-w-[460px] rounded-md border border-black/[0.08] bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.18)]">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex size-10 items-center justify-center rounded-md bg-[#FEF2F2] text-[#EF4444]">
+              <Trash2 size={18} aria-hidden="true" />
+            </div>
+            <p id="delete-all-tools-title" className="mt-4 text-sm font-bold text-[#171717]">
+              Delete all technology tools
+            </p>
+            <p className="mt-2 text-xs leading-5 font-semibold text-[#86868B]">
+              This removes every tool from the Technology Stack Library.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isDeleting}
+            className="flex size-8 shrink-0 items-center justify-center rounded-md border border-black/[0.08] text-[#86868B] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="Close delete all tools confirmation"
+            title="Close confirmation"
+          >
+            <X size={14} aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="mt-4 rounded-md border border-black/[0.06] bg-[#FAFAFA] p-3">
+          <p className="text-sm font-bold text-[#171717]">
+            {toolCount} {toolCount === 1 ? "tool" : "tools"} will be removed
+          </p>
+          <p className="mt-1 text-xs font-semibold text-[#86868B]">
+            This action applies to all global, industry default, and industry + domain tools.
+          </p>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2 border-t border-black/[0.06] pt-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isDeleting}
+            className="h-9 rounded-md border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#555555] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#EF4444] px-3 text-xs font-bold text-white transition hover:bg-[#DC2626] disabled:cursor-wait disabled:opacity-70"
+          >
+            {isDeleting ? (
+              <span className="size-3 animate-spin rounded-full border border-white/40 border-t-white" />
+            ) : null}
+            {isDeleting ? "Deleting..." : "Delete all tools"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FieldSpinner({ label }: { label: string }) {
   return (
     <span
@@ -2412,7 +2626,15 @@ function MappedDomainCard({
   );
 }
 
-function ReorderToastStack({ toasts }: { toasts: ReorderToastState[] }) {
+function ReorderToastStack({
+  ariaLabel = "Industry and domain mapping notifications",
+  successDescription = "Industry and domain mapping",
+  toasts,
+}: {
+  ariaLabel?: string;
+  successDescription?: string;
+  toasts: ReorderToastState[];
+}) {
   const visibleToasts = toasts.slice(0, 3);
 
   if (visibleToasts.length === 0) {
@@ -2422,7 +2644,7 @@ function ReorderToastStack({ toasts }: { toasts: ReorderToastState[] }) {
   return (
     <div
       className="pointer-events-none fixed right-5 bottom-5 z-50 h-[112px] w-[min(380px,calc(100vw-40px))]"
-      aria-label="Industry and domain mapping notifications"
+      aria-label={ariaLabel}
     >
       <style>
         {`
@@ -2446,7 +2668,7 @@ function ReorderToastStack({ toasts }: { toasts: ReorderToastState[] }) {
           ? "Changes are being saved."
           : isError
             ? "Please retry this action."
-            : "Industry and domain mapping";
+            : successDescription;
 
         return (
           <div
@@ -3170,6 +3392,7 @@ function TechnologyStackCard({
   filteredTools,
   industries,
   isCatalogLoading,
+  isDeletingAllTools,
   isToolDeleting,
   isToolFormOpen,
   isToolSaving,
@@ -3186,6 +3409,7 @@ function TechnologyStackCard({
   editingTool,
   onAddTool,
   onCloseToolForm,
+  onDeleteAllTools,
   onDeleteTool,
   onEditTool,
   onOpenNewToolForm,
@@ -3194,6 +3418,7 @@ function TechnologyStackCard({
   filteredTools: TechStackTool[];
   industries: DictionaryIndustry[];
   isCatalogLoading: boolean;
+  isDeletingAllTools: boolean;
   isToolDeleting: boolean;
   isToolFormOpen: boolean;
   isToolSaving: boolean;
@@ -3210,6 +3435,7 @@ function TechnologyStackCard({
   editingTool: TechStackTool | null;
   onAddTool: (event: FormEvent<HTMLFormElement>) => void;
   onCloseToolForm: () => void;
+  onDeleteAllTools: () => void;
   onDeleteTool: (tool: TechStackTool) => void;
   onEditTool: (tool: TechStackTool) => void;
   onOpenNewToolForm: () => void;
@@ -3235,10 +3461,34 @@ function TechnologyStackCard({
 
   return (
     <Panel
-      className="mt-5 min-h-[313px]"
+      className="mt-5"
       title={`Technology Stack Library (${tools.length} of 50)`}
-      actionLabel="Add Tool"
-      onAction={onOpenNewToolForm}
+      actionSlot={
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onDeleteAllTools}
+            disabled={tools.length === 0 || isToolDeleting || isToolSaving}
+            className="inline-flex items-center gap-1 text-xs font-bold text-[#EF4444] transition hover:text-[#DC2626] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isDeletingAllTools ? (
+              <span className="size-3 animate-spin rounded-full border border-[#EF4444]/30 border-t-[#EF4444]" />
+            ) : (
+              <Trash2 size={12} aria-hidden="true" />
+            )}
+            {isDeletingAllTools ? "Deleting..." : "Delete all"}
+          </button>
+          <button
+            type="button"
+            onClick={onOpenNewToolForm}
+            disabled={isToolDeleting || isToolSaving}
+            className="inline-flex items-center gap-1 text-xs font-bold text-[#007AFF] transition hover:text-[#0051D5] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus size={12} aria-hidden="true" />
+            Add Tool
+          </button>
+        </div>
+      }
     >
       {isCatalogLoading ? (
         <TechnologyStackSkeleton />
@@ -3276,47 +3526,49 @@ function TechnologyStackCard({
               onAddTool={onAddTool}
             />
           ) : null}
-          <div className="mt-5 grid min-h-[82px] gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {visibleTools.map((tool) => (
-              <article
-                key={tool.id}
-                className="relative min-h-[82px] rounded-md border border-black/[0.08] bg-white px-4 py-3 pr-20"
-              >
-                <p className="text-sm font-bold">{tool.name}</p>
-                <p className="mt-1 text-xs font-semibold text-[#86868B]">
-                  {tool.vendor} - {tool.category} - {getTechStackScopeLabel(tool)}
-                </p>
-                <button
-                  type="button"
-                  aria-label={`Edit ${tool.name}`}
-                  title={`Edit ${tool.name}`}
-                  disabled={isToolDeleting || isToolSaving}
-                  onClick={() => onEditTool(tool)}
-                  className="absolute top-3 right-11 inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[#86868B] transition hover:bg-[#F5F5F7] hover:text-[#007AFF] focus-visible:bg-[#F5F5F7] focus-visible:text-[#007AFF] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          {visibleTools.length ? (
+            <div className="mt-5 grid min-h-[82px] gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {visibleTools.map((tool) => (
+                <article
+                  key={tool.id}
+                  className="relative min-h-[82px] rounded-md border border-black/[0.08] bg-white px-4 py-3 pr-20"
                 >
-                  {toolActionId === tool.id && isToolSaving ? (
-                    <span className="size-3 animate-spin rounded-full border border-[#86868B]/30 border-t-[#007AFF]" />
-                  ) : (
-                    <Pencil size={14} aria-hidden="true" />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Delete ${tool.name}`}
-                  title={`Delete ${tool.name}`}
-                  disabled={isToolDeleting || isToolSaving}
-                  onClick={() => onDeleteTool(tool)}
-                  className="absolute top-3 right-3 inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[#86868B] transition hover:bg-[#F5F5F7] hover:text-[#EF4444] focus-visible:bg-[#F5F5F7] focus-visible:text-[#EF4444] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {toolActionId === tool.id ? (
-                    <span className="size-3 animate-spin rounded-full border border-[#86868B]/30 border-t-[#EF4444]" />
-                  ) : (
-                    <Trash2 size={14} aria-hidden="true" />
-                  )}
-                </button>
-              </article>
-            ))}
-          </div>
+                  <p className="text-sm font-bold">{tool.name}</p>
+                  <p className="mt-1 text-xs font-semibold text-[#86868B]">
+                    {tool.vendor} - {tool.category} - {getTechStackScopeLabel(tool)}
+                  </p>
+                  <button
+                    type="button"
+                    aria-label={`Edit ${tool.name}`}
+                    title={`Edit ${tool.name}`}
+                    disabled={isToolDeleting || isToolSaving}
+                    onClick={() => onEditTool(tool)}
+                    className="absolute top-3 right-11 inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[#86868B] transition hover:bg-[#F5F5F7] hover:text-[#007AFF] focus-visible:bg-[#F5F5F7] focus-visible:text-[#007AFF] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {toolActionId === tool.id && isToolSaving ? (
+                      <span className="size-3 animate-spin rounded-full border border-[#86868B]/30 border-t-[#007AFF]" />
+                    ) : (
+                      <Pencil size={14} aria-hidden="true" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${tool.name}`}
+                    title={`Delete ${tool.name}`}
+                    disabled={isToolDeleting || isToolSaving}
+                    onClick={() => onDeleteTool(tool)}
+                    className="absolute top-3 right-3 inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[#86868B] transition hover:bg-[#F5F5F7] hover:text-[#EF4444] focus-visible:bg-[#F5F5F7] focus-visible:text-[#EF4444] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {toolActionId === tool.id ? (
+                      <span className="size-3 animate-spin rounded-full border border-[#86868B]/30 border-t-[#EF4444]" />
+                    ) : (
+                      <Trash2 size={14} aria-hidden="true" />
+                    )}
+                  </button>
+                </article>
+              ))}
+            </div>
+          ) : null}
           <PaginationSummary
             currentPage={safeToolPage}
             label={

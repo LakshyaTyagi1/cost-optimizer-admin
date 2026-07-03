@@ -40,6 +40,14 @@ textarea {
   font: inherit;
 }
 
+button:not(:disabled):not([class*="cursor-"]) {
+  cursor: pointer;
+}
+
+button:disabled:not([class*="cursor-"]) {
+  cursor: not-allowed;
+}
+
 /* Utilities */
 .scrollbar-hidden {
   -ms-overflow-style: none;

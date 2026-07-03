@@ -391,7 +391,7 @@ export function AssessmentsPage() {
               aria-label="Reset assessment filters"
             >
               <RotateCcw size={13} aria-hidden="true" />
-              Reset filters
+              Reset
             </button>
           </div>
         </div>
