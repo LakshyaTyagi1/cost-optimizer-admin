@@ -41,7 +41,7 @@ const navigationItems: readonly NavigationItem[] = [
   { label: "Data Dictionary", href: "/data-dictionary", icon: BookOpen },
   { label: "Experts", href: "/experts", icon: Users },
   { label: "Team", href: "#team", icon: UserRound },
-  { label: "Archive", href: "#archive", icon: Archive },
+  { label: "Archive", href: "/archive", icon: Archive },
   { label: "Settings", href: "#settings", icon: Settings },
 ];
 

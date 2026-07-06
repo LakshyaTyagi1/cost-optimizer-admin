@@ -42,6 +42,7 @@ export type DictionaryProcess = {
   industryLabel?: string;
   industryIds: string[];
   isActive?: boolean;
+  isDeleted?: boolean;
   name: string;
   scope?: "industry-default" | "industry-domain";
   source: string;

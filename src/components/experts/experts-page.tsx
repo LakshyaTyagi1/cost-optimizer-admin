@@ -53,20 +53,20 @@ const experts: Expert[] = [
 export function ExpertsPage() {
   return (
     <AdminShell activeItem="Experts">
-      <div className="lg:pr-6">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+      <div className="max-w-full overflow-hidden lg:pr-6">
+        <header className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <h1 className="text-[26px] leading-tight font-bold tracking-normal text-[#171717]">
               Experts
             </h1>
-            <p className="mt-2 text-sm leading-none font-semibold text-[#86868B]">
+            <p className="mt-2 text-sm leading-5 font-semibold text-[#86868B] sm:leading-none">
               Consultants available for booking from the Expert tab.
             </p>
           </div>
 
           <button
             type="button"
-            className="inline-flex h-9 items-center gap-2 rounded-md bg-[#007AFF] px-4 text-xs font-bold text-white shadow-[0_1px_2px_rgba(0,122,255,0.18)] transition hover:bg-[#006FE8]"
+            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-[#007AFF] px-4 text-xs font-bold text-white shadow-[0_1px_2px_rgba(0,122,255,0.18)] transition hover:bg-[#006FE8] sm:w-auto"
           >
             <Plus size={13} strokeWidth={2.2} aria-hidden="true" />
             Add Expert
@@ -75,7 +75,7 @@ export function ExpertsPage() {
 
         <section
           aria-label="Expert consultants"
-          className="mt-[31px] grid gap-5 xl:grid-cols-3"
+          className="mt-[31px] grid gap-5 sm:grid-cols-2 xl:grid-cols-3"
         >
           {experts.map((expert) => (
             <ExpertCard expert={expert} key={expert.name} />
@@ -88,9 +88,9 @@ export function ExpertsPage() {
 
 function ExpertCard({ expert }: { expert: Expert }) {
   return (
-    <article className="min-h-[290px] rounded-md border border-black/[0.08] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.08),0_1px_3px_rgba(15,23,42,0.1)]">
+    <article className="min-h-[290px] min-w-0 rounded-md border border-black/[0.08] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.08),0_1px_3px_rgba(15,23,42,0.1)] sm:p-5">
       <div className="flex items-start justify-between gap-4">
-        <span className="inline-flex h-5 items-center rounded bg-black px-2 text-[8px] leading-none font-bold text-white">
+        <span className="inline-flex h-5 min-w-0 items-center rounded bg-black px-2 text-[8px] leading-none font-bold text-white">
           {expert.role}
         </span>
         <span className="inline-flex items-center gap-1 text-[11px] leading-none font-bold text-[#171717]">
@@ -111,7 +111,7 @@ function ExpertCard({ expert }: { expert: Expert }) {
         </p>
       </div>
 
-      <div className="mt-[22px] grid grid-cols-2 border-b border-black/[0.08] pb-4">
+      <div className="mt-[22px] grid grid-cols-2 gap-3 border-b border-black/[0.08] pb-4">
         <ExpertMetric label="Lifetime assessments" value={expert.lifetimeAssessments} />
         <ExpertMetric label="In this pipeline" value={expert.pipelineCount} tone="blue" />
       </div>

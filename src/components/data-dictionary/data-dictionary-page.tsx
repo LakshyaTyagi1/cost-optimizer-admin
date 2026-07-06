@@ -37,7 +37,13 @@ import {
   type ProcessTier,
   type TechStackTool,
 } from "./data-dictionary-data";
+import type {
+  DeleteAllToolsConfirmationModalProps,
+  DeleteProcessConfirmationModalProps,
+  DeleteToolConfirmationModalProps,
+} from "./confirmation-modals";
 import type { NewProcessModalProps, ProcessFormState } from "./new-process-modal";
+import type { TechStackToolModalProps, ToolFormState } from "./tech-stack-tool-modal";
 import {
   createDataDictionaryDomain,
   createDataDictionaryDomainProcess,
@@ -60,6 +66,8 @@ import {
 } from "@/api/data-dictionary.api";
 
 const dataDictionaryQueryKey = ["data-dictionary"] as const;
+const dataDictionaryCacheTime = 5 * 60_000;
+const dataDictionaryGcTime = 30 * 60_000;
 const initialExpandedProcessId = "__initial_process__";
 const industryDefaultDomainFilter = "industry-default";
 const libraryPageSize = 20;
@@ -70,6 +78,31 @@ const emptyProcesses: DictionaryProcess[] = [];
 const emptyTechStack: TechStackTool[] = [];
 const NewProcessModal = dynamic<NewProcessModalProps>(
   () => import("./new-process-modal").then((module) => module.NewProcessModal),
+  { ssr: false },
+);
+const TechStackToolModal = dynamic<TechStackToolModalProps>(
+  () => import("./tech-stack-tool-modal").then((module) => module.TechStackToolModal),
+  { ssr: false },
+);
+const DeleteProcessConfirmationModal = dynamic<DeleteProcessConfirmationModalProps>(
+  () =>
+    import("./confirmation-modals").then(
+      (module) => module.DeleteProcessConfirmationModal,
+    ),
+  { ssr: false },
+);
+const DeleteToolConfirmationModal = dynamic<DeleteToolConfirmationModalProps>(
+  () =>
+    import("./confirmation-modals").then(
+      (module) => module.DeleteToolConfirmationModal,
+    ),
+  { ssr: false },
+);
+const DeleteAllToolsConfirmationModal = dynamic<DeleteAllToolsConfirmationModalProps>(
+  () =>
+    import("./confirmation-modals").then(
+      (module) => module.DeleteAllToolsConfirmationModal,
+    ),
   { ssr: false },
 );
 
@@ -92,8 +125,6 @@ const tierStyles: Record<ProcessTier, { bg: string; text: string; dot: string }>
 };
 const fallbackTierStyle = { bg: "bg-[#F5F5F7]", text: "text-[#555555]", dot: "bg-[#A1A1AA]" };
 
-const fieldInputClass =
-  "h-8 w-full rounded-md border border-black/[0.08] bg-white px-3 text-xs font-semibold text-[#555555] outline-none placeholder:text-[#A1A1AA] focus:border-[#007AFF]";
 const usdToAedRate = 3.6725;
 
 const mappingColumnStyle = {
@@ -105,15 +136,6 @@ const mappingGridClassName =
   "mt-6 grid min-h-[320px] items-start gap-4 xl:grid-cols-[350px_minmax(0,1fr)_320px]";
 const mappingPanelClassName =
   "relative h-[320px] min-h-[320px] overflow-hidden rounded-md border border-black/[0.06] bg-white p-4";
-
-type ToolFormState = {
-  category: string;
-  domainId: string;
-  industryId: string;
-  name: string;
-  scope: "common" | "industry" | "domain";
-  vendor: string;
-};
 
 const emptyToolForm: ToolFormState = {
   category: "CRM / Support",
@@ -209,6 +231,8 @@ export function DataDictionaryPage() {
   } = useQuery({
     queryKey: dataDictionaryQueryKey,
     queryFn: fetchDataDictionary,
+    gcTime: dataDictionaryGcTime,
+    staleTime: dataDictionaryCacheTime,
   });
   const createIndustryMutation = useMutation({
     mutationFn: createDataDictionaryIndustry,
@@ -654,7 +678,9 @@ export function DataDictionaryPage() {
       setProcessForm(createEmptyProcessForm(industries));
       setIsProcessFormOpen(false);
     } catch (error) {
-      setDictionaryError(getErrorMessage(error));
+      const message = getErrorMessage(error);
+      setDictionaryError(message);
+      showTechStackToast(message, "error");
     }
   }
 
@@ -914,7 +940,7 @@ export function DataDictionaryPage() {
 
   return (
     <AdminShell activeItem="Data Dictionary">
-      <div className="lg:pr-6">
+      <div className="max-w-full overflow-hidden lg:pr-6">
         <PageHeader />
         <section className="mt-7 grid gap-5 xl:grid-cols-2" aria-label="Reference scales">
           <AutomationLevelsCard />
@@ -1072,7 +1098,7 @@ export function DataDictionaryPage() {
           />
         ) : null}
         <ReorderToastStack
-          ariaLabel="Technology stack library notifications"
+          ariaLabel="Data dictionary notifications"
           successDescription="Technology Stack Library"
           toasts={techStackToasts}
         />
@@ -1085,7 +1111,7 @@ function PageHeader() {
   return (
     <header>
       <h1 className="text-[26px] leading-tight font-bold tracking-normal">Data Dictionary</h1>
-      <p className="mt-2 text-sm font-semibold text-[#86868B]">
+      <p className="mt-2 text-sm leading-5 font-semibold text-[#86868B]">
         Reference and management for every code, scale, and process used across assessments.
       </p>
     </header>
@@ -1122,10 +1148,10 @@ function ProcessTiersCard() {
         {processTiers.map((tier) => (
           <div
             key={tier.label}
-            className="flex items-center justify-between gap-5 text-xs font-bold"
+            className="flex min-w-0 items-center justify-between gap-5 text-xs font-bold"
           >
             <TierPill tier={tier.label} />
-            <span className="text-right text-[#86868B]">{tier.slug}</span>
+            <span className="min-w-0 text-right text-[#86868B] break-words">{tier.slug}</span>
           </div>
         ))}
       </div>
@@ -1136,7 +1162,7 @@ function ProcessTiersCard() {
 function BenchmarkCard() {
   return (
     <Panel className="mt-5 min-h-[134px]">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
           GCC / MENA CX Benchmark
         </p>
@@ -2299,253 +2325,6 @@ function DeleteImpactMetric({ label, value }: { label: string; value: number }) 
   );
 }
 
-function DeleteProcessConfirmationModal({
-  isDeleting,
-  onCancel,
-  onConfirm,
-  process,
-}: {
-  isDeleting: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-  process: DictionaryProcess;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 px-4 backdrop-blur-[2px]"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="delete-process-title"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !isDeleting) {
-          onCancel();
-        }
-      }}
-    >
-      <div className="w-full max-w-[460px] rounded-md border border-black/[0.08] bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.18)]">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex size-10 items-center justify-center rounded-md bg-[#FEF2F2] text-[#EF4444]">
-              <Trash2 size={18} aria-hidden="true" />
-            </div>
-            <p id="delete-process-title" className="mt-4 text-sm font-bold text-[#171717]">
-              Delete process
-            </p>
-            <p className="mt-2 text-xs leading-5 font-semibold text-[#86868B]">
-              This removes the process from the admin process library.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isDeleting}
-            className="flex size-8 shrink-0 items-center justify-center rounded-md border border-black/[0.08] text-[#86868B] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed disabled:opacity-60"
-            aria-label="Close delete process confirmation"
-            title="Close confirmation"
-          >
-            <X size={14} aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="mt-4 rounded-md border border-black/[0.06] bg-[#FAFAFA] p-3">
-          <p className="truncate text-sm font-bold text-[#171717]">{process.name}</p>
-          <p className="mt-1 text-xs font-semibold text-[#86868B]">
-            {[process.code, process.tier, process.industryLabel || process.domain]
-              .filter(Boolean)
-              .join(" - ")}
-          </p>
-        </div>
-
-        <div className="mt-5 flex justify-end gap-2 border-t border-black/[0.06] pt-4">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isDeleting}
-            className="h-9 rounded-md border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#555555] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isDeleting}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#EF4444] px-3 text-xs font-bold text-white transition hover:bg-[#DC2626] disabled:cursor-wait disabled:opacity-70"
-          >
-            {isDeleting ? (
-              <span className="size-3 animate-spin rounded-full border border-white/40 border-t-white" />
-            ) : null}
-            {isDeleting ? "Deleting..." : "Delete process"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DeleteToolConfirmationModal({
-  isDeleting,
-  onCancel,
-  onConfirm,
-  tool,
-}: {
-  isDeleting: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-  tool: TechStackTool;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 px-4 backdrop-blur-[2px]"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="delete-tool-title"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !isDeleting) {
-          onCancel();
-        }
-      }}
-    >
-      <div className="w-full max-w-[460px] rounded-md border border-black/[0.08] bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.18)]">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex size-10 items-center justify-center rounded-md bg-[#FEF2F2] text-[#EF4444]">
-              <Trash2 size={18} aria-hidden="true" />
-            </div>
-            <p id="delete-tool-title" className="mt-4 text-sm font-bold text-[#171717]">
-              Delete technology tool
-            </p>
-            <p className="mt-2 text-xs leading-5 font-semibold text-[#86868B]">
-              This removes the tool from available technology stack options in the admin library.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isDeleting}
-            className="flex size-8 shrink-0 items-center justify-center rounded-md border border-black/[0.08] text-[#86868B] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed disabled:opacity-60"
-            aria-label="Close delete tool confirmation"
-            title="Close confirmation"
-          >
-            <X size={14} aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="mt-4 rounded-md border border-black/[0.06] bg-[#FAFAFA] p-3">
-          <p className="truncate text-sm font-bold text-[#171717]">{tool.name}</p>
-          <p className="mt-1 text-xs font-semibold text-[#86868B]">
-            {tool.vendor} - {tool.category} - {getTechStackScopeLabel(tool)}
-          </p>
-        </div>
-
-        <div className="mt-5 flex justify-end gap-2 border-t border-black/[0.06] pt-4">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isDeleting}
-            className="h-9 rounded-md border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#555555] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isDeleting}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#EF4444] px-3 text-xs font-bold text-white transition hover:bg-[#DC2626] disabled:cursor-wait disabled:opacity-70"
-          >
-            {isDeleting ? (
-              <span className="size-3 animate-spin rounded-full border border-white/40 border-t-white" />
-            ) : null}
-            {isDeleting ? "Deleting..." : "Delete tool"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DeleteAllToolsConfirmationModal({
-  isDeleting,
-  onCancel,
-  onConfirm,
-  toolCount,
-}: {
-  isDeleting: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-  toolCount: number;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 px-4 backdrop-blur-[2px]"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="delete-all-tools-title"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !isDeleting) {
-          onCancel();
-        }
-      }}
-    >
-      <div className="w-full max-w-[460px] rounded-md border border-black/[0.08] bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.18)]">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex size-10 items-center justify-center rounded-md bg-[#FEF2F2] text-[#EF4444]">
-              <Trash2 size={18} aria-hidden="true" />
-            </div>
-            <p id="delete-all-tools-title" className="mt-4 text-sm font-bold text-[#171717]">
-              Delete all technology tools
-            </p>
-            <p className="mt-2 text-xs leading-5 font-semibold text-[#86868B]">
-              This removes every tool from the Technology Stack Library.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isDeleting}
-            className="flex size-8 shrink-0 items-center justify-center rounded-md border border-black/[0.08] text-[#86868B] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed disabled:opacity-60"
-            aria-label="Close delete all tools confirmation"
-            title="Close confirmation"
-          >
-            <X size={14} aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="mt-4 rounded-md border border-black/[0.06] bg-[#FAFAFA] p-3">
-          <p className="text-sm font-bold text-[#171717]">
-            {toolCount} {toolCount === 1 ? "tool" : "tools"} will be removed
-          </p>
-          <p className="mt-1 text-xs font-semibold text-[#86868B]">
-            This action applies to all global, industry default, and industry + domain tools.
-          </p>
-        </div>
-
-        <div className="mt-5 flex justify-end gap-2 border-t border-black/[0.06] pt-4">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isDeleting}
-            className="h-9 rounded-md border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#555555] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isDeleting}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#EF4444] px-3 text-xs font-bold text-white transition hover:bg-[#DC2626] disabled:cursor-wait disabled:opacity-70"
-          >
-            {isDeleting ? (
-              <span className="size-3 animate-spin rounded-full border border-white/40 border-t-white" />
-            ) : null}
-            {isDeleting ? "Deleting..." : "Delete all tools"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function FieldSpinner({ label }: { label: string }) {
   return (
     <span
@@ -2643,7 +2422,7 @@ function ReorderToastStack({
 
   return (
     <div
-      className="pointer-events-none fixed right-5 bottom-5 z-50 h-[112px] w-[min(380px,calc(100vw-40px))]"
+      className="pointer-events-none fixed right-5 bottom-5 z-[70] h-[112px] w-[min(380px,calc(100vw-40px))]"
       aria-label={ariaLabel}
     >
       <style>
@@ -2837,22 +2616,22 @@ function IndustryDomainRelationTable({
       className="mt-6 overflow-hidden rounded-md border border-black/[0.08] bg-white"
       style={mappingColumnStyle}
     >
-      <div className="max-h-[420px] overflow-auto">
+      <div className="max-h-[420px] max-w-full overflow-auto">
         <table
           aria-label="Industry and domain relationship table"
           title="Industry and domain relationship table"
-          className="min-w-[920px] w-full border-collapse text-left"
+          className="w-full min-w-[760px] border-collapse text-left sm:min-w-[920px]"
         >
           <thead className="sticky top-0 z-10 bg-[#FAFAFA]">
             <tr>
-              <th className="sticky left-0 z-30 w-[220px] min-w-[220px] border border-black/[0.1] bg-[#FAFAFA] px-4 py-3 text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
+              <th className="sticky left-0 z-30 w-[170px] min-w-[170px] border border-black/[0.1] bg-[#FAFAFA] px-3 py-3 text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase sm:w-[220px] sm:min-w-[220px] sm:px-4">
                 Industry
               </th>
               {domains.map((domain) => (
                 <th
                   key={domain.id}
                   title={`Domain column: ${getDomainDisplayTitle(domain.name)}`}
-                  className="min-w-[190px] border border-black/[0.1] bg-[#FAFAFA] px-4 py-3 text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase"
+                  className="min-w-[150px] border border-black/[0.1] bg-[#FAFAFA] px-3 py-3 text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase sm:min-w-[190px] sm:px-4"
                 >
                   {getDomainDisplayTitle(domain.name)}
                 </th>
@@ -2866,7 +2645,7 @@ function IndustryDomainRelationTable({
               return (
                 <tr key={industry.id}>
                   <th
-                    className="sticky left-0 z-20 w-[220px] min-w-[220px] border border-black/[0.1] bg-white px-4 py-3 align-top"
+                    className="sticky left-0 z-20 w-[170px] min-w-[170px] border border-black/[0.1] bg-white px-3 py-3 align-top sm:w-[220px] sm:min-w-[220px] sm:px-4"
                     title={`${industry.name}: ${mappedDomains.size} mapped ${mappedDomains.size === 1 ? "domain" : "domains"}`}
                   >
                     <p className="text-sm leading-5 font-bold text-[#171717]">{industry.name}</p>
@@ -2887,7 +2666,7 @@ function IndustryDomainRelationTable({
                             ? `${getDomainDisplayTitle(mappedDomain.name)} is mapped to ${industry.name}`
                             : `Map ${getDomainDisplayTitle(domain.name)} to ${industry.name}`
                         }
-                        className={`h-[74px] min-w-[190px] border border-black/[0.1] px-4 py-3 align-top transition ${
+                        className={`h-[74px] min-w-[150px] border border-black/[0.1] px-3 py-3 align-top transition sm:min-w-[190px] sm:px-4 ${
                           isMappingCell ? "bg-[#EAF3FF]" : "bg-white"
                         }`}
                       >
@@ -3068,7 +2847,7 @@ function ProcessLibraryCard({
           className="w-full sm:w-[280px]"
         />
         <label
-          className="relative flex h-10 w-full min-w-[210px] items-center sm:w-[224px]"
+          className="relative flex h-10 w-full min-w-0 items-center sm:w-[224px]"
           title="Filter processes by industry"
         >
           <Building2
@@ -3102,7 +2881,7 @@ function ProcessLibraryCard({
           />
         </label>
         <label
-          className="relative flex h-10 w-full min-w-[210px] items-center sm:w-[224px]"
+          className="relative flex h-10 w-full min-w-0 items-center sm:w-[224px]"
           title="Filter processes by domain"
         >
           <Database
@@ -3139,7 +2918,7 @@ function ProcessLibraryCard({
             setProcessPage(1);
           }}
           disabled={!hasProcessFilters}
-          className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-[#D9E3F0] bg-white px-3 text-xs font-bold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#B8D8FF] hover:text-[#007AFF] disabled:cursor-not-allowed disabled:border-black/[0.06] disabled:bg-[#F5F5F7] disabled:text-[#A1A1AA]"
+          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-[#D9E3F0] bg-white px-3 text-xs font-bold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#B8D8FF] hover:text-[#007AFF] disabled:cursor-not-allowed disabled:border-black/[0.06] disabled:bg-[#F5F5F7] disabled:text-[#A1A1AA] sm:w-auto"
           aria-label="Reset process filters"
           title="Reset process filters"
         >
@@ -3167,8 +2946,8 @@ function ProcessLibraryCard({
           onSaveCurrencyRate={onSaveCurrencyRate}
         />
       ) : null}
-      <div className="mt-4 min-h-[170px] overflow-x-auto rounded-md border border-black/[0.06] bg-white">
-        <div className="min-w-[1040px]">
+      <div className="mt-4 min-h-[170px] max-w-full overflow-x-auto rounded-md border border-black/[0.06] bg-white">
+        <div className="min-w-[860px] lg:min-w-[1040px]">
           {isCatalogLoading ? <ProcessRowsSkeleton /> : null}
           {!isCatalogLoading && filteredProcesses.length === 0 ? (
             <ProcessListState label={dictionaryError || "No mapped processes found."} />
@@ -3464,7 +3243,7 @@ function TechnologyStackCard({
       className="mt-5"
       title={`Technology Stack Library (${tools.length} of 50)`}
       actionSlot={
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
           <button
             type="button"
             onClick={onDeleteAllTools}
@@ -3504,7 +3283,7 @@ function TechnologyStackCard({
             <select
               value={toolScopeFilter}
               onChange={(event) => setToolScopeFilter(event.target.value)}
-              className="h-9 w-[180px] rounded-md border border-black/[0.08] bg-white px-3 text-xs font-semibold text-[#555555] outline-none focus:border-[#007AFF]"
+              className="h-9 w-full rounded-md border border-black/[0.08] bg-white px-3 text-xs font-semibold text-[#555555] outline-none focus:border-[#007AFF] sm:w-[180px]"
             >
               <option value="all">All tools</option>
               <option value="common">Global tools</option>
@@ -3531,9 +3310,9 @@ function TechnologyStackCard({
               {visibleTools.map((tool) => (
                 <article
                   key={tool.id}
-                  className="relative min-h-[82px] rounded-md border border-black/[0.08] bg-white px-4 py-3 pr-20"
+                  className="relative min-h-[82px] min-w-0 rounded-md border border-black/[0.08] bg-white px-4 py-3 pr-20"
                 >
-                  <p className="text-sm font-bold">{tool.name}</p>
+                  <p className="truncate text-sm font-bold" title={tool.name}>{tool.name}</p>
                   <p className="mt-1 text-xs font-semibold text-[#86868B]">
                     {tool.vendor} - {tool.category} - {getTechStackScopeLabel(tool)}
                   </p>
@@ -3593,7 +3372,7 @@ function TechnologyStackSkeleton() {
     <div className="animate-pulse" aria-label="Loading technology stack library">
       <div className="mt-7 flex flex-wrap gap-2">
         <div className="h-9 w-full rounded-md border border-black/[0.06] bg-[#F8F8FA] sm:w-[280px]" />
-        <div className="h-9 w-[180px] rounded-md border border-black/[0.06] bg-[#F8F8FA]" />
+        <div className="h-9 w-full rounded-md border border-black/[0.06] bg-[#F8F8FA] sm:w-[180px]" />
       </div>
       <div className="mt-5 grid min-h-[82px] gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[0, 1, 2, 3].map((item) => (
@@ -3611,191 +3390,6 @@ function TechnologyStackSkeleton() {
   );
 }
 
-function TechStackToolModal({
-  canAddTool,
-  domains,
-  industries,
-  isToolSaving,
-  editingTool,
-  selectedIndustryId,
-  onClose,
-  setToolForm,
-  toolForm,
-  onAddTool,
-}: {
-  canAddTool: boolean;
-  domains: DictionaryDomain[];
-  industries: DictionaryIndustry[];
-  isToolSaving: boolean;
-  editingTool: TechStackTool | null;
-  selectedIndustryId: string;
-  onClose: () => void;
-  setToolForm: (value: ToolFormState | ((current: ToolFormState) => ToolFormState)) => void;
-  toolForm: ToolFormState;
-  onAddTool: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, []);
-
-  function closeToolForm() {
-    if (!isToolSaving) {
-      onClose();
-    }
-  }
-  const isEditingTool = Boolean(editingTool);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-[1px]"
-      role="presentation"
-      onClick={closeToolForm}
-    >
-      <form
-        onSubmit={onAddTool}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="new-tech-stack-title"
-        className="w-full max-w-[760px] rounded-md border border-[#B3D7FF] bg-[#F0F9FF] px-4 py-4 shadow-[0_24px_70px_rgba(15,23,42,0.22)]"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-4">
-          <p id="new-tech-stack-title" className="text-sm font-bold text-[#171717]">
-            {isEditingTool ? "Edit Tool" : "Add Tool"}
-          </p>
-          <button
-            type="button"
-            onClick={closeToolForm}
-            className="text-[#A1A1AA] transition hover:text-[#555555]"
-            aria-label="Close tool form"
-          >
-            <X size={16} aria-hidden="true" />
-          </button>
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <Field label="Tool Name" required>
-            <input
-              value={toolForm.name}
-              onChange={(event) =>
-                setToolForm((current) => ({ ...current, name: event.target.value }))
-              }
-              className={fieldInputClass}
-              placeholder="e.g. Salesforce Service Cloud"
-            />
-          </Field>
-          <Field label="Vendor" required>
-            <input
-              value={toolForm.vendor}
-              onChange={(event) =>
-                setToolForm((current) => ({ ...current, vendor: event.target.value }))
-              }
-              className={fieldInputClass}
-              placeholder="e.g. Salesforce"
-            />
-          </Field>
-          <Field label="Category" required>
-            <input
-              value={toolForm.category}
-              onChange={(event) =>
-                setToolForm((current) => ({ ...current, category: event.target.value }))
-              }
-              className={fieldInputClass}
-              placeholder="e.g. CRM / Support"
-            />
-          </Field>
-          <Field label="Scope" required>
-            <select
-              value={toolForm.scope}
-              disabled={isEditingTool}
-              onChange={(event) =>
-                setToolForm((current) => ({
-                  ...current,
-                  domainId: "",
-                  scope: event.target.value as ToolFormState["scope"],
-                }))
-              }
-              className={fieldInputClass}
-            >
-              <option value="common">Global tool</option>
-              <option value="industry">Industry default</option>
-              <option value="domain">Industry + domain</option>
-            </select>
-          </Field>
-          {toolForm.scope !== "common" ? (
-            <Field label="Industry" required>
-              <select
-                value={selectedIndustryId}
-                disabled={isEditingTool}
-                onChange={(event) =>
-                  setToolForm((current) => ({
-                    ...current,
-                    domainId: "",
-                    industryId: event.target.value,
-                  }))
-                }
-                className={fieldInputClass}
-              >
-                <option value="">Select industry</option>
-                {industries.map((industry) => (
-                  <option key={industry.id} value={industry.id}>
-                    {industry.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          ) : null}
-          {toolForm.scope === "domain" ? (
-            <Field label="Domain" required>
-              <select
-                value={toolForm.domainId}
-                disabled={isEditingTool}
-                onChange={(event) =>
-                  setToolForm((current) => ({ ...current, domainId: event.target.value }))
-                }
-                className={fieldInputClass}
-              >
-                <option value="">Select domain</option>
-                {domains.map((domain) => (
-                  <option key={domain.id} value={domain.id}>
-                    {getDomainDisplayTitle(domain.name)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          ) : null}
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={closeToolForm}
-            disabled={isToolSaving}
-            className="h-8 rounded-md border border-black/[0.08] bg-white px-4 text-xs font-semibold text-[#86868B] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={!canAddTool || isToolSaving}
-            className={`inline-flex h-8 items-center gap-2 rounded-md px-4 text-xs font-bold transition ${
-              canAddTool && !isToolSaving
-                ? "bg-[#007AFF] text-white hover:bg-[#0063CC]"
-                : "cursor-not-allowed bg-[#E5E5E7] text-[#86868B]"
-            }`}
-          >
-            {isEditingTool ? <Check size={13} aria-hidden="true" /> : <Plus size={13} aria-hidden="true" />}
-            {isToolSaving ? "Saving..." : isEditingTool ? "Save Changes" : "Add Tool"}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
 function getTechStackScopeLabel(tool: TechStackTool) {
   if (tool.scope === "common") {
     return "Global tool";
@@ -3806,26 +3400,6 @@ function getTechStackScopeLabel(tool: TechStackTool) {
   }
 
   return tool.industryName || "Industry default";
-}
-
-function Field({
-  children,
-  label,
-  required = false,
-}: {
-  children: ReactNode;
-  label: string;
-  required?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-[10px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
-        {label}
-        {required ? <span className="ml-1 text-[#EF4444]">*</span> : null}
-      </span>
-      {children}
-    </label>
-  );
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -3957,10 +3531,10 @@ function Panel({
 }) {
   return (
     <section
-      className={`min-w-0 rounded-md border border-black/[0.08] bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.05)] ${className}`}
+      className={`min-w-0 rounded-md border border-black/[0.08] bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] sm:p-5 ${className}`}
     >
       {title || actionLabel || actionSlot ? (
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           {title ? (
             <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
               {title}

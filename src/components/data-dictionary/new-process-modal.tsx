@@ -117,7 +117,7 @@ export function NewProcessModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-[1px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-3 py-4 backdrop-blur-[1px] sm:px-4 sm:py-6"
       role="presentation"
     >
       <form
@@ -125,7 +125,7 @@ export function NewProcessModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="new-process-title"
-        className="max-h-[calc(100vh-48px)] w-full max-w-[900px] overflow-auto rounded-md border border-[#B3D7FF] bg-[#F0F9FF] px-4 py-4 shadow-[0_24px_70px_rgba(15,23,42,0.22)]"
+        className="max-h-[calc(100vh-32px)] w-full max-w-[900px] overflow-auto rounded-md border border-[#B3D7FF] bg-[#F0F9FF] px-3 py-4 shadow-[0_24px_70px_rgba(15,23,42,0.22)] sm:max-h-[calc(100vh-48px)] sm:px-4"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-4">
@@ -266,7 +266,7 @@ export function NewProcessModal({
                 </div>
               </Field>
               <Field label="Conversion Rate">
-                <div className="flex min-h-10 min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-[#CFE5FF] bg-white px-2.5 py-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/10">
+                <div className="flex min-h-10 min-w-0 flex-col items-stretch gap-2 overflow-hidden rounded-lg border border-[#CFE5FF] bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/10 sm:flex-row sm:items-center sm:py-1">
                   <div className="flex min-w-0 flex-1 items-center gap-2">
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#007AFF] text-white shadow-[0_4px_10px_rgba(0,122,255,0.22)]">
                       <Repeat2 size={14} aria-hidden="true" />
@@ -275,7 +275,7 @@ export function NewProcessModal({
                       Saved: 1 USD = {formatConversionRateInput(savedUsdToAedRate)} AED
                     </span>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                     <span className="text-[10px] font-semibold text-[#86868B]">1 USD =</span>
                     <input
                       value={currencyRateInput}
@@ -312,7 +312,7 @@ export function NewProcessModal({
             </div>
           </div>
         </div>
-        <div className="mt-3 flex justify-end gap-2">
+        <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={closeProcessForm}
@@ -324,7 +324,7 @@ export function NewProcessModal({
           <button
             type="submit"
             disabled={!canAddProcess || isProcessSaving}
-            className={`inline-flex h-8 items-center gap-2 rounded-md px-4 text-xs font-bold transition ${
+            className={`inline-flex h-8 items-center justify-center gap-2 rounded-md px-4 text-xs font-bold transition ${
               canAddProcess && !isProcessSaving
                 ? "bg-[#007AFF] text-white hover:bg-[#0063CC]"
                 : "cursor-not-allowed bg-[#E5E5E7] text-[#86868B]"

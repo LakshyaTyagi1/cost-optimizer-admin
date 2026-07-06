@@ -48,6 +48,7 @@ type ApiProcess = {
   industryDomainId?: string;
   industryId?: string;
   isActive?: boolean;
+  isDeleted?: boolean;
   name?: string;
   scope?: "industry-default" | "industry-domain";
   slug?: string;
@@ -86,7 +87,10 @@ type ApiResponse<T> = {
   data?: T;
   message?: string;
   pagination?: {
+    limit?: number;
+    page?: number;
     totalCount?: number;
+    totalPages?: number;
   };
   status?: boolean;
   success?: boolean;
@@ -95,7 +99,10 @@ type ApiResponse<T> = {
 type ApiListPayload<T> = {
   data?: T[];
   pagination?: {
+    limit?: number;
+    page?: number;
     totalCount?: number;
+    totalPages?: number;
   };
 };
 
@@ -183,24 +190,34 @@ export async function fetchMappedProcesses(catalog: DataDictionaryCatalog) {
   return addProcessCodes(rows);
 }
 
-export async function fetchMappedTechStack(catalog: DataDictionaryCatalog) {
-  const [industryTools, domainToolLists] = await Promise.all([
-    fetchListApi<ApiTechStack>(`${adminBasePath}/tech-stack`, {
-      params: { limit: "500" },
+export async function fetchArchivedDataDictionaryProcesses() {
+  const catalog = await fetchDataDictionaryCatalog();
+  const [industryProcesses, domainProcesses] = await Promise.all([
+    fetchListApi<ApiProcess>(`${adminBasePath}/industry-processes`, {
+      params: { deleted: "true", includeInactive: "true", limit: "500" },
     }),
-    Promise.all(
-      catalog.domains.map((domain) =>
-        fetchListApi<ApiTechStack>(`${adminBasePath}/tech-stack`, {
-          params: { domainId: domain.id, limit: "500" },
-        }),
-      ),
-    ),
+    fetchListApi<ApiProcess>(`${adminBasePath}/processes`, {
+      params: { deleted: "true", includeInactive: "true", limit: "500" },
+    }),
   ]);
+  const rows = [
+    ...(industryProcesses.data ?? []).map((process) =>
+      mapProcess(process, "industry-default", catalog),
+    ),
+    ...(domainProcesses.data ?? []).map((process) =>
+      mapProcess(process, "industry-domain", catalog),
+    ),
+  ].filter((process): process is DictionaryProcess => Boolean(process));
 
-  return [
-    ...(industryTools.data ?? []),
-    ...domainToolLists.flatMap((result) => result.data ?? []),
-  ]
+  return addProcessCodes(rows);
+}
+
+export async function fetchMappedTechStack(catalog: DataDictionaryCatalog) {
+  const tools = await fetchAllListApi<ApiTechStack>(`${adminBasePath}/tech-stack`, {
+    params: { includeDomains: "true", limit: "100" },
+  });
+
+  return tools
     .map((tool) => mapTechStackTool(tool, catalog))
     .filter((tool): tool is TechStackTool => Boolean(tool));
 }
@@ -374,6 +391,14 @@ export async function deleteDataDictionaryProcess(process: DictionaryProcess) {
   });
 
   return getId(deletedProcess);
+}
+
+export async function restoreDataDictionaryProcess(process: DictionaryProcess) {
+  const restoredProcess = await fetchApi<ApiProcess>(`${getProcessPath(process)}/restore`, {
+    method: "PATCH",
+  });
+
+  return getId(restoredProcess);
 }
 
 export async function updateDataDictionaryCurrencyConversionRate(rate: number) {
@@ -610,6 +635,7 @@ function mapProcess(
     id,
     industryIds: industry?.id ? [industry.id] : [],
     isActive: process.isActive !== false,
+    isDeleted: process.isDeleted === true,
     name,
     scope,
     source: scope === "industry-domain" ? "Industry x Domain" : "Industry Default",
@@ -782,6 +808,35 @@ async function fetchListApi<T>(
     data: Array.isArray(body?.data) ? body.data : [],
     pagination: body?.pagination,
   };
+}
+
+async function fetchAllListApi<T>(
+  path: string,
+  options: RequestInit & { params?: Record<string, string> } = {},
+) {
+  const firstPage = await fetchListApi<T>(path, {
+    ...options,
+    params: { ...options.params, page: "1" },
+  });
+  const totalPages = Math.max(1, Number(firstPage.pagination?.totalPages) || 1);
+
+  if (totalPages <= 1) {
+    return firstPage.data ?? [];
+  }
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      fetchListApi<T>(path, {
+        ...options,
+        params: { ...options.params, page: String(index + 2) },
+      }),
+    ),
+  );
+
+  return [
+    ...(firstPage.data ?? []),
+    ...remainingPages.flatMap((page) => page.data ?? []),
+  ];
 }
 
 async function fetchApiResponse<T>(
