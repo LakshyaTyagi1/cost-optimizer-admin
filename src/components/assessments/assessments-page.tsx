@@ -20,7 +20,6 @@ import {
   CalendarDays,
   Car,
   ChevronDown,
-  ClipboardPlus,
   Home,
   Landmark,
   LayoutGrid,
@@ -43,9 +42,11 @@ import {
   type AdminAssessmentRow,
   updateAdminAssessmentProcess,
 } from "@/api/assessments.api";
+import { fetchDataDictionaryCatalog } from "@/api/data-dictionary.api";
 import { AdminShell } from "@/components/admin-shell/admin-shell";
 
 const assessmentsQueryKey = ["admin-assessments"] as const;
+const assessmentIndustryCatalogQueryKey = ["data-dictionary", "catalog", "industries"] as const;
 const pageSize = 10;
 const emptyAssessments: AdminAssessmentRow[] = [];
 const defaultUsdToAedRate = 3.6725;
@@ -180,11 +181,15 @@ export function AssessmentsPage() {
     queryKey: assessmentsQueryKey,
     queryFn: fetchAdminAssessments,
   });
+  const { data: industryCatalog } = useQuery({
+    queryKey: assessmentIndustryCatalogQueryKey,
+    queryFn: fetchDataDictionaryCatalog,
+  });
 
   const assessments = data?.assessments ?? emptyAssessments;
   const totalAssessments = data?.totalAssessments ?? assessments.length;
   const errorMessage = error ? getErrorMessage(error) : "";
-  const industryOptions = useMemo(() => getIndustryOptions(assessments), [assessments]);
+  const industryOptions = useMemo(() => getIndustryOptions(assessments, industryCatalog?.industries ?? []), [assessments, industryCatalog?.industries]);
   const statusOptions = useMemo(() => getUniqueOptions(assessments, "status"), [assessments]);
 
   const filteredAssessments = useMemo(() => {
@@ -331,15 +336,6 @@ export function AssessmentsPage() {
             >
               <ArrowDownToLine size={13} aria-hidden="true" />
               Export CSV
-            </button>
-            <button
-              type="button"
-              disabled
-              title="New assessments are created from the customer assessment flow."
-              className="inline-flex h-9 w-full cursor-not-allowed items-center justify-center gap-2 rounded-md bg-[#007AFF] px-4 text-xs font-bold text-white opacity-80 sm:w-auto"
-            >
-              <ClipboardPlus size={13} aria-hidden="true" />
-              Add Assessment
             </button>
           </div>
         </header>
@@ -815,7 +811,7 @@ function SearchInput({
         aria-label="Search company, contact, or region"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#171717] outline-none placeholder:text-[#A1A1AA]"
+        className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#171717] outline-none placeholder:text-[#A1A1AA] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
         placeholder="Search company, contact, region..."
         type="search"
       />
@@ -842,7 +838,7 @@ function FilterSelect({
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-full w-full appearance-none rounded-md bg-transparent pr-9 pl-3 text-sm font-semibold text-[#171717] outline-none"
+        className="h-full w-full appearance-none rounded-md bg-transparent pr-9 pl-3 text-sm font-semibold text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
       >
         {children}
       </select>
@@ -869,7 +865,7 @@ function MetricFilterInput({
         aria-label="Minimum DI score"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#171717] outline-none placeholder:text-[#A1A1AA]"
+        className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#171717] outline-none placeholder:text-[#A1A1AA] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
         inputMode="numeric"
         placeholder="DI min"
       />
@@ -893,7 +889,7 @@ function DateInput({
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#171717] outline-none"
+        className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
         type="date"
       />
     </label>
@@ -1495,7 +1491,7 @@ function AssessmentProcesses({ assessment }: { assessment: AssessmentSummary }) 
               <th className="w-[18%] px-5">Automation</th>
               <th className="w-[13%] px-5">Cost / yr</th>
               <th className="w-[10%] px-5">FTEs</th>
-              <th className="w-[10%] px-5">Software / yr</th>
+              <th className="w-[10%] px-5 whitespace-nowrap">Software / yr</th>
               <th className="w-[13%] px-5 text-right">Est. saving</th>
             </tr>
           </thead>
@@ -2929,8 +2925,11 @@ function compareAssessmentSummaries(
   );
 }
 
-function getIndustryOptions(rows: AdminAssessmentRow[]) {
-  return getUniqueValues(rows.flatMap((row) => getAssessmentIndustries(row))).sort(
+function getIndustryOptions(rows: AdminAssessmentRow[], catalogIndustries: Array<{ name: string }>) {
+  return getUniqueValues([
+    ...catalogIndustries.map((industry) => industry.name),
+    ...rows.flatMap((row) => getAssessmentIndustries(row)),
+  ]).sort(
     (first, second) => first.localeCompare(second),
   );
 }

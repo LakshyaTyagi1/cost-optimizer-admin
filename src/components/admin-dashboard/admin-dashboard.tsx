@@ -609,7 +609,7 @@ function StatusPill({ label, tone }: { label: string; tone: keyof typeof statusS
 
   return (
     <span
-      className={`inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold ${styles.chip}`}
+      className={`inline-flex w-fit items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-bold ${styles.chip}`}
     >
       <span className={`size-1.5 rounded-full ${styles.dot}`} />
       {label}

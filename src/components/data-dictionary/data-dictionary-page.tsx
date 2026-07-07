@@ -72,6 +72,7 @@ const archiveProcessesQueryKey = ["data-dictionary", "archive", "processes"] as 
 const techStackQueryKey = ["data-dictionary", "tech-stack"] as const;
 const dataDictionaryCacheTime = 5 * 60_000;
 const dataDictionaryGcTime = 30 * 60_000;
+const dataDictionaryToastDismissMs = 8000;
 const initialExpandedProcessId = "__initial_process__";
 const industryDefaultDomainFilter = "industry-default";
 const processLibraryPageSize = 10;
@@ -425,7 +426,7 @@ export function DataDictionaryPage() {
         currentToasts.filter((toast) => toast.id !== toastId),
       );
       techStackToastTimeoutsRef.current.delete(toastId);
-    }, 4400);
+    }, dataDictionaryToastDismissMs);
 
     techStackToastTimeoutsRef.current.set(toastId, toastTimeout);
   }
@@ -494,7 +495,10 @@ export function DataDictionaryPage() {
         industryId: selectedIndustryId,
         name,
       });
-      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
+        queryClient.invalidateQueries({ queryKey: techStackQueryKey }),
+      ]);
       setDomainIndustryId(selectedIndustryId);
       setMappingIndustryId(selectedIndustryId);
     } catch (error) {
@@ -1499,7 +1503,7 @@ function IndustryDomainManager({
         currentToasts.filter((toast) => toast.id !== toastId),
       );
       reorderToastTimeoutsRef.current.delete(toastId);
-    }, 4400);
+    }, dataDictionaryToastDismissMs);
 
     reorderToastTimeoutsRef.current.set(toastId, toastTimeout);
   }
@@ -1985,7 +1989,7 @@ function IndustryDomainManager({
                   onChange={(event) => setIndustryName(event.target.value)}
                   onKeyDown={handleIndustrySearchKeyDown}
                   disabled={isIndustrySaving}
-                  className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[#555555] outline-none placeholder:text-[#A1A1AA] disabled:cursor-wait"
+                  className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[#555555] outline-none placeholder:text-[#A1A1AA] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0 disabled:cursor-wait"
                   placeholder="Search industry or type new name"
                   title="Search industries, select an existing match, or press Enter to create a new industry"
                 />
@@ -2158,7 +2162,7 @@ function IndustryDomainManager({
                   }}
                   onKeyDown={handleDomainSearchKeyDown}
                   disabled={!selectedIndustryId || isDomainSaving || isMappingDomain}
-                  className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[#555555] outline-none placeholder:text-[#A1A1AA] disabled:cursor-not-allowed disabled:text-[#A1A1AA]"
+                  className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[#555555] outline-none placeholder:text-[#A1A1AA] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0 disabled:cursor-not-allowed disabled:text-[#A1A1AA]"
                   placeholder={selectedIndustryId ? "Search domain or type new name" : "Select an industry first"}
                   title={
                     selectedIndustryId
@@ -2516,15 +2520,27 @@ function ReorderToastStack({
   toasts: ReorderToastState[];
 }) {
   const visibleToasts = toasts.slice(0, 3);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   if (visibleToasts.length === 0) {
     return null;
   }
 
+  const toastHeight = 78;
+  const expandedGap = 10;
+  const stackHeight = isExpanded
+    ? visibleToasts.length * toastHeight + (visibleToasts.length - 1) * expandedGap
+    : 112;
+
   return (
     <div
-      className="pointer-events-none fixed right-5 bottom-5 z-[70] h-[112px] w-[min(380px,calc(100vw-40px))]"
+      className="pointer-events-auto fixed right-5 bottom-5 z-[70] w-[min(380px,calc(100vw-40px))]"
       aria-label={ariaLabel}
+      onBlur={() => setIsExpanded(false)}
+      onFocus={() => setIsExpanded(true)}
+      onMouseEnter={() => setIsExpanded(true)}
+      onMouseLeave={() => setIsExpanded(false)}
+      style={{ height: stackHeight }}
     >
       <style>
         {`
@@ -2553,19 +2569,21 @@ function ReorderToastStack({
         return (
           <div
             key={toast.id}
-            aria-hidden={!isFrontToast}
+            aria-hidden={!isExpanded && !isFrontToast}
             aria-live={isError ? "assertive" : "polite"}
             className="absolute right-0 bottom-0 min-h-[72px] w-full overflow-hidden rounded-[11px] border border-black/[0.08] bg-white px-5 py-4 shadow-[0_18px_45px_rgba(15,23,42,0.16)]"
-            role={isFrontToast ? (isError ? "alert" : "status") : undefined}
+            role={isExpanded || isFrontToast ? (isError ? "alert" : "status") : undefined}
             style={{
               animation: isFrontToast ? "mapping-toast-enter 180ms ease-out" : undefined,
-              opacity: 1 - index * 0.14,
-              transform: `translateY(${index * 15}px) scale(${1 - index * 0.035})`,
+              opacity: isExpanded ? 1 : 1 - index * 0.14,
+              transform: isExpanded
+                ? `translateY(-${index * (toastHeight + expandedGap)}px) scale(1)`
+                : `translateY(${index * 15}px) scale(${1 - index * 0.035})`,
               transition: "transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease",
               zIndex: visibleToasts.length - index,
             }}
           >
-            {isFrontToast ? (
+            {isExpanded || isFrontToast ? (
               <div className="flex items-center gap-3">
                 {isProcessing ? (
                   <span
@@ -2957,7 +2975,7 @@ function ProcessLibraryCard({
             className="w-full sm:w-[238px]"
           />
           <label
-            className="relative flex h-9 w-full min-w-0 items-center sm:w-[190px]"
+            className="relative flex h-9 w-full min-w-0 items-center rounded-md border border-[#D9E3F0] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#B8D8FF] focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/10 sm:w-[190px]"
             title="Filter processes by industry"
           >
             <Building2
@@ -2975,7 +2993,7 @@ function ProcessLibraryCard({
                 }
               }}
               aria-label="Filter processes by industry"
-              className="h-9 w-full appearance-none rounded-md border border-[#D9E3F0] bg-white pr-9 pl-9 text-sm font-semibold text-[#333333] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition hover:border-[#B8D8FF] focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10"
+              className="h-full w-full appearance-none rounded-md bg-transparent pr-9 pl-9 text-sm font-semibold text-[#333333] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
             >
               <option value="all">All industries</option>
               {industries.map((industry) => (
@@ -2991,7 +3009,7 @@ function ProcessLibraryCard({
             />
           </label>
           <label
-            className="relative flex h-9 w-full min-w-0 items-center sm:w-[190px]"
+            className="relative flex h-9 w-full min-w-0 items-center rounded-md border border-[#D9E3F0] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#B8D8FF] focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/10 sm:w-[190px]"
             title="Filter processes by domain"
           >
             <Database
@@ -3003,7 +3021,7 @@ function ProcessLibraryCard({
               value={processDomainFilter}
               onChange={(event) => setProcessDomainFilter(event.target.value)}
               aria-label="Filter processes by domain"
-              className="h-9 w-full appearance-none rounded-md border border-[#D9E3F0] bg-white pr-9 pl-9 text-sm font-semibold text-[#333333] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition hover:border-[#B8D8FF] focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10"
+              className="h-full w-full appearance-none rounded-md bg-transparent pr-9 pl-9 text-sm font-semibold text-[#333333] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
             >
               <option value="all">All domains</option>
               <option value={industryDefaultDomainFilter}>Industry default</option>
@@ -3528,6 +3546,18 @@ function TechnologyStackCard({
   const emptyToolMessage = hasToolFilters
     ? "No tools match the selected filters. Reset filters to view all tools."
     : "No tools added yet. Add a tool to build the technology stack library.";
+  const canDeleteAllTools = toolTotalCount > 0 && !isToolDeleting && !isToolSaving;
+  const isAddToolDisabled = isToolDeleting || isToolSaving;
+  const deleteAllToolsLabel = isDeletingAllTools
+    ? "Deleting all technology stack tools"
+    : toolTotalCount === 0
+      ? "No technology stack tools to delete"
+      : isToolDeleting || isToolSaving
+        ? "Technology stack update in progress"
+        : "Delete all technology stack tools";
+  const addToolLabel = isAddToolDisabled
+    ? "Technology stack update in progress"
+    : "Add technology stack tool";
 
   return (
     <section className="mt-5 min-w-0 overflow-hidden rounded-md border border-black/8 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
@@ -3539,11 +3569,13 @@ function TechnologyStackCard({
           <button
             type="button"
             onClick={onDeleteAllTools}
-            disabled={toolTotalCount === 0 || isToolDeleting || isToolSaving}
-            className="inline-flex items-center gap-1 text-xs font-bold text-[#EF4444] transition hover:text-[#DC2626] disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!canDeleteAllTools}
+            aria-label={deleteAllToolsLabel}
+            title={deleteAllToolsLabel}
+            className="inline-flex cursor-pointer items-center gap-1 text-xs font-bold text-[#EF4444] transition hover:text-[#DC2626] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isDeletingAllTools ? (
-              <span className="size-3 animate-spin rounded-full border border-[#EF4444]/30 border-t-[#EF4444]" />
+              <span className="size-3 animate-spin rounded-full border border-[#EF4444]/30 border-t-[#EF4444]" aria-hidden="true" />
             ) : (
               <Trash2 size={12} aria-hidden="true" />
             )}
@@ -3552,8 +3584,10 @@ function TechnologyStackCard({
           <button
             type="button"
             onClick={onOpenNewToolForm}
-            disabled={isToolDeleting || isToolSaving}
-            className="inline-flex items-center gap-1 text-xs font-bold text-[#007AFF] transition hover:text-[#0051D5] disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isAddToolDisabled}
+            aria-label={addToolLabel}
+            title={addToolLabel}
+            className="inline-flex cursor-pointer items-center gap-1 text-xs font-bold text-[#007AFF] transition hover:text-[#0051D5] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus size={12} aria-hidden="true" />
             Add Tool
@@ -3572,16 +3606,21 @@ function TechnologyStackCard({
                 placeholder="Search tools or vendors..."
                 className="w-full sm:w-[280px]"
               />
-              <select
-                value={toolScopeFilter}
-                onChange={(event) => setToolScopeFilter(event.target.value)}
-                className="h-9 w-full rounded-md border border-black/[0.08] bg-white px-3 text-xs font-semibold text-[#555555] outline-none focus:border-[#007AFF] sm:w-[180px]"
+              <label
+                className="relative flex h-9 w-full min-w-0 items-center rounded-md border border-black/[0.08] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus-within:border-[#007AFF] sm:w-[180px]"
+                title="Filter technology stack tools by scope"
               >
-                <option value="all">All tools</option>
-                <option value="common">Global tools</option>
-                <option value="industry">Industry default</option>
-                <option value="domain">Industry + domain</option>
-              </select>
+                <select
+                  value={toolScopeFilter}
+                  onChange={(event) => setToolScopeFilter(event.target.value)}
+                  className="h-full w-full rounded-md bg-transparent px-3 text-xs font-semibold text-[#555555] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
+                >
+                  <option value="all">All tools</option>
+                  <option value="common">Global tools</option>
+                  <option value="industry">Industry default</option>
+                  <option value="domain">Industry + domain</option>
+                </select>
+              </label>
               <button
                 type="button"
                 onClick={() => {
@@ -3744,7 +3783,7 @@ function SearchInput({
 
   return (
     <label
-      className={`flex h-9 items-center gap-2 rounded-md border border-black/[0.08] px-3 ${className}`}
+      className={`flex h-9 items-center gap-2 rounded-md border border-black/[0.08] px-3 focus-within:border-[#007AFF] ${className}`}
       title={inputTitle}
     >
       <Search size={14} className="text-[#A1A1AA]" aria-hidden="true" />
@@ -3752,7 +3791,7 @@ function SearchInput({
         aria-label={placeholder.replace("...", "")}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 text-xs font-semibold outline-none placeholder:text-[#A1A1AA]"
+        className="min-w-0 flex-1 text-xs font-semibold outline-none placeholder:text-[#A1A1AA] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
         placeholder={placeholder}
         title={inputTitle}
         type="search"
