@@ -1,4 +1,4 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 
 /* Design tokens */
 :root {
@@ -23,12 +23,15 @@
 /* Base document */
 html {
   scroll-behavior: smooth;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   min-height: 100vh;
   background: var(--background);
   color: var(--foreground);
+  overflow-x: hidden;
   font-family: var(--font-inter), Inter, Arial, Helvetica, sans-serif;
 }
 
@@ -46,6 +49,16 @@ button:not(:disabled):not([class*="cursor-"]) {
 
 button:disabled:not([class*="cursor-"]) {
   cursor: not-allowed;
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #007aff;
+  outline-offset: 2px;
+}
+
+:where(input, select, textarea) {
+  max-width: 100%;
+  min-width: 0;
 }
 
 /* Utilities */
@@ -111,6 +124,22 @@ button:disabled:not([class*="cursor-"]) {
 
 .assessment-highlight-flash {
   animation: assessment-highlight-flash 1250ms ease-in-out 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .recent-assessment-card:hover,
+  .recent-assessment-card:focus-visible {
+    transform: none;
+  }
 }
 
 /* Animations */

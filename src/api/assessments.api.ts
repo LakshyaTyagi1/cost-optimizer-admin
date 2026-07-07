@@ -8,6 +8,7 @@ export type AdminAssessmentRow = {
   currencyConversionRate?: number;
   customProcesses?: AdminAssessmentProcess[];
   domain?: string;
+  email?: string;
   id: string;
   industry: string;
   owner?: string;
@@ -65,6 +66,12 @@ export type AdminAssessmentProcess = {
   source?: string;
   stack?: string[];
   tier?: string;
+  updatedAt?: string;
+  updatedBy?: {
+    email?: string;
+    id?: string;
+    name?: string;
+  };
 };
 
 export type AdminCurrencyAmount = {
@@ -137,6 +144,44 @@ export async function fetchAdminAssessments(): Promise<AdminAssessmentsPayload> 
     assessments,
     pipelineByStatus: Array.isArray(data.pipelineByStatus) ? data.pipelineByStatus : [],
     totalAssessments: Number(data.totalAssessments) || assessments.length,
+  };
+}
+
+export async function fetchAdminAssessment(assessmentId: string): Promise<AdminAssessmentRow> {
+  const headers = getRequestHeaders();
+  const normalizedAssessmentId = assessmentId.trim();
+
+  if (!headers.Authorization) {
+    throw new Error("Admin access token is required to load assessment details");
+  }
+
+  if (!normalizedAssessmentId) {
+    throw new Error("Assessment id is required");
+  }
+
+  const response = await fetch(
+    buildAdminApiUrl(`/adm/cos-process-management/assessments/${encodeURIComponent(normalizedAssessmentId)}`),
+    {
+      credentials: "include",
+      headers,
+    },
+  );
+  const body = (await response.json().catch(() => null)) as ApiResponse<AdminAssessmentRow> | null;
+
+  if (!response.ok || body?.success === false || body?.status === false || !body?.data) {
+    throw new Error(body?.message || "Unable to load assessment details");
+  }
+
+  const assessment = body.data;
+  const processes = mapAssessmentProcesses(assessment.processes, assessment.id);
+  const customProcesses = mapAssessmentProcesses(assessment.customProcesses, assessment.id);
+
+  return {
+    ...assessment,
+    customProcesses: customProcesses.length
+      ? customProcesses
+      : processes.filter(isFrontendCustomAssessmentProcess),
+    processes,
   };
 }
 

@@ -14,7 +14,6 @@ import {
 type ApiEntity = {
   _id?: string;
   displayOrder?: number;
-  displayName?: string;
   id?: string;
   isActive?: boolean;
   name?: string;
@@ -22,7 +21,6 @@ type ApiEntity = {
 };
 
 type ApiMapping = {
-  domainDisplayName?: string;
   displayOrder?: number;
   domainName?: string;
   domainId?: ApiEntity | string;
@@ -39,6 +37,8 @@ type ApiProcess = {
   _id?: string;
   category?: string;
   description?: string;
+  domainName?: string;
+  domainSlug?: string;
   estimatedAnnualCost?: {
     amount?: number;
     currency?: "AED" | "USD";
@@ -46,6 +46,8 @@ type ApiProcess = {
   id?: string;
   hoursPerYear?: number;
   industryDomainId?: string;
+  industryName?: string;
+  industrySlug?: string;
   industryId?: string;
   isActive?: boolean;
   isDeleted?: boolean;
@@ -144,19 +146,28 @@ export type DataDictionaryPayload = DataDictionaryCatalog & {
   techStack: TechStackTool[];
 };
 
+export type DataDictionaryPagination = {
+  limit: number;
+  page: number;
+  totalCount: number;
+  totalPages: number;
+};
+
+export type DataDictionaryTechStackPage = {
+  pagination: DataDictionaryPagination;
+  tools: TechStackTool[];
+};
+
 const adminBasePath = "/adm/cos-process-management";
 
 export async function fetchDataDictionary(): Promise<DataDictionaryPayload> {
   const catalog = await fetchDataDictionaryCatalog();
-  const [processes, techStack] = await Promise.all([
-    fetchMappedProcesses(catalog),
-    fetchMappedTechStack(catalog),
-  ]);
+  const processes = await fetchMappedProcesses(catalog);
 
   return {
     ...catalog,
     processes,
-    techStack,
+    techStack: [],
   };
 }
 
@@ -170,46 +181,62 @@ export async function fetchDataDictionaryCatalog() {
 
 export async function fetchMappedProcesses(catalog: DataDictionaryCatalog) {
   const [industryProcesses, domainProcesses] = await Promise.all([
-    fetchListApi<ApiProcess>(`${adminBasePath}/industry-processes`, {
-      params: { includeInactive: "true", limit: "500" },
+    fetchAllListApi<ApiProcess>(`${adminBasePath}/industry-processes`, {
+      params: { includeInactive: "true" },
     }),
-    fetchListApi<ApiProcess>(`${adminBasePath}/processes`, {
-      params: { includeInactive: "true", limit: "500" },
+    fetchAllListApi<ApiProcess>(`${adminBasePath}/processes`, {
+      params: { includeInactive: "true" },
     }),
   ]);
 
   const rows = [
-    ...(industryProcesses.data ?? []).map((process) =>
+    ...industryProcesses.map((process) =>
       mapProcess(process, "industry-default", catalog),
     ),
-    ...(domainProcesses.data ?? []).map((process) =>
+    ...domainProcesses.map((process) =>
       mapProcess(process, "industry-domain", catalog),
+    ),
+  ]
+    .filter((process): process is DictionaryProcess => Boolean(process))
+    .filter((process) => process.isActive !== false);
+
+  return addProcessCodes(rows);
+}
+
+export async function fetchArchivedDataDictionaryProcesses() {
+  const archiveCatalog = getArchiveProcessCatalog();
+  const [archivedIndustryProcesses, archivedDomainProcesses] = await Promise.all([
+    fetchAllListApi<ApiProcess>(`${adminBasePath}/industry-processes`, {
+      params: { archiveView: "true", includeInactive: "true" },
+    }),
+    fetchAllListApi<ApiProcess>(`${adminBasePath}/processes`, {
+      params: { archiveView: "true", includeInactive: "true" },
+    }),
+  ]);
+  const rows = [
+    ...archivedIndustryProcesses.map((process) =>
+      mapProcess(process, "industry-default", archiveCatalog),
+    ),
+    ...archivedDomainProcesses.map((process) =>
+      mapProcess(process, "industry-domain", archiveCatalog),
     ),
   ].filter((process): process is DictionaryProcess => Boolean(process));
 
   return addProcessCodes(rows);
 }
 
-export async function fetchArchivedDataDictionaryProcesses() {
-  const catalog = await fetchDataDictionaryCatalog();
-  const [industryProcesses, domainProcesses] = await Promise.all([
-    fetchListApi<ApiProcess>(`${adminBasePath}/industry-processes`, {
-      params: { deleted: "true", includeInactive: "true", limit: "500" },
-    }),
-    fetchListApi<ApiProcess>(`${adminBasePath}/processes`, {
-      params: { deleted: "true", includeInactive: "true", limit: "500" },
-    }),
-  ]);
-  const rows = [
-    ...(industryProcesses.data ?? []).map((process) =>
-      mapProcess(process, "industry-default", catalog),
-    ),
-    ...(domainProcesses.data ?? []).map((process) =>
-      mapProcess(process, "industry-domain", catalog),
-    ),
-  ].filter((process): process is DictionaryProcess => Boolean(process));
-
-  return addProcessCodes(rows);
+function getArchiveProcessCatalog(): DataDictionaryCatalog {
+  return {
+    domains: [],
+    industries: [],
+    inactiveIndustries: [],
+    libraries: [],
+    options: {
+      categories: [...processCategories],
+      currencyConversionRate: 3.6725,
+      tiers: getStaticTierOptions(),
+    },
+  };
 }
 
 export async function fetchMappedTechStack(catalog: DataDictionaryCatalog) {
@@ -220,6 +247,50 @@ export async function fetchMappedTechStack(catalog: DataDictionaryCatalog) {
   return tools
     .map((tool) => mapTechStackTool(tool, catalog))
     .filter((tool): tool is TechStackTool => Boolean(tool));
+}
+
+export async function fetchMappedTechStackPage({
+  catalog,
+  limit,
+  page,
+  search,
+  scopeFilter,
+}: {
+  catalog: DataDictionaryCatalog;
+  limit: number;
+  page: number;
+  search: string;
+  scopeFilter: string;
+}): Promise<DataDictionaryTechStackPage> {
+  const trimmedSearch = search.trim();
+  const params: Record<string, string> = {
+    includeDomains: "true",
+    limit: String(limit),
+    page: String(page),
+  };
+
+  if (trimmedSearch) {
+    params.search = trimmedSearch;
+  }
+
+  Object.assign(params, getTechStackScopeParams(scopeFilter));
+
+  const result = await fetchListApi<ApiTechStack>(`${adminBasePath}/tech-stack`, {
+    params,
+  });
+  const pagination = result.pagination ?? {};
+
+  return {
+    pagination: {
+      limit: Number(pagination.limit) || limit,
+      page: Number(pagination.page) || page,
+      totalCount: Number(pagination.totalCount) || 0,
+      totalPages: Number(pagination.totalPages) || 0,
+    },
+    tools: (result.data ?? [])
+      .map((tool) => mapTechStackTool(tool, catalog))
+      .filter((tool): tool is TechStackTool => Boolean(tool)),
+  };
 }
 
 export async function createDataDictionaryIndustry(payload: { name: string }) {
@@ -393,6 +464,19 @@ export async function deleteDataDictionaryProcess(process: DictionaryProcess) {
   return getId(deletedProcess);
 }
 
+export async function permanentlyDeleteDataDictionaryProcess(process: DictionaryProcess) {
+  if (process.isDeleted !== true) {
+    await deleteDataDictionaryProcess(process);
+  }
+
+  const deletedProcess = await fetchApi<ApiProcess>(getProcessPath(process), {
+    method: "DELETE",
+    params: { permanent: "true" },
+  });
+
+  return getId(deletedProcess);
+}
+
 export async function restoreDataDictionaryProcess(process: DictionaryProcess) {
   const restoredProcess = await fetchApi<ApiProcess>(`${getProcessPath(process)}/restore`, {
     method: "PATCH",
@@ -425,6 +509,30 @@ function toApiTechStackPayload(payload: DataDictionaryTechStackPayload) {
   };
 }
 
+function getTechStackScopeParams(scopeFilter: string): Record<string, string> {
+  if (scopeFilter === "common") {
+    return { scope: "common" };
+  }
+
+  if (scopeFilter === "industry") {
+    return {
+      includeCommon: "false",
+      includeDomains: "false",
+      scope: "industry-default",
+    };
+  }
+
+  if (scopeFilter === "domain") {
+    return {
+      includeCommon: "false",
+      includeDomains: "true",
+      scope: "industry-domain",
+    };
+  }
+
+  return { includeDomains: "true" };
+}
+
 function mapCatalog(payload: ApiCatalogPayload = {}): DataDictionaryCatalog {
   const mappedIndustries = (payload.industries ?? [])
     .map(mapIndustry)
@@ -454,7 +562,6 @@ function mapCatalog(payload: ApiCatalogPayload = {}): DataDictionaryCatalog {
     const rawDomain = typeof mapping.domainId === "object" ? mapping.domainId : undefined;
     const existingDomain = domainById.get(domainId);
     const library = mapLibrary(mapping, {
-      domainDisplayName: existingDomain?.name,
       domainName: existingDomain?.name,
       industryName: industryById.get(industryId)?.name,
     });
@@ -471,7 +578,6 @@ function mapCatalog(payload: ApiCatalogPayload = {}): DataDictionaryCatalog {
       mapDomain(
         {
           _id: library.domainId,
-          displayName: library.domainDisplayName || library.domainName,
           displayOrder: library.displayOrder,
           isActive: library.isActive,
           name: library.domainName,
@@ -553,7 +659,7 @@ function mapDomain(domain: ApiEntity | undefined, industryIds: string[]): Dictio
 
 function mapLibrary(
   mapping?: ApiMapping,
-  fallbackNames: { domainDisplayName?: string; domainName?: string; industryName?: string } = {},
+  fallbackNames: { domainName?: string; industryName?: string } = {},
 ): DictionaryLibrary | null {
   const domainId = getId(mapping?.domainId);
   const industryId = getId(mapping?.industryId);
@@ -568,12 +674,6 @@ function mapLibrary(
     displayOrder: Number(mapping?.displayOrder) || 0,
     id: mapping?.id || domainId,
     domainId,
-    domainDisplayName:
-      toDisplayName(mapping?.domainDisplayName || "") ||
-      toDomainLabel(domain) ||
-      fallbackNames.domainDisplayName ||
-      fallbackNames.domainName ||
-      "Mapped Domain",
     domainName:
       toDisplayName(mapping?.domainName || "") ||
       toDomainLabel(domain) ||
@@ -610,6 +710,8 @@ function mapProcess(
   const industry = [...catalog.industries, ...catalog.inactiveIndustries].find(
     (item) => item.id === (industryId || domainLibrary?.industryId),
   );
+  const processIndustryName = toDisplayName(process.industryName || process.industrySlug || "");
+  const processDomainName = toDisplayName(process.domainName || process.domainSlug || "");
 
   if (!id || !name) {
     return null;
@@ -628,12 +730,12 @@ function mapProcess(
     description: String(process.description || "").trim(),
     domain:
       scope === "industry-domain"
-        ? domain?.name || domainLibrary?.domainDisplayName || domainLibrary?.domainName || "Mapped Domain"
+        ? domain?.name || domainLibrary?.domainName || processDomainName || "Mapped Domain"
         : "Industry Default",
     domainId: scope === "industry-domain" ? domain?.id || domainLibrary?.domainId || domainId : "industry-default",
     hours: formatHours(process.hoursPerYear),
     id,
-    industryIds: industry?.id ? [industry.id] : [],
+    industryIds: industry?.id ? [industry.id] : industryId ? [industryId] : [],
     isActive: process.isActive !== false,
     isDeleted: process.isDeleted === true,
     name,
@@ -641,7 +743,7 @@ function mapProcess(
     source: scope === "industry-domain" ? "Industry x Domain" : "Industry Default",
     tier: toTierLabel(process.tier),
     tierValue: process.tier || "",
-    industryLabel: industry?.name || domainLibrary?.industryName,
+    industryLabel: industry?.name || domainLibrary?.industryName || processIndustryName || undefined,
   };
 }
 
@@ -907,7 +1009,7 @@ function getId(entity?: ApiEntity | string | null) {
 }
 
 function toDomainLabel(domain?: ApiEntity) {
-  return toDisplayName(domain?.displayName || domain?.name || domain?.slug || "");
+  return toDisplayName(domain?.name || domain?.slug || "");
 }
 
 function toDisplayName(value: string) {

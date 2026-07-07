@@ -20,12 +20,11 @@ import { AdminShell } from "@/components/admin-shell/admin-shell";
 import { AssessmentTrendChart } from "./assessment-trend-chart";
 import {
   pipelineStatuses,
-  stageWeights,
-  type DashboardAssessmentProcess,
   type DashboardCount,
+  type DashboardPipelineStageWeight,
   type DashboardSummary,
-  type DashboardTrendPoint,
   type DashboardValue,
+  type DashboardTrendPoint,
   type PipelineStatus,
   type RecentAssessment,
 } from "./dashboard-data";
@@ -67,44 +66,72 @@ const industryIconStyles: Record<string, { className: string; icon: LucideIcon; 
   retail: { className: "text-[#86868B]", icon: ShoppingBag },
 };
 
+type DashboardData = Awaited<ReturnType<typeof fetchDashboardData>>;
+
 export function AdminDashboard() {
   return (
     <AdminShell activeItem="Dashboard">
       <div className="lg:pr-6">
         <header>
           <h1 className="text-[26px] leading-tight font-bold tracking-normal">Business Dashboard</h1>
-          <p className="mt-2 text-sm font-semibold text-[#86868B]">
-            Overview of every assessment submitted through the Enterprise Cost Optimizer.
-          </p>
         </header>
 
-        <section className="mt-7 grid gap-5 xl:grid-cols-4" aria-label="Business dashboard summary">
-          <DashboardStatsCards />
-        </section>
-
-        <section className="mt-5 grid gap-5 xl:grid-cols-2" aria-label="Pipeline distribution">
-          <PipelineStatusCard />
-          <IndustryBreakdownCard />
-        </section>
-
-        <section
-          className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.42fr)_minmax(360px,1fr)]"
-          aria-label="Pipeline trend and value"
-        >
-          <AssessmentTrendCard />
-          <WeightedPipelineCard />
-        </section>
-
-        <PipelineConversionCard />
-
-        <section className="mt-5 grid gap-5 xl:grid-cols-2" aria-label="Portfolio signals">
-          <CompanySizeCard />
-          <SelectedProcessesCard />
-        </section>
-
+        <DashboardStatsSection />
+        <PipelineDistributionSection />
+        <PipelineValueSection />
+        <PipelineConversionSection />
+        <PortfolioSignalsSection />
         <RecentAssessmentsList />
       </div>
     </AdminShell>
+  );
+}
+
+function DashboardStatsSection() {
+  return (
+    <section className="mt-7 grid gap-5 xl:grid-cols-4" aria-label="Business dashboard summary">
+      <DashboardStatsCards />
+    </section>
+  );
+}
+
+function PipelineDistributionSection() {
+  return (
+    <section
+      className="mt-5 grid gap-5 xl:grid-cols-2"
+      aria-label="Pipeline distribution"
+    >
+      <PipelineStatusCard />
+      <IndustryBreakdownCard />
+    </section>
+  );
+}
+
+function PipelineValueSection() {
+  return (
+    <section
+      className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.42fr)_minmax(360px,1fr)]"
+      aria-label="Pipeline trend and value"
+    >
+      <AssessmentTrendCard />
+      <WeightedPipelineCard />
+    </section>
+  );
+}
+
+function PipelineConversionSection() {
+  return <PipelineConversionCard />;
+}
+
+function PortfolioSignalsSection() {
+  return (
+    <section
+      className="mt-5 grid gap-5 xl:grid-cols-2"
+      aria-label="Portfolio signals"
+    >
+      <CompanySizeCard />
+      <SelectedProcessesCard />
+    </section>
   );
 }
 
@@ -113,15 +140,10 @@ function DashboardStatsCards() {
     queryKey: dashboardQueryKey,
     queryFn: fetchDashboardData,
   });
-  const assessments = data?.recentAssessments ?? [];
-  const statuses = data?.pipelineByStatus
-    ? mergePipelineStatuses(data.pipelineByStatus)
-    : pipelineStatuses;
   const stats = createDashboardStats({
-    assessments,
-    statuses,
+    statuses: getDashboardStatuses(data),
     summary: data?.summary,
-    totalAssessments: data?.totalAssessments ?? assessments.length,
+    totalAssessments: data?.totalAssessments ?? 0,
   });
 
   return (
@@ -202,7 +224,7 @@ function IndustryBreakdownCard() {
     queryKey: dashboardQueryKey,
     queryFn: fetchDashboardData,
   });
-  const industries = normalizeDashboardCounts(data?.industryBreakdown) ?? createIndustryBreakdown(data?.recentAssessments ?? []);
+  const industries = getIndustryBreakdownData(data);
   const maxCount = Math.max(1, ...industries.map((industry) => industry.count));
   const errorMessage = error ? getErrorMessage(error) : "";
 
@@ -253,7 +275,7 @@ function AssessmentTrendCard() {
     queryKey: dashboardQueryKey,
     queryFn: fetchDashboardData,
   });
-  const trend = normalizeDashboardTrend(data?.assessmentTrend) ?? createAssessmentTrend(data?.recentAssessments ?? []);
+  const trend = getAssessmentTrendData(data);
 
   return (
     <Panel title="New Assessments - Last 6 Months" className="min-h-[270px]">
@@ -267,11 +289,8 @@ function WeightedPipelineCard() {
     queryKey: dashboardQueryKey,
     queryFn: fetchDashboardData,
   });
-  const assessments = data?.recentAssessments ?? [];
-  const statuses = data?.pipelineByStatus
-    ? mergePipelineStatuses(data.pipelineByStatus)
-    : pipelineStatuses;
-  const weightedPipelineValue = calculateWeightedPipelineValue(statuses, assessments, data?.summary, data?.totalAssessments);
+  const weightedPipelineStages = getWeightedPipelineStages(data);
+  const weightedPipelineValue = getWeightedPipelineValue(data);
 
   return (
     <Panel title="Weighted Pipeline Value" className="min-h-[264px]">
@@ -282,17 +301,17 @@ function WeightedPipelineCard() {
         Open deals x stage-probability using live pipeline counts and average assessment cost.
       </p>
       <div className="mt-6 space-y-3">
-        {stageWeights.map((stage) => {
-          const statusCount = getPipelineStatusCount(statuses, stage.label);
+        {weightedPipelineStages.map((stage) => {
+          const weightLabel = `${stage.weightPercent}% weight`;
 
           return (
             <div
-              key={stage.label}
+              key={stage.key || stage.label}
               className="flex items-center justify-between gap-4 text-xs font-bold"
             >
               <span className="text-[#86868B]">{stage.label}</span>
               <span className="text-[#171717]">
-                {stage.weight} - {statusCount} deals
+                {weightLabel} - {stage.count} deals
               </span>
             </div>
           );
@@ -342,11 +361,7 @@ function CompanySizeCard() {
     queryKey: dashboardQueryKey,
     queryFn: fetchDashboardData,
   });
-  const distribution =
-    normalizeDashboardValues(data?.companySizeDistribution)?.map((item) => ({
-      ...item,
-      label: item.label.includes("employees") ? item.label : `${item.label}\nemployees`,
-    })) ?? createCompanySizeDistribution(data?.recentAssessments ?? []);
+  const distribution = getCompanySizeDistributionData(data);
   const maxValue = getChartAxisMax(distribution.map((item) => item.value));
   const ticks = createChartTicks(maxValue);
 
@@ -395,12 +410,7 @@ function SelectedProcessesCard() {
     queryKey: dashboardQueryKey,
     queryFn: fetchDashboardData,
   });
-  const processes =
-    normalizeDashboardValues(data?.selectedProcesses)?.map((item) => ({
-      ...item,
-      label: wrapChartLabel(item.label, 18),
-    })) ??
-    createSelectedProcesses(data?.recentAssessments ?? []);
+  const processes = getSelectedProcessesData(data);
   const maxValue = getChartAxisMax(processes.map((process) => process.value));
   const ticks = createChartTicks(maxValue);
 
@@ -452,7 +462,7 @@ function RecentAssessmentsList() {
     queryKey: dashboardQueryKey,
     queryFn: fetchDashboardData,
   });
-  const assessments = getRecentlyUpdatedAssessments(data?.recentAssessments ?? []);
+  const assessments = data?.recentAssessments ?? [];
   const errorMessage = error ? getErrorMessage(error) : "";
 
   return (
@@ -629,13 +639,25 @@ function getStatusTone(status: string, statusKey = ""): keyof typeof statusStyle
   return status === "Draft" ? "gray" : "blue";
 }
 
+function getDashboardStatuses(data?: DashboardData) {
+  return data?.pipelineByStatus
+    ? mergePipelineStatuses(data.pipelineByStatus)
+    : pipelineStatuses;
+}
+
+function getIndustryBreakdownData(data?: DashboardData) {
+  return normalizeDashboardCounts(data?.industryBreakdown) ?? [];
+}
+
+function getAssessmentTrendData(data?: DashboardData) {
+  return normalizeDashboardTrend(data?.assessmentTrend) ?? [];
+}
+
 function createDashboardStats({
-  assessments,
   statuses,
   summary,
   totalAssessments,
 }: {
-  assessments: RecentAssessment[];
   statuses: PipelineStatus[];
   summary?: DashboardSummary;
   totalAssessments: number;
@@ -654,13 +676,13 @@ function createDashboardStats({
     : getPipelineStatusCount(statuses, "Closed Won");
   const totalCost = isFiniteDashboardNumber(summary?.totalCostAed)
     ? summary.totalCostAed
-    : sumAssessmentMetric(assessments, "cost");
+    : 0;
   const totalSavings = isFiniteDashboardNumber(summary?.totalSavingsAed)
     ? summary.totalSavingsAed
-    : sumAssessmentMetric(assessments, "savings");
+    : 0;
   const averageScore = isFiniteDashboardNumber(summary?.averageDigitizationIndex)
     ? Math.round(summary.averageDigitizationIndex)
-    : getAverageScore(assessments);
+    : null;
 
   return [
     {
@@ -688,12 +710,6 @@ function createDashboardStats({
       tone: "green",
     },
   ];
-}
-
-function createIndustryBreakdown(assessments: RecentAssessment[]) {
-  return getSortedCounts(
-    assessments.map((assessment) => normalizeDashboardLabel(assessment.industry)),
-  ).slice(0, 8);
 }
 
 function normalizeDashboardCounts(values?: DashboardCount[]) {
@@ -736,38 +752,6 @@ function normalizeDashboardTrend(values?: DashboardTrendPoint[]) {
     .filter((item) => item.month);
 }
 
-function createAssessmentTrend(assessments: RecentAssessment[]) {
-  const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "short" });
-  const now = new Date();
-  const months = Array.from({ length: 6 }, (_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
-
-    return {
-      key: `${date.getFullYear()}-${date.getMonth()}`,
-      month: monthFormatter.format(date),
-      value: 0,
-    };
-  });
-  const monthByKey = new Map(months.map((month) => [month.key, month]));
-
-  assessments.forEach((assessment) => {
-    const assessmentDate = new Date(assessment.createdAt || assessment.updatedAt || "");
-
-    if (Number.isNaN(assessmentDate.getTime())) {
-      return;
-    }
-
-    const key = `${assessmentDate.getFullYear()}-${assessmentDate.getMonth()}`;
-    const month = monthByKey.get(key);
-
-    if (month) {
-      month.value += 1;
-    }
-  });
-
-  return months;
-}
-
 function createPipelineConversion(statuses: PipelineStatus[]) {
   const activeWonStatuses = statuses.filter((status) => {
     const key = normalizeStatusKey(status.key || status.label);
@@ -783,59 +767,53 @@ function createPipelineConversion(statuses: PipelineStatus[]) {
   }));
 }
 
-function createCompanySizeDistribution(assessments: RecentAssessment[]) {
-  return getSortedCounts(
-    assessments.map((assessment) =>
-      normalizeDashboardLabel(assessment.preferences?.companySize),
-    ),
-  )
-    .map((item) => ({
+function getCompanySizeDistributionData(data?: DashboardData) {
+  return (
+    normalizeDashboardValues(data?.companySizeDistribution)?.map((item) => ({
+      ...item,
       label: item.label.includes("employees") ? item.label : `${item.label}\nemployees`,
-      value: item.count,
-    }))
-    .slice(0, 5);
-}
-
-function createSelectedProcesses(assessments: RecentAssessment[]) {
-  const processNames = assessments.flatMap((assessment) =>
-    (assessment.processes || [])
-      .map((process) => getProcessDisplayName(process))
-      .filter(Boolean),
+    })) ?? []
   );
-
-  return getSortedCounts(processNames)
-    .map((item) => ({
-      label: wrapChartLabel(item.label, 18),
-      value: item.count,
-    }))
-    .slice(0, 8);
 }
 
-function calculateWeightedPipelineValue(
-  statuses: PipelineStatus[],
-  assessments: RecentAssessment[],
-  summary?: DashboardSummary,
-  totalAssessments?: number,
-) {
-  const aggregateAssessmentCount = Number(totalAssessments) || 0;
-  const aggregateCost = isFiniteDashboardNumber(summary?.totalCostAed)
-    ? summary.totalCostAed
-    : 0;
-  const averageCost =
-    aggregateCost > 0 && aggregateAssessmentCount > 0
-      ? aggregateCost / aggregateAssessmentCount
-      : getAverageAssessmentCost(assessments);
+function getSelectedProcessesData(data?: DashboardData) {
+  return (
+    normalizeDashboardValues(data?.selectedProcesses)?.map((item) => ({
+      ...item,
+      label: wrapChartLabel(item.label, 18),
+    })) ?? []
+  );
+}
 
-  if (averageCost <= 0) {
-    return 0;
+function getWeightedPipelineStages(data?: DashboardData) {
+  return normalizeDashboardPipelineStages(data?.pipelineStageWeights) ?? [];
+}
+
+function getWeightedPipelineValue(data?: DashboardData) {
+  if (isFiniteDashboardNumber(data?.summary?.weightedPipelineValueAed)) {
+    return data.summary.weightedPipelineValueAed;
   }
 
-  return stageWeights.reduce((sum, stage) => {
-    const statusCount = getPipelineStatusCount(statuses, stage.label);
-    const weight = parseMetricNumber(stage.weight) / 100;
+  return getWeightedPipelineStages(data).reduce(
+    (sum, stage) => sum + (Number(stage.valueAed) || 0),
+    0,
+  );
+}
 
-    return sum + statusCount * averageCost * weight;
-  }, 0);
+function normalizeDashboardPipelineStages(values?: DashboardPipelineStageWeight[]) {
+  if (!Array.isArray(values)) {
+    return null;
+  }
+
+  return values
+    .map((item) => ({
+      count: Math.max(0, Math.round(Number(item.count) || 0)),
+      key: normalizeStatusKey(item.key || item.label),
+      label: normalizeDashboardLabel(item.label),
+      valueAed: Math.max(0, Math.round(Number(item.valueAed) || 0)),
+      weightPercent: Math.max(0, Math.round(Number(item.weightPercent) || 0)),
+    }))
+    .filter((item) => item.label);
 }
 
 function isFiniteDashboardNumber(value: unknown): value is number {
@@ -852,22 +830,6 @@ function getPipelineStatusCount(statuses: PipelineStatus[], label: string) {
   );
 
   return status?.count || 0;
-}
-
-function getSortedCounts(values: string[]) {
-  const countByLabel = values.reduce((map, rawLabel) => {
-    const label = normalizeDashboardLabel(rawLabel);
-
-    if (label) {
-      map.set(label, (map.get(label) || 0) + 1);
-    }
-
-    return map;
-  }, new Map<string, number>());
-
-  return Array.from(countByLabel, ([label, count]) => ({ count, label })).sort(
-    (first, second) => second.count - first.count || first.label.localeCompare(second.label),
-  );
 }
 
 function mergePipelineStatuses(fetchedStatuses: PipelineStatus[]) {
@@ -893,47 +855,6 @@ function mergePipelineStatuses(fetchedStatuses: PipelineStatus[]) {
       tone: fetchedStatus?.tone || status.tone,
     };
   });
-}
-
-function sumAssessmentMetric(
-  assessments: RecentAssessment[],
-  metric: "cost" | "savings",
-) {
-  return assessments.reduce(
-    (sum, assessment) => sum + parseMetricNumber(assessment[metric]),
-    0,
-  );
-}
-
-function getAverageScore(assessments: RecentAssessment[]) {
-  const scores = assessments
-    .map((assessment) => parseMetricNumber(assessment.score))
-    .filter((score) => score > 0);
-
-  if (!scores.length) {
-    return null;
-  }
-
-  return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
-}
-
-function getAverageAssessmentCost(assessments: RecentAssessment[]) {
-  const costs = assessments
-    .map((assessment) => parseMetricNumber(assessment.cost))
-    .filter((cost) => cost > 0);
-
-  if (!costs.length) {
-    return 0;
-  }
-
-  return costs.reduce((sum, cost) => sum + cost, 0) / costs.length;
-}
-
-function parseMetricNumber(value?: string) {
-  const normalizedValue = String(value || "").replace(/[^0-9.-]/g, "");
-  const parsedValue = Number(normalizedValue);
-
-  return Number.isFinite(parsedValue) ? parsedValue : 0;
 }
 
 function formatCompactAed(value: number) {
@@ -968,14 +889,6 @@ function getChartAxisMax(values: number[]) {
 
 function createChartTicks(maxValue: number) {
   return Array.from({ length: 5 }, (_, index) => Math.round((maxValue / 4) * index));
-}
-
-function getProcessDisplayName(process: DashboardAssessmentProcess) {
-  return (
-    normalizeDashboardLabel(process.name) ||
-    normalizeDashboardLabel(process.processId) ||
-    normalizeDashboardLabel(process.id)
-  );
 }
 
 function normalizeDashboardLabel(value?: string) {
@@ -1018,49 +931,6 @@ function normalizeStatusKey(value: string) {
 
 function normalizeStatusLabel(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function getRecentlyUpdatedAssessments(assessments: RecentAssessment[]) {
-  const latestAssessmentByCompany = new Map<
-    string,
-    { assessment: RecentAssessment; index: number; time: number }
-  >();
-
-  assessments.forEach((assessment, index) => {
-    const companyKey = getRecentAssessmentCompanyKey(assessment);
-    const time = getRecentAssessmentTime(assessment);
-    const currentAssessment = latestAssessmentByCompany.get(companyKey);
-
-    if (
-      !currentAssessment ||
-      time > currentAssessment.time ||
-      (time === currentAssessment.time && index < currentAssessment.index)
-    ) {
-      latestAssessmentByCompany.set(companyKey, { assessment, index, time });
-    }
-  });
-
-  return Array.from(latestAssessmentByCompany.values())
-    .sort((first, second) => {
-      if (first.time !== second.time) {
-        return second.time - first.time;
-      }
-
-      return first.index - second.index;
-    })
-    .map((item) => item.assessment);
-}
-
-function getRecentAssessmentCompanyKey(assessment: RecentAssessment) {
-  const company = normalizeDashboardLabel(assessment.company).toLowerCase();
-
-  return company || `assessment:${assessment.id}`;
-}
-
-function getRecentAssessmentTime(assessment: RecentAssessment) {
-  const time = new Date(assessment.updatedAt || assessment.createdAt || "").getTime();
-
-  return Number.isFinite(time) ? time : 0;
 }
 
 function getRecentAssessmentHighlightHref(assessment: RecentAssessment) {

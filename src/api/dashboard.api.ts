@@ -3,6 +3,7 @@ import type {
   DashboardCount,
   DashboardSummary,
   DashboardTrendPoint,
+  DashboardPipelineStageWeight,
   DashboardValue,
   PipelineStatus,
   RecentAssessment,
@@ -21,6 +22,7 @@ type DashboardPayload = {
   currencyConversionRate?: number;
   industryBreakdown?: DashboardCount[];
   pipelineByStatus?: PipelineStatus[];
+  pipelineStageWeights?: DashboardPipelineStageWeight[];
   recentAssessments?: RecentAssessment[];
   selectedProcesses?: DashboardValue[];
   summary?: DashboardSummary;

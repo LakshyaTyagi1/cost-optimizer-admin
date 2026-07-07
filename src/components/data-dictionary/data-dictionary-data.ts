@@ -18,7 +18,6 @@ export type DictionaryDomain = {
 export type DictionaryLibrary = {
   displayOrder?: number;
   domainId: string;
-  domainDisplayName?: string;
   domainName: string;
   id: string;
   industryId: string;

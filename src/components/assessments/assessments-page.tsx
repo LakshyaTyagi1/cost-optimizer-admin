@@ -3,7 +3,9 @@
 import {
   Fragment,
   useCallback,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent,
@@ -35,6 +37,7 @@ import {
 } from "lucide-react";
 
 import {
+  fetchAdminAssessment,
   fetchAdminAssessments,
   type AdminAssessmentProcess,
   type AdminAssessmentRow,
@@ -68,6 +71,7 @@ type AssessmentSummary = {
   currencyConversionRate: number;
   customProcesses: AdminAssessmentProcess[];
   domain: string;
+  email: string;
   id: string;
   industry: string;
   industries: string[];
@@ -98,6 +102,13 @@ type ProcessEditFormState = {
   softwareCostAed: string;
   stack: string;
   tier: string;
+};
+
+type AssessmentProcessToast = {
+  description?: string;
+  id: string;
+  message: string;
+  tone: "error" | "success";
 };
 
 const automationLevelOptions = [1, 2, 3, 4, 5] as const;
@@ -300,7 +311,7 @@ export function AssessmentsPage() {
 
   return (
     <AdminShell activeItem="Assessments">
-      <div className="flex h-full min-h-0 flex-col overflow-hidden lg:pr-6">
+      <div className="flex min-h-[calc(100vh-56px)] flex-col lg:h-full lg:min-h-0 lg:overflow-hidden lg:pr-6">
         <header className="shrink-0 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-[26px] leading-tight font-bold tracking-normal">Assessments</h1>
@@ -311,12 +322,12 @@ export function AssessmentsPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
             <button
               type="button"
               onClick={() => exportAssessmentsCsv(filteredAssessments)}
               disabled={!filteredAssessments.length}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#555555] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#555555] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               <ArrowDownToLine size={13} aria-hidden="true" />
               Export CSV
@@ -325,7 +336,7 @@ export function AssessmentsPage() {
               type="button"
               disabled
               title="New assessments are created from the customer assessment flow."
-              className="inline-flex h-9 cursor-not-allowed items-center gap-2 rounded-md bg-[#007AFF] px-4 text-xs font-bold text-white opacity-80"
+              className="inline-flex h-9 w-full cursor-not-allowed items-center justify-center gap-2 rounded-md bg-[#007AFF] px-4 text-xs font-bold text-white opacity-80 sm:w-auto"
             >
               <ClipboardPlus size={13} aria-hidden="true" />
               Add Assessment
@@ -333,9 +344,9 @@ export function AssessmentsPage() {
           </div>
         </header>
 
-        <section className="mt-8 flex min-h-0 flex-1 flex-col overflow-hidden" aria-label="Assessments table">
+        <section className="mt-6 flex min-h-0 flex-1 flex-col lg:mt-8 lg:overflow-hidden" aria-label="Assessments table">
         <div className="mb-3 rounded-md border border-[#E7EEF8] bg-[#F8FBFF] p-3 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
-          <div className="grid grid-cols-[minmax(180px,1.25fr)_minmax(128px,0.8fr)_minmax(118px,0.72fr)_minmax(84px,0.48fr)_minmax(124px,0.68fr)_18px_minmax(124px,0.68fr)_max-content] items-center gap-2">
+          <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1.25fr)_minmax(128px,0.8fr)_minmax(118px,0.72fr)_minmax(84px,0.48fr)_minmax(124px,0.68fr)_18px_minmax(124px,0.68fr)_max-content]">
             <SearchInput
               value={searchQuery}
               onChange={(value) => updateFilter(setSearchQuery, value)}
@@ -375,7 +386,7 @@ export function AssessmentsPage() {
               value={fromDateFilter}
               onChange={(value) => updateFilter(setFromDateFilter, value)}
             />
-            <span className="flex h-10 items-center px-1 text-xs font-bold text-[#8E9AAB]">
+            <span className="hidden h-10 items-center px-1 text-xs font-bold text-[#8E9AAB] xl:flex">
               to
             </span>
             <DateInput
@@ -387,7 +398,7 @@ export function AssessmentsPage() {
               type="button"
               onClick={resetFilters}
               disabled={!hasActiveFilters}
-              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-[#DCE8F8] bg-white px-3 text-sm font-bold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:text-[#A1A1AA] disabled:opacity-60"
+              className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-md border border-[#DCE8F8] bg-white px-3 text-sm font-bold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:text-[#A1A1AA] disabled:opacity-60 sm:col-span-2 xl:col-span-1 xl:w-auto"
               aria-label="Reset assessment filters"
             >
               <RotateCcw size={13} aria-hidden="true" />
@@ -398,7 +409,31 @@ export function AssessmentsPage() {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-black/[0.08] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
           <div className="flex-1 overflow-auto">
-            <table className="w-full min-w-[1170px] table-fixed border-collapse">
+            <div className="space-y-2 p-3 md:hidden">
+              {isLoading ? <AssessmentMobileCardsSkeleton /> : null}
+
+              {!isLoading && pagedAssessments.length === 0 ? (
+                <div className="rounded-md border border-black/[0.08] bg-white px-4 py-8 text-center text-sm font-semibold text-[#86868B]">
+                  {errorMessage || "No assessments found."}
+                </div>
+              ) : null}
+
+              {!isLoading
+                ? pagedAssessments.map((assessment) => (
+                    <AssessmentMobileCard
+                      key={assessment.id}
+                      assessment={assessment}
+                      isHighlighted={isAssessmentHighlighted(
+                        assessment,
+                        highlightedAssessmentKey,
+                      )}
+                      onOpen={() => openAssessment(getAssessmentDetailRouteId(assessment))}
+                    />
+                  ))
+                : null}
+            </div>
+
+            <table className="hidden w-full min-w-[1170px] table-fixed border-collapse md:table">
               <colgroup>
                 <col className="w-[334px]" />
                 <col className="w-[157px]" />
@@ -462,7 +497,7 @@ export function AssessmentsPage() {
                           assessment,
                           highlightedAssessmentKey,
                         )}
-                        onOpen={() => openAssessment(assessment.id)}
+                        onOpen={() => openAssessment(getAssessmentDetailRouteId(assessment))}
                       />
                     ))
                   : null}
@@ -500,19 +535,18 @@ export function AssessmentDetailPage({
   assessmentId: string;
 }) {
   const router = useRouter();
+  const routeAssessmentId = getAssessmentIdFromRouteParam(assessmentId);
   const { data, error, isLoading } = useQuery({
-    queryKey: assessmentsQueryKey,
-    queryFn: fetchAdminAssessments,
+    queryKey: ["admin-assessments", "detail", routeAssessmentId],
+    queryFn: () => fetchAdminAssessment(routeAssessmentId),
+    enabled: routeAssessmentId !== "",
   });
-  const assessments = data?.assessments ?? emptyAssessments;
-  const normalizedAssessmentId = getRouteSlug(assessmentId);
+  const normalizedAssessmentId = routeAssessmentId;
   const assessment = useMemo(
-    () =>
-      groupAssessmentsByUser(assessments, "company", "asc").find(
-        (assessmentSummary) => assessmentSummary.id === normalizedAssessmentId,
-      ),
-    [assessments, normalizedAssessmentId],
+    () => (data ? createAssessmentSummary(data.id || normalizedAssessmentId, [data]) : null),
+    [data, normalizedAssessmentId],
   );
+  const detailRouteSlug = assessment ? getAssessmentDetailRouteId(assessment) : assessmentId.trim();
   const backToAssessments = useCallback(() => {
     router.push("/assessments");
   }, [router]);
@@ -520,12 +554,12 @@ export function AssessmentDetailPage({
     (tab: DetailTab) => {
       const nextUrl =
         tab === defaultDetailTab
-          ? `/assessments/${normalizedAssessmentId}`
-          : `/assessments/${normalizedAssessmentId}?tab=${tab}`;
+          ? `/assessments/${detailRouteSlug}`
+          : `/assessments/${detailRouteSlug}?tab=${tab}`;
 
       router.push(nextUrl);
     },
-    [normalizedAssessmentId, router],
+    [detailRouteSlug, router],
   );
 
   if (isLoading) {
@@ -636,6 +670,102 @@ function AssessmentRow({
         </button>
       </td>
     </tr>
+  );
+}
+
+function AssessmentMobileCard({
+  assessment,
+  isHighlighted,
+  onOpen,
+}: {
+  assessment: AssessmentSummary;
+  isHighlighted: boolean;
+  onOpen: () => void;
+}) {
+  const statusTone = getStatusTone(assessment.status, assessment.statusKey);
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={`w-full rounded-md border border-black/[0.08] bg-white p-4 text-left shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition hover:border-[#007AFF]/25 hover:bg-[#FAFCFF] ${
+        isHighlighted ? "assessment-highlight-flash" : ""
+      }`}
+      aria-label={`Open ${assessment.company}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="break-words text-sm leading-5 font-bold text-[#171717]">
+            {assessment.company}
+          </p>
+          <p className="mt-1 break-words text-xs leading-4 font-semibold text-[#8E9AAB]">
+            {assessment.contact}
+          </p>
+        </div>
+        <StatusPill label={assessment.status} tone={statusTone} />
+      </div>
+
+      <div className="mt-3 flex min-w-0 items-center gap-2 text-xs font-semibold text-[#555555]">
+        <IndustryIcon industry={assessment.industry} />
+        <span className="min-w-0 truncate">{assessment.industry}</span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <MobileMetric label="DI Score" tone="blue" value={assessment.score} />
+        <MobileMetric label="Total Cost" value={assessment.cost} />
+        <MobileMetric label="Savings" tone="green" value={assessment.savings} />
+        <MobileMetric label="Submissions" value={String(assessment.assessments.length)} />
+      </div>
+    </button>
+  );
+}
+
+function MobileMetric({
+  label,
+  tone = "default",
+  value,
+}: {
+  label: string;
+  tone?: "blue" | "default" | "green";
+  value: string;
+}) {
+  const toneClass =
+    tone === "blue"
+      ? "text-[#007AFF]"
+      : tone === "green"
+        ? "text-[#10B981]"
+        : "text-[#171717]";
+
+  return (
+    <div className="min-w-0 rounded-md bg-[#F8FAFC] px-3 py-2">
+      <p className="text-[9px] font-bold tracking-[0.12em] text-[#8E9AAB] uppercase">
+        {label}
+      </p>
+      <p className={`mt-1 truncate text-xs font-bold ${toneClass}`}>
+        <MetricValue value={value} mutedValue="--" />
+      </p>
+    </div>
+  );
+}
+
+function AssessmentMobileCardsSkeleton() {
+  return (
+    <div className="space-y-2" aria-label="Loading assessments">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div
+          key={index}
+          className="rounded-md border border-black/[0.08] bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)]"
+        >
+          <div className="h-4 w-3/4 animate-pulse rounded-full bg-black/[0.06]" />
+          <div className="mt-2 h-3 w-1/2 animate-pulse rounded-full bg-black/[0.06]" />
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {Array.from({ length: 4 }).map((__, itemIndex) => (
+              <div key={itemIndex} className="h-12 animate-pulse rounded-md bg-black/[0.04]" />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1013,7 +1143,7 @@ function AssessmentDetailView({
   const statusTone = getStatusTone(assessment.status, assessment.statusKey);
 
   return (
-    <section className="min-h-[calc(100vh-56px)] bg-white px-5 py-7 text-[#171717]">
+    <section className="min-h-[calc(100vh-56px)] bg-white px-4 py-6 text-[#171717] sm:px-5 sm:py-7">
       <button
         type="button"
         onClick={onBack}
@@ -1023,12 +1153,12 @@ function AssessmentDetailView({
         Back to assessments
       </button>
 
-      <header className="mt-4 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="truncate text-[26px] leading-tight font-bold tracking-normal">
+      <header className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0 sm:flex-1">
+          <h1 className="break-words text-[24px] leading-tight font-bold tracking-normal sm:text-[26px]">
             {assessment.company}
           </h1>
-          <p className="mt-1 text-xs font-semibold text-[#86868B]">
+          <p className="mt-1 break-words text-xs font-semibold text-[#86868B]">
             {assessment.contact}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-bold text-[#86868B]">
@@ -1041,16 +1171,16 @@ function AssessmentDetailView({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex h-9 items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#555555] transition hover:border-[#007AFF]/30 hover:text-[#007AFF]"
+            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#555555] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] sm:w-auto"
           >
             <Printer size={13} aria-hidden="true" />
             Export PDF
           </button>
-          <div className="h-9 w-[180px] rounded-md border border-black/[0.08] bg-white" aria-hidden="true" />
+          <div className="hidden h-9 w-[180px] rounded-md border border-black/[0.08] bg-white sm:block" aria-hidden="true" />
           <button
             type="button"
             disabled
@@ -1062,7 +1192,7 @@ function AssessmentDetailView({
         </div>
       </header>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-5">
+      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
         <DetailMetric label="Processes selected" value={formatNullableCount(assessment.processCount)} />
         <DetailMetric label="Current DI" value={assessment.score} />
         <DetailMetric label="Potential DI" value={getPotentialDi(assessment.score)} />
@@ -1072,8 +1202,14 @@ function AssessmentDetailView({
 
       <DetailTabs activeTab={activeTab} onTabChange={onTabChange} />
 
-      {activeTab === "overview" ? <AssessmentOverview assessment={assessment} /> : null}
-      {activeTab !== "overview" ? <AssessmentTabContent activeTab={activeTab} assessment={assessment} /> : null}
+      <div
+        id={`assessment-tab-panel-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`assessment-tab-${activeTab}`}
+        className="outline-none"
+      >
+        {activeTab === "overview" ? <AssessmentOverview assessment={assessment} /> : <AssessmentTabContent activeTab={activeTab} assessment={assessment} />}
+      </div>
     </section>
   );
 }
@@ -1106,7 +1242,11 @@ function DetailTabs({
   ];
 
   return (
-    <div className="mt-7 flex overflow-x-auto border-b border-black/[0.08]">
+    <div
+      className="scrollbar-hidden mt-7 flex overflow-x-auto whitespace-nowrap border-b border-black/[0.08]"
+      role="tablist"
+      aria-label="Assessment detail sections"
+    >
       {tabs.map((tab) => {
         const isActive = tab.value === activeTab;
 
@@ -1114,8 +1254,13 @@ function DetailTabs({
           <button
             key={tab.value}
             type="button"
+            id={`assessment-tab-${tab.value}`}
+            role="tab"
+            aria-selected={isActive}
+            aria-controls={`assessment-tab-panel-${tab.value}`}
+            tabIndex={isActive ? 0 : -1}
             onClick={() => onTabChange(tab.value)}
-            className={`h-12 shrink-0 px-4 text-[16px] leading-none font-normal transition ${
+            className={`h-12 shrink-0 px-3 text-sm leading-none font-semibold transition sm:px-4 sm:text-[16px] sm:font-normal ${
               isActive
                 ? "border-b border-[#171717] text-[#171717]"
                 : "text-[#86868B] hover:text-[#171717]"
@@ -1203,6 +1348,9 @@ function AssessmentProcesses({ assessment }: { assessment: AssessmentSummary }) 
   const queryClient = useQueryClient();
   const [expandedProcessKey, setExpandedProcessKey] = useState("");
   const [processNotice, setProcessNotice] = useState("");
+  const [processToasts, setProcessToasts] = useState<AssessmentProcessToast[]>([]);
+  const processToastIdRef = useRef(0);
+  const processToastTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const customProcesses = assessment.customProcesses;
   const updateProcessMutation = useMutation({
     mutationFn: ({
@@ -1215,9 +1363,52 @@ function AssessmentProcesses({ assessment }: { assessment: AssessmentSummary }) 
       processId: string;
     }) => updateAdminAssessmentProcess(assessmentId, processId, payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: assessmentsQueryKey });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: assessmentsQueryKey }),
+        queryClient.invalidateQueries({ queryKey: ["admin-assessments", "detail", assessment.id] }),
+      ]);
     },
   });
+
+  useEffect(() => {
+    const toastTimeouts = processToastTimeoutsRef.current;
+
+    return () => {
+      toastTimeouts.forEach((timeout) => clearTimeout(timeout));
+      toastTimeouts.clear();
+    };
+  }, []);
+
+  function scheduleProcessToastDismiss(toastId: string) {
+    const existingTimeout = processToastTimeoutsRef.current.get(toastId);
+
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    const timeout = setTimeout(() => {
+      setProcessToasts((currentToasts) =>
+        currentToasts.filter((toast) => toast.id !== toastId),
+      );
+      processToastTimeoutsRef.current.delete(toastId);
+    }, 3600);
+
+    processToastTimeoutsRef.current.set(toastId, timeout);
+  }
+
+  function showProcessToast(
+    message: string,
+    tone: AssessmentProcessToast["tone"],
+    description?: string,
+  ) {
+    processToastIdRef.current += 1;
+    const toastId = `assessment-process-toast-${processToastIdRef.current}`;
+
+    setProcessToasts((currentToasts) =>
+      [{ description, id: toastId, message, tone }, ...currentToasts].slice(0, 3),
+    );
+    scheduleProcessToastDismiss(toastId);
+  }
 
   async function handleSaveProcess(process: AdminAssessmentProcess, form: ProcessEditFormState) {
     const assessmentId = process.assessmentId;
@@ -1225,6 +1416,7 @@ function AssessmentProcesses({ assessment }: { assessment: AssessmentSummary }) 
 
     if (!assessmentId || !processId) {
       setProcessNotice("Assessment process id is missing. Refresh and try again.");
+      showProcessToast("Process update failed", "error", "Assessment process id is missing.");
       return;
     }
 
@@ -1237,8 +1429,11 @@ function AssessmentProcesses({ assessment }: { assessment: AssessmentSummary }) 
       });
       setExpandedProcessKey("");
       setProcessNotice("Process details saved.");
+      showProcessToast("Selected process updated", "success", "Admin changes were saved and tracked.");
     } catch (error) {
-      setProcessNotice(getErrorMessage(error));
+      const message = getErrorMessage(error);
+      setProcessNotice(message);
+      showProcessToast("Process update failed", "error", message);
     }
   }
 
@@ -1246,9 +1441,52 @@ function AssessmentProcesses({ assessment }: { assessment: AssessmentSummary }) 
     processes: AdminAssessmentProcess[],
     sectionKey: string,
     emptyMessage: string,
+    options: { editable?: boolean } = {},
   ) {
+    const isEditable = options.editable !== false;
     return (
-      <div className="overflow-auto">
+      <div>
+        <div className="divide-y divide-black/[0.05] md:hidden">
+          {processes.length ? (
+            processes.map((process) => {
+              const processSectionKey = getProcessSectionKey(sectionKey, process);
+              const isExpanded = isEditable && expandedProcessKey === processSectionKey;
+
+              return (
+                <div key={processSectionKey}>
+                  <AssessmentProcessMobileCard
+                    currencyConversionRate={assessment.currencyConversionRate}
+                    editable={isEditable}
+                    expanded={isExpanded}
+                    process={process}
+                    onToggle={() => {
+                      if (isEditable) {
+                        setExpandedProcessKey(isExpanded ? "" : processSectionKey);
+                      }
+                    }}
+                  />
+                  {isEditable && isExpanded ? (
+                    <div className="border-t border-black/[0.05] bg-[#FAFAFA]">
+                      <AssessmentProcessEditor
+                        currencyConversionRate={assessment.currencyConversionRate}
+                        isSaving={updateProcessMutation.isPending}
+                        process={process}
+                        onCancel={() => setExpandedProcessKey("")}
+                        onSave={(form) => void handleSaveProcess(process, form)}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })
+          ) : (
+            <div className="px-4 py-8 text-center text-sm font-semibold text-[#86868B]">
+              {emptyMessage}
+            </div>
+          )}
+        </div>
+
+        <div className="hidden overflow-auto md:block">
         <table className="w-full min-w-[920px] table-fixed border-collapse">
           <thead>
             <tr className="h-[42px] border-b border-black/[0.08] bg-[#FAFAFA] text-left text-[10px] font-bold tracking-[0.12em] text-[#86868B] uppercase">
@@ -1265,17 +1503,22 @@ function AssessmentProcesses({ assessment }: { assessment: AssessmentSummary }) 
             {processes.length ? (
               processes.map((process) => {
                 const processSectionKey = getProcessSectionKey(sectionKey, process);
-                const isExpanded = expandedProcessKey === processSectionKey;
+                const isExpanded = isEditable && expandedProcessKey === processSectionKey;
 
                 return (
                   <Fragment key={processSectionKey}>
                     <ProcessRow
                       currencyConversionRate={assessment.currencyConversionRate}
+                      editable={isEditable}
                       expanded={isExpanded}
                       process={process}
-                      onToggle={() => setExpandedProcessKey(isExpanded ? "" : processSectionKey)}
+                      onToggle={() => {
+                        if (isEditable) {
+                          setExpandedProcessKey(isExpanded ? "" : processSectionKey);
+                        }
+                      }}
                     />
-                    {isExpanded ? (
+                    {isEditable && isExpanded ? (
                       <tr>
                         <td colSpan={7} className="border-b border-black/[0.05] bg-[#FAFAFA] p-0">
                           <AssessmentProcessEditor
@@ -1300,12 +1543,14 @@ function AssessmentProcesses({ assessment }: { assessment: AssessmentSummary }) 
             )}
           </tbody>
         </table>
+        </div>
       </div>
     );
   }
 
   return (
     <>
+      <AssessmentProcessToastStack toasts={processToasts} />
       <section className="mt-6 overflow-hidden rounded-md border border-black/[0.08] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
         <div className="flex items-center justify-between gap-3 border-b border-black/[0.08] px-5 py-4">
           <p className="text-[10px] font-bold tracking-[0.14em] text-[#86868B] uppercase">
@@ -1339,6 +1584,7 @@ function AssessmentProcesses({ assessment }: { assessment: AssessmentSummary }) 
             customProcesses,
             "custom",
             "Custom process details are not available for this assessment yet.",
+            { editable: false },
           )}
         </section>
       ) : null}
@@ -1555,11 +1801,13 @@ function EmptyTabMessage({ message }: { message: string }) {
 
 function ProcessRow({
   currencyConversionRate,
+  editable = true,
   expanded,
   onToggle,
   process,
 }: {
   currencyConversionRate: number;
+  editable?: boolean;
   expanded: boolean;
   onToggle: () => void;
   process: AdminAssessmentProcess;
@@ -1568,10 +1816,26 @@ function ProcessRow({
   const cost = getProcessCost(process, currencyConversionRate);
   const saving = getProcessSaving(process, cost);
 
+  function handleKeyDown(event: KeyboardEvent<HTMLTableRowElement>) {
+    if (!editable) {
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onToggle();
+    }
+  }
+
   return (
     <tr
-      className="h-[58px] cursor-pointer border-b border-black/[0.05] transition hover:bg-[#FAFAFA] last:border-b-0"
-      onClick={onToggle}
+      className={`h-[58px] border-b border-black/[0.05] transition last:border-b-0 ${
+        editable ? "cursor-pointer hover:bg-[#FAFAFA]" : ""
+      }`}
+      onClick={editable ? onToggle : undefined}
+      onKeyDown={editable ? handleKeyDown : undefined}
+      tabIndex={editable ? 0 : undefined}
+      aria-expanded={editable ? expanded : undefined}
     >
       <td className="px-5 py-3">
         <p className="truncate text-xs font-bold text-[#171717]">
@@ -1599,6 +1863,77 @@ function ProcessRow({
   );
 }
 
+function AssessmentProcessMobileCard({
+  currencyConversionRate,
+  editable = true,
+  expanded,
+  onToggle,
+  process,
+}: {
+  currencyConversionRate: number;
+  editable?: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  process: AdminAssessmentProcess;
+}) {
+  const automationLevel = Math.min(5, Math.max(1, Number(process.automationLevel) || 1));
+  const cost = getProcessCost(process, currencyConversionRate);
+  const saving = getProcessSaving(process, cost);
+  const auditLabel = getProcessAuditLabel(process);
+
+  return (
+    <button
+      type="button"
+      onClick={editable ? onToggle : undefined}
+      aria-expanded={editable ? expanded : undefined}
+      disabled={!editable}
+      className={`w-full bg-white px-4 py-4 text-left transition ${
+        editable ? "hover:bg-[#FAFAFA]" : "cursor-default"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="break-words text-sm font-bold text-[#171717]">
+            {process.name || process.processId || "--"}
+          </p>
+          <p className="mt-1 break-words text-[11px] font-semibold text-[#86868B]">
+            {process.category || "--"}
+          </p>
+          {auditLabel ? (
+            <p className="mt-1 break-words text-[10px] font-semibold text-[#A1A1AA]">
+              {auditLabel}
+            </p>
+          ) : null}
+        </div>
+        <span className="shrink-0 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[10px] font-bold text-[#10B981]">
+          {process.tier || "--"}
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+        <MobileMetric label="Automation" value={`${automationLevel} - ${process.automation || getAutomationLabel(automationLevel)}`} />
+        <MobileMetric label="Cost / yr" value={formatAedCurrency(cost)} />
+        <MobileMetric label="FTEs" value={getProcessFteLabel(process)} />
+        <MobileMetric label="Software / yr" value={getProcessSoftwareLabel(process, currencyConversionRate)} />
+        <div className="col-span-2 rounded-md bg-[#F8FAFC] px-3 py-2">
+          <p className="text-[9px] font-bold tracking-[0.12em] text-[#8E9AAB] uppercase">
+            Est. saving
+          </p>
+          <p className="mt-1 text-xs font-bold text-[#10B981]">
+            {formatAedCurrency(saving)}
+          </p>
+        </div>
+      </div>
+
+      {editable ? (
+        <span className="mt-3 inline-flex text-[11px] font-bold text-[#007AFF]">
+          {expanded ? "Hide details" : "Edit details"}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
 function AssessmentProcessEditor({
   currencyConversionRate,
   isSaving,
@@ -1619,9 +1954,10 @@ function AssessmentProcessEditor({
   }
 
   const totalCost = calculateProcessFormCost(form);
+  const auditLabel = getProcessAuditLabel(process);
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       <div className="rounded-md border border-black/[0.08] bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/[0.08] px-4 py-3">
           <div className="min-w-0">
@@ -1629,7 +1965,7 @@ function AssessmentProcessEditor({
               {form.name || process.name || "Selected process"}
             </p>
             <p className="mt-1 text-[10px] font-semibold text-[#86868B]">
-              Editing selected assessment process fields
+              Editing selected assessment process fields{auditLabel ? ` - ${auditLabel}` : ""}
             </p>
           </div>
           <p className="rounded-full bg-[#EAF3FF] px-2.5 py-1 text-[10px] font-bold text-[#007AFF]">
@@ -1653,6 +1989,8 @@ function AssessmentProcessEditor({
                   key={level}
                   type="button"
                   onClick={() => updateField("automationLevel", String(level))}
+                  aria-pressed={Number(form.automationLevel) === level}
+                  aria-label={`Set digitization level ${level}`}
                   className={`h-9 border-r border-black/[0.08] text-xs font-bold last:border-r-0 ${
                     Number(form.automationLevel) === level
                       ? "bg-[#10B981] text-white"
@@ -1777,12 +2115,12 @@ function AssessmentProcessEditor({
           </section>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-black/[0.08] px-4 py-3">
+        <div className="flex flex-col-reverse gap-2 border-t border-black/[0.08] px-4 py-3 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={onCancel}
             disabled={isSaving}
-            className="h-9 rounded-md border border-black/[0.08] bg-white px-4 text-xs font-bold text-[#555555] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed"
+            className="h-9 rounded-md border border-black/[0.08] bg-white px-4 text-xs font-bold text-[#555555] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed sm:w-auto"
           >
             Cancel
           </button>
@@ -1790,7 +2128,7 @@ function AssessmentProcessEditor({
             type="button"
             onClick={() => onSave(form)}
             disabled={isSaving || !form.name.trim()}
-            className="h-9 rounded-md bg-[#007AFF] px-5 text-xs font-bold text-white transition hover:bg-[#006EE6] disabled:cursor-not-allowed disabled:opacity-60"
+            className="h-9 rounded-md bg-[#007AFF] px-5 text-xs font-bold text-white transition hover:bg-[#006EE6] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             {isSaving ? "Saving..." : "Save"}
           </button>
@@ -1816,6 +2154,74 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+function AssessmentProcessToastStack({
+  toasts,
+}: {
+  toasts: AssessmentProcessToast[];
+}) {
+  const visibleToasts = toasts.slice(0, 3);
+
+  if (visibleToasts.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      className="pointer-events-none fixed right-5 bottom-5 z-[70] h-[112px] w-[min(380px,calc(100vw-40px))]"
+      aria-label="Assessment process notifications"
+    >
+      <style>
+        {`
+          @keyframes assessment-process-toast-enter {
+            from {
+              opacity: 0;
+              transform: translate3d(0, 18px, 0) scale(0.96);
+            }
+            to {
+              opacity: 1;
+              transform: translate3d(0, 0, 0) scale(1);
+            }
+          }
+        `}
+      </style>
+      {visibleToasts.map((toast, index) => {
+        const isFrontToast = index === 0;
+        const isError = toast.tone === "error";
+        const toastDescription = isError
+          ? toast.description || "Please retry this selected process update."
+          : toast.description || "Selected process details were saved.";
+
+        return (
+          <div
+            key={toast.id}
+            aria-hidden={!isFrontToast}
+            aria-live={isError ? "assertive" : "polite"}
+            className="absolute right-0 bottom-0 min-h-[72px] w-full overflow-hidden rounded-[11px] border border-black/[0.08] bg-white px-5 py-4 shadow-[0_18px_45px_rgba(15,23,42,0.16)]"
+            role={isFrontToast ? (isError ? "alert" : "status") : undefined}
+            style={{
+              animation: isFrontToast ? "assessment-process-toast-enter 180ms ease-out" : undefined,
+              opacity: 1 - index * 0.14,
+              transform: `translateY(${index * 15}px) scale(${1 - index * 0.035})`,
+              transition: "transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease",
+              zIndex: visibleToasts.length - index,
+            }}
+          >
+            {isFrontToast ? (
+              <div className="flex items-center gap-3">
+                <span className={`size-2.5 shrink-0 rounded-full ${isError ? "bg-[#EF4444]" : "bg-[#10B981]"}`} aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm leading-5 font-bold text-[#171717]">{toast.message}</span>
+                  <span className="mt-0.5 block truncate text-xs leading-4 font-semibold text-[#86868B]">{toastDescription}</span>
+                </span>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1948,6 +2354,7 @@ function createAssessmentSummary(id: string, rows: AdminAssessmentRow[]): Assess
     currencyConversionRate: getAssessmentCurrencyConversionRate(rows),
     customProcesses,
     domain: getUniqueValues(rows.map((row) => row.domain)).join(", ") || "--",
+    email: getUniqueValues(rows.map((row) => row.email))[0] || "",
     id,
     industry: getIndustrySummaryLabel(industries),
     industries,
@@ -1978,6 +2385,30 @@ function getAssessmentGroupKey(row: AdminAssessmentRow) {
   return getRouteSlug(stableUserKey);
 }
 
+function getAssessmentIdFromRouteParam(value: string) {
+  const trimmedValue = value.trim();
+  const idMatches = trimmedValue.match(/[a-f0-9]{24}/gi);
+
+  if (!idMatches?.length) {
+    return trimmedValue;
+  }
+
+  return idMatches[idMatches.length - 1];
+}
+
+function getAssessmentDetailRouteId(assessment: AssessmentSummary) {
+  const assessmentId = assessment.assessments[0]?.id || assessment.id;
+  const userSlug = getRouteSlug(getContactName(assessment.contact));
+  const companySlug = getRouteSlug(assessment.company);
+  const readableSlug = [userSlug, companySlug].filter(Boolean).join("-");
+
+  if (!assessmentId || !readableSlug) {
+    return assessmentId;
+  }
+
+  return `${readableSlug}-${assessmentId}`;
+}
+
 function isAssessmentHighlighted(assessment: AssessmentSummary, highlightKey: string) {
   if (!highlightKey) {
     return false;
@@ -1992,11 +2423,13 @@ function getAssessmentHighlightKeys(assessment: AssessmentSummary) {
       assessment.id,
       assessment.company,
       assessment.contact,
+      assessment.email,
       getContactEmail(assessment.contact),
       ...assessment.assessments.flatMap((row) => [
         row.id,
         row.company,
         row.contact,
+        row.email,
         getContactEmail(row.contact),
         getAssessmentGroupKey(row),
       ]),
@@ -2114,6 +2547,23 @@ function formatDate(value?: string) {
     month: "2-digit",
     year: "numeric",
   }).format(date);
+}
+
+function getProcessAuditLabel(process: AdminAssessmentProcess) {
+  const actorName = String(process.updatedBy?.name || "").trim();
+  const actorEmail = String(process.updatedBy?.email || "").trim();
+  const actorLabel = actorName || actorEmail;
+  const dateLabel = formatDate(process.updatedAt);
+
+  if (actorLabel && dateLabel !== "--") {
+    return `Updated by ${actorLabel} on ${dateLabel}`;
+  }
+
+  if (actorLabel) {
+    return `Updated by ${actorLabel}`;
+  }
+
+  return dateLabel !== "--" ? `Updated ${dateLabel}` : "";
 }
 
 function sumMetric(values: string[]) {

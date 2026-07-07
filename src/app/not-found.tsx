@@ -23,7 +23,7 @@ export default function NotFoundPage() {
       </section>
 
       <section className="flex min-h-screen flex-1 items-center justify-center bg-[#FAFAFA] px-5 py-10">
-        <div className="w-full max-w-[720px] overflow-hidden rounded-md border border-black/[0.08] bg-white shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+        <div className="w-full max-w-[720px] overflow-hidden rounded-md">
           <div className="border-b border-black/[0.06] bg-[#FCFCFD] px-6 py-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">

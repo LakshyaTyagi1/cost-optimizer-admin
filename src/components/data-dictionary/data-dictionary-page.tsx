@@ -2,11 +2,12 @@
 
 import type { CSSProperties, DragEvent, FormEvent, KeyboardEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import {
   Building2,
   Check,
+  ChevronLeft,
   ChevronRight,
   Database,
   EyeOff,
@@ -57,6 +58,7 @@ import {
   deleteAllDataDictionaryTechStack,
   deleteDataDictionaryTechStack,
   fetchDataDictionary,
+  fetchMappedTechStackPage,
   reorderDataDictionaryDomains,
   reorderDataDictionaryIndustries,
   updateDataDictionaryCurrencyConversionRate,
@@ -66,11 +68,14 @@ import {
 } from "@/api/data-dictionary.api";
 
 const dataDictionaryQueryKey = ["data-dictionary"] as const;
+const archiveProcessesQueryKey = ["data-dictionary", "archive", "processes"] as const;
+const techStackQueryKey = ["data-dictionary", "tech-stack"] as const;
 const dataDictionaryCacheTime = 5 * 60_000;
 const dataDictionaryGcTime = 30 * 60_000;
 const initialExpandedProcessId = "__initial_process__";
 const industryDefaultDomainFilter = "industry-default";
-const libraryPageSize = 20;
+const processLibraryPageSize = 10;
+const technologyStackLibraryPageSize = 20;
 const emptyIndustries: DictionaryIndustry[] = [];
 const emptyDomains: DictionaryDomain[] = [];
 const emptyLibraries: DictionaryLibrary[] = [];
@@ -107,6 +112,7 @@ const DeleteAllToolsConfirmationModal = dynamic<DeleteAllToolsConfirmationModalP
 );
 
 type ReorderToastState = {
+  description?: string;
   id: string;
   message: string;
   tone: "success" | "error" | "processing";
@@ -133,7 +139,7 @@ const mappingColumnStyle = {
   contentVisibility: "auto",
 } satisfies CSSProperties;
 const mappingGridClassName =
-  "mt-6 grid min-h-[320px] items-start gap-4 xl:grid-cols-[350px_minmax(0,1fr)_320px]";
+  "grid min-h-[320px] items-start gap-4 xl:grid-cols-[350px_minmax(0,1fr)_320px]";
 const mappingPanelClassName =
   "relative h-[320px] min-h-[320px] overflow-hidden rounded-md border border-black/[0.06] bg-white p-4";
 
@@ -219,6 +225,7 @@ export function DataDictionaryPage() {
   const [editingTool, setEditingTool] = useState<TechStackTool | null>(null);
   const [toolDeleteTarget, setToolDeleteTarget] = useState<TechStackTool | null>(null);
   const [isDeleteAllToolsOpen, setIsDeleteAllToolsOpen] = useState(false);
+  const [isTechnologyStackReady, setIsTechnologyStackReady] = useState(false);
   const [techStackToasts, setTechStackToasts] = useState<ReorderToastState[]>([]);
   const [expandedProcessId, setExpandedProcessId] = useState(initialExpandedProcessId);
   const [dictionaryError, setDictionaryError] = useState("");
@@ -232,6 +239,25 @@ export function DataDictionaryPage() {
     queryKey: dataDictionaryQueryKey,
     queryFn: fetchDataDictionary,
     gcTime: dataDictionaryGcTime,
+    staleTime: dataDictionaryCacheTime,
+  });
+  const {
+    data: techStackData,
+    error: techStackQueryError,
+    isLoading: isTechStackLoading,
+  } = useQuery({
+    queryKey: [...techStackQueryKey, toolPage, toolSearch.trim(), toolScopeFilter],
+    queryFn: () =>
+      fetchMappedTechStackPage({
+        catalog: dictionaryData!,
+        limit: technologyStackLibraryPageSize,
+        page: toolPage,
+        search: toolSearch,
+        scopeFilter: toolScopeFilter,
+      }),
+    enabled: Boolean(dictionaryData && isTechnologyStackReady),
+    gcTime: dataDictionaryGcTime,
+    placeholderData: keepPreviousData,
     staleTime: dataDictionaryCacheTime,
   });
   const createIndustryMutation = useMutation({
@@ -293,7 +319,8 @@ export function DataDictionaryPage() {
   const libraries = dictionaryData?.libraries ?? emptyLibraries;
   const inactiveIndustries = dictionaryData?.inactiveIndustries ?? emptyIndustries;
   const processes = dictionaryData?.processes ?? emptyProcesses;
-  const tools = dictionaryData?.techStack ?? emptyTechStack;
+  const tools = techStackData?.tools ?? emptyTechStack;
+  const toolTotalCount = techStackData?.pagination.totalCount ?? 0;
   const categoryOptions = dictionaryData?.options.categories.length
     ? dictionaryData.options.categories
     : processCategories;
@@ -308,7 +335,9 @@ export function DataDictionaryPage() {
     updateProcessMutation.isPending;
   const isToolSaving = createTechStackMutation.isPending || updateTechStackMutation.isPending;
   const dictionaryErrorMessage =
-    dictionaryError || (dictionaryQueryError ? getErrorMessage(dictionaryQueryError) : "");
+    dictionaryError ||
+    (dictionaryQueryError ? getErrorMessage(dictionaryQueryError) : "") ||
+    (techStackQueryError ? getErrorMessage(techStackQueryError) : "");
   const savedUsdToAedRate =
     savedUsdToAedRateOverride ?? dictionaryData?.options.currencyConversionRate ?? usdToAedRate;
   const currencyRateValue = currencyRateInput ?? formatConversionRateInput(savedUsdToAedRate);
@@ -317,8 +346,7 @@ export function DataDictionaryPage() {
 
     libraries.forEach((library) => {
       const domainKey =
-        domainIdentityMap.get(library.domainId) ||
-        toSlug(library.domainDisplayName || library.domainName);
+        domainIdentityMap.get(library.domainId) || toSlug(library.domainName);
 
       if (!domainKey) {
         return;
@@ -365,23 +393,7 @@ export function DataDictionaryPage() {
     selectedProcessDomainFilterKey,
   ]);
 
-  const filteredTools = useMemo(() => {
-    const query = normalizeSearch(toolSearch);
-    return tools.filter((tool) => {
-      const matchesSearch =
-        !query ||
-        normalizeSearch(
-          `${tool.name} ${tool.vendor} ${tool.category} ${tool.industryName || ""} ${tool.domainName || ""}`,
-        ).includes(query);
-      const matchesScope =
-        toolScopeFilter === "all" ||
-        (toolScopeFilter === "common" && tool.scope === "common") ||
-        (toolScopeFilter === "industry" && tool.scope === "industry-default") ||
-        (toolScopeFilter === "domain" && tool.scope === "industry-domain");
-
-      return matchesSearch && matchesScope;
-    });
-  }, [toolScopeFilter, toolSearch, tools]);
+  const filteredTools = tools;
 
   useEffect(() => {
     const toastTimeouts = techStackToastTimeoutsRef.current;
@@ -418,12 +430,16 @@ export function DataDictionaryPage() {
     techStackToastTimeoutsRef.current.set(toastId, toastTimeout);
   }
 
-  function showTechStackToast(message: string, tone: ReorderToastState["tone"]) {
+  function showTechStackToast(
+    message: string,
+    tone: ReorderToastState["tone"],
+    description?: string,
+  ) {
     techStackToastIdRef.current += 1;
     const toastId = `tech-stack-toast-${techStackToastIdRef.current}`;
 
     setTechStackToasts((currentToasts) =>
-      [{ id: toastId, message, tone }, ...currentToasts].slice(0, 3),
+      [{ description, id: toastId, message, tone }, ...currentToasts].slice(0, 3),
     );
     scheduleTechStackToastDismiss(toastId, tone);
   }
@@ -478,7 +494,7 @@ export function DataDictionaryPage() {
         industryId: selectedIndustryId,
         name,
       });
-      await queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey });
+      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
       setDomainIndustryId(selectedIndustryId);
       setMappingIndustryId(selectedIndustryId);
     } catch (error) {
@@ -626,6 +642,7 @@ export function DataDictionaryPage() {
     const industryId = processForm.industryId || industries[0]?.id || "";
     const category = processForm.category.trim();
     const tier = processForm.tier.trim();
+    const isUpdatingProcess = Boolean(editingProcess);
 
     if (!name || !industryId || !category || !tier) return;
 
@@ -677,6 +694,9 @@ export function DataDictionaryPage() {
       setEditingProcess(null);
       setProcessForm(createEmptyProcessForm(industries));
       setIsProcessFormOpen(false);
+      if (!isUpdatingProcess) {
+        showTechStackToast(`${name} added to Process Library`, "success", "Process Library");
+      }
     } catch (error) {
       const message = getErrorMessage(error);
       setDictionaryError(message);
@@ -713,13 +733,18 @@ export function DataDictionaryPage() {
 
         return {
           ...currentData,
-          processes: currentData.processes.map((item) =>
-            item.id === process.id ? { ...item, isActive: nextIsActive } : item,
-          ),
+          processes: nextIsActive
+            ? currentData.processes.map((item) =>
+                item.id === process.id ? { ...item, isActive: true } : item,
+              )
+            : currentData.processes.filter((item) => item.id !== process.id),
         };
       });
-      await queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey });
-      setExpandedProcessId(process.id);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
+        queryClient.invalidateQueries({ queryKey: archiveProcessesQueryKey }),
+      ]);
+      setExpandedProcessId(nextIsActive ? process.id : "");
     } catch (error) {
       setDictionaryError(getErrorMessage(error));
     } finally {
@@ -742,7 +767,10 @@ export function DataDictionaryPage() {
       setDictionaryError("");
       setProcessActionId(process.id);
       await deleteProcessMutation.mutateAsync(process);
-      await queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
+        queryClient.invalidateQueries({ queryKey: archiveProcessesQueryKey }),
+      ]);
       setExpandedProcessId("");
       setProcessDeleteTarget(null);
       if (editingProcess?.id === process.id) {
@@ -864,7 +892,10 @@ export function DataDictionaryPage() {
       setDictionaryError("");
       setToolActionId(tool.id);
       await deleteTechStackMutation.mutateAsync(tool.id);
-      await queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey });
+      if (tools.length === 1 && toolPage > 1) {
+        setToolPage(toolPage - 1);
+      }
+      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
       setToolDeleteTarget(null);
       if (editingTool?.id === tool.id) {
         handleCloseToolForm();
@@ -880,7 +911,7 @@ export function DataDictionaryPage() {
   }
 
   function handleDeleteAllTools() {
-    if (tools.length === 0 || deleteAllTechStackMutation.isPending) {
+    if (toolTotalCount === 0 || deleteAllTechStackMutation.isPending) {
       return;
     }
 
@@ -888,27 +919,18 @@ export function DataDictionaryPage() {
   }
 
   async function confirmDeleteAllTools() {
-    if (tools.length === 0 || deleteAllTechStackMutation.isPending) {
+    if (toolTotalCount === 0 || deleteAllTechStackMutation.isPending) {
       return;
     }
 
-    const deletedToolCount = tools.length;
+    const deletedToolCount = toolTotalCount;
 
     try {
       setDictionaryError("");
       await deleteAllTechStackMutation.mutateAsync();
-      queryClient.setQueryData(dataDictionaryQueryKey, (currentData: typeof dictionaryData) => {
-        if (!currentData) {
-          return currentData;
-        }
-
-        return {
-          ...currentData,
-          techStack: [],
-        };
-      });
       setIsDeleteAllToolsOpen(false);
       setToolPage(1);
+      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
       setToolDeleteTarget(null);
       handleCloseToolForm();
       showTechStackToast(
@@ -947,114 +969,123 @@ export function DataDictionaryPage() {
           <ProcessTiersCard />
         </section>
         <BenchmarkCard />
-        <IndustryDomainManager
-          domainName={domainName}
-          domains={domains}
-          industryName={industryName}
-          industries={industries}
-          isCatalogLoading={isCatalogLoading}
-          isDomainSaving={createDomainMutation.isPending}
-          isDeletingDomain={deleteProcessLibraryMutation.isPending}
-          isDeletingIndustry={deleteIndustryMutation.isPending}
-          isIndustrySaving={createIndustryMutation.isPending || activateIndustryMutation.isPending}
-          isMappingDomain={createProcessLibraryMutation.isPending}
-          libraries={libraries}
-          inactiveIndustries={inactiveIndustries}
-          mappingIndustryId={mappingIndustryId}
-          processes={processes}
-          setDomainIndustryId={setDomainIndustryId}
-          setDomainName={setDomainName}
-          setIndustryName={setIndustryName}
-          setMappingIndustryId={setMappingIndustryId}
-          onAddDomain={handleAddDomain}
-          onAddIndustry={handleAddIndustry}
-          onActivateIndustry={handleActivateIndustry}
-          onDeleteDomain={handleDeleteDomain}
-          onDeleteIndustry={handleDeleteIndustry}
-          onMapDomain={handleMapDomain}
-          onMapDomainToIndustry={handleMapDomainToIndustry}
-          onReorderDomains={handleReorderDomains}
-          onReorderIndustries={handleReorderIndustries}
-        />
-        <ProcessLibraryCard
-          domains={domains}
-          dictionaryError={dictionaryErrorMessage}
-          expandedProcessId={activeExpandedProcessId}
-          filteredProcesses={filteredProcesses}
-          industries={industries}
-          isCatalogLoading={isCatalogLoading}
-          isProcessSaving={isProcessSaving}
-          isProcessFormOpen={isProcessFormOpen}
-          categoryOptions={categoryOptions}
-          tierOptions={tierOptions}
-          editingProcess={editingProcess}
-          processDomainFilter={processDomainFilter}
-          processForm={processForm}
-          processActionId={processActionId}
-          processIndustryFilter={processIndustryFilter}
-          processPage={processPage}
-          processSearch={processSearch}
-          processes={processes}
-          setExpandedProcessId={setExpandedProcessId}
-          setIsProcessFormOpen={setIsProcessFormOpen}
-          setProcessDomainFilter={(value) => {
-            setProcessPage(1);
-            setProcessDomainFilter(value);
-          }}
-          setProcessForm={setProcessForm}
-          setProcessIndustryFilter={(value) => {
-            setProcessPage(1);
-            setProcessIndustryFilter(value);
-          }}
-          setProcessPage={setProcessPage}
-          setProcessSearch={(value) => {
-            setProcessPage(1);
-            setProcessSearch(value);
-          }}
-          onAddProcess={handleAddProcess}
-          currencyRateInput={currencyRateValue}
-          isCurrencyRateSaving={updateCurrencyConversionRateMutation.isPending}
-          savedUsdToAedRate={savedUsdToAedRate}
-          setCurrencyRateInput={setCurrencyRateInput}
-          onSaveCurrencyRate={handleSaveCurrencyRate}
-          onDeleteProcess={handleDeleteProcess}
-          onEditProcess={handleEditProcess}
-          onOpenNewProcessForm={handleOpenNewProcessForm}
-          onToggleProcessStatus={handleToggleProcessStatus}
-        />
-        <TechnologyStackCard
-          domains={domains}
-          filteredTools={filteredTools}
-          industries={industries}
-          isCatalogLoading={isCatalogLoading}
-          isToolDeleting={deleteTechStackMutation.isPending || deleteAllTechStackMutation.isPending}
-          isDeletingAllTools={deleteAllTechStackMutation.isPending}
-          isToolFormOpen={isToolFormOpen}
-          isToolSaving={isToolSaving}
-          setToolForm={setToolForm}
-          setToolPage={setToolPage}
-          setToolScopeFilter={(value) => {
-            setToolPage(1);
-            setToolScopeFilter(value);
-          }}
-          setToolSearch={(value) => {
-            setToolPage(1);
-            setToolSearch(value);
-          }}
-          toolForm={toolForm}
-          toolActionId={toolActionId}
-          toolPage={toolPage}
-          toolScopeFilter={toolScopeFilter}
-          toolSearch={toolSearch}
-          tools={tools}
-          editingTool={editingTool}
-          onAddTool={handleAddTool}
-          onCloseToolForm={handleCloseToolForm}
-          onDeleteAllTools={handleDeleteAllTools}
-          onDeleteTool={handleDeleteTool}
-          onEditTool={handleEditTool}
-          onOpenNewToolForm={handleOpenNewToolForm}
-        />
+        <LazyViewportSection minHeight={414}>
+          <IndustryDomainManager
+            domainName={domainName}
+            domains={domains}
+            industryName={industryName}
+            industries={industries}
+            isCatalogLoading={isCatalogLoading}
+            isDomainSaving={createDomainMutation.isPending}
+            isDeletingDomain={deleteProcessLibraryMutation.isPending}
+            isDeletingIndustry={deleteIndustryMutation.isPending}
+            isIndustrySaving={createIndustryMutation.isPending || activateIndustryMutation.isPending}
+            isMappingDomain={createProcessLibraryMutation.isPending}
+            libraries={libraries}
+            inactiveIndustries={inactiveIndustries}
+            mappingIndustryId={mappingIndustryId}
+            processes={processes}
+            setDomainIndustryId={setDomainIndustryId}
+            setDomainName={setDomainName}
+            setIndustryName={setIndustryName}
+            setMappingIndustryId={setMappingIndustryId}
+            onAddDomain={handleAddDomain}
+            onAddIndustry={handleAddIndustry}
+            onActivateIndustry={handleActivateIndustry}
+            onDeleteDomain={handleDeleteDomain}
+            onDeleteIndustry={handleDeleteIndustry}
+            onMapDomain={handleMapDomain}
+            onMapDomainToIndustry={handleMapDomainToIndustry}
+            onReorderDomains={handleReorderDomains}
+            onReorderIndustries={handleReorderIndustries}
+          />
+        </LazyViewportSection>
+        <LazyViewportSection minHeight={758}>
+          <ProcessLibraryCard
+            domains={domains}
+            dictionaryError={dictionaryErrorMessage}
+            expandedProcessId={activeExpandedProcessId}
+            filteredProcesses={filteredProcesses}
+            industries={industries}
+            isCatalogLoading={isCatalogLoading}
+            isProcessSaving={isProcessSaving}
+            isProcessFormOpen={isProcessFormOpen}
+            categoryOptions={categoryOptions}
+            tierOptions={tierOptions}
+            editingProcess={editingProcess}
+            processDomainFilter={processDomainFilter}
+            processForm={processForm}
+            processActionId={processActionId}
+            processIndustryFilter={processIndustryFilter}
+            processPage={processPage}
+            processSearch={processSearch}
+            processes={processes}
+            setExpandedProcessId={setExpandedProcessId}
+            setIsProcessFormOpen={setIsProcessFormOpen}
+            setProcessDomainFilter={(value) => {
+              setProcessPage(1);
+              setProcessDomainFilter(value);
+            }}
+            setProcessForm={setProcessForm}
+            setProcessIndustryFilter={(value) => {
+              setProcessPage(1);
+              setProcessIndustryFilter(value);
+            }}
+            setProcessPage={setProcessPage}
+            setProcessSearch={(value) => {
+              setProcessPage(1);
+              setProcessSearch(value);
+            }}
+            onAddProcess={handleAddProcess}
+            currencyRateInput={currencyRateValue}
+            isCurrencyRateSaving={updateCurrencyConversionRateMutation.isPending}
+            savedUsdToAedRate={savedUsdToAedRate}
+            setCurrencyRateInput={setCurrencyRateInput}
+            onSaveCurrencyRate={handleSaveCurrencyRate}
+            onDeleteProcess={handleDeleteProcess}
+            onEditProcess={handleEditProcess}
+            onOpenNewProcessForm={handleOpenNewProcessForm}
+            onToggleProcessStatus={handleToggleProcessStatus}
+          />
+        </LazyViewportSection>
+        <LazyViewportSection
+          minHeight={535}
+          onVisible={() => setIsTechnologyStackReady(true)}
+        >
+          <TechnologyStackCard
+            domains={domains}
+            filteredTools={filteredTools}
+            industries={industries}
+            isCatalogLoading={isCatalogLoading || isTechStackLoading}
+            isToolDeleting={deleteTechStackMutation.isPending || deleteAllTechStackMutation.isPending}
+            isDeletingAllTools={deleteAllTechStackMutation.isPending}
+            isToolFormOpen={isToolFormOpen}
+            isToolSaving={isToolSaving}
+            setToolForm={setToolForm}
+            setToolPage={setToolPage}
+            setToolScopeFilter={(value) => {
+              setToolPage(1);
+              setToolScopeFilter(value);
+            }}
+            setToolSearch={(value) => {
+              setToolPage(1);
+              setToolSearch(value);
+            }}
+            toolForm={toolForm}
+            toolActionId={toolActionId}
+            toolPage={toolPage}
+            toolScopeFilter={toolScopeFilter}
+            toolSearch={toolSearch}
+            toolTotalCount={toolTotalCount}
+            editingTool={editingTool}
+            onAddTool={handleAddTool}
+            onCloseToolForm={handleCloseToolForm}
+            onDeleteAllTools={handleDeleteAllTools}
+            onDeleteTool={handleDeleteTool}
+            onEditTool={handleEditTool}
+            onOpenNewToolForm={handleOpenNewToolForm}
+          />
+        </LazyViewportSection>
         {processDeleteTarget ? (
           <DeleteProcessConfirmationModal
             isDeleting={deleteProcessMutation.isPending && processActionId === processDeleteTarget.id}
@@ -1086,7 +1117,7 @@ export function DataDictionaryPage() {
         {isDeleteAllToolsOpen ? (
           <DeleteAllToolsConfirmationModal
             isDeleting={deleteAllTechStackMutation.isPending}
-            toolCount={tools.length}
+            toolCount={toolTotalCount}
             onCancel={() => {
               if (!deleteAllTechStackMutation.isPending) {
                 setIsDeleteAllToolsOpen(false);
@@ -1115,6 +1146,74 @@ function PageHeader() {
         Reference and management for every code, scale, and process used across assessments.
       </p>
     </header>
+  );
+}
+
+function LazyViewportSection({
+  children,
+  minHeight,
+  onVisible,
+}: {
+  children: ReactNode;
+  minHeight: number;
+  onVisible?: () => void;
+}) {
+  const sectionRef = useRef<HTMLDivElement | null>(null);
+  const hasNotifiedRef = useRef(false);
+  const [shouldRender, setShouldRender] = useState(false);
+
+  useEffect(() => {
+    if (shouldRender) {
+      return;
+    }
+
+    const sectionNode = sectionRef.current;
+
+    if (!sectionNode) {
+      return;
+    }
+
+    function revealSection() {
+      if (!hasNotifiedRef.current) {
+        hasNotifiedRef.current = true;
+        onVisible?.();
+      }
+
+      setShouldRender(true);
+    }
+
+    if (typeof IntersectionObserver === "undefined") {
+      const fallbackTimer = setTimeout(revealSection, 0);
+
+      return () => clearTimeout(fallbackTimer);
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          revealSection();
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "240px 0px" },
+    );
+
+    observer.observe(sectionNode);
+
+    return () => observer.disconnect();
+  }, [onVisible, shouldRender]);
+
+  if (shouldRender) {
+    return <>{children}</>;
+  }
+
+  return (
+    <div
+      ref={sectionRef}
+      aria-hidden="true"
+      className="mt-5"
+      style={{ minHeight }}
+    />
   );
 }
 
@@ -1161,8 +1260,8 @@ function ProcessTiersCard() {
 
 function BenchmarkCard() {
   return (
-    <Panel className="mt-5 min-h-[134px]">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <section className="mt-5 min-w-0 overflow-hidden rounded-md border border-black/8 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
+      <div className="flex min-h-[47px] flex-wrap items-center justify-between gap-4 border-b border-black/[0.08] px-6">
         <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
           GCC / MENA CX Benchmark
         </p>
@@ -1170,7 +1269,7 @@ function BenchmarkCard() {
           Edit in Settings -&gt;
         </button>
       </div>
-      <div className="mt-8 grid grid-cols-2 gap-6 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-6 px-6 pt-6 pb-5 md:grid-cols-4">
         {benchmarkMetrics.map((metric) => (
           <div key={metric.label}>
             <p className="text-2xl leading-none font-bold">{metric.value}</p>
@@ -1178,7 +1277,7 @@ function BenchmarkCard() {
           </div>
         ))}
       </div>
-    </Panel>
+    </section>
   );
 }
 
@@ -1811,8 +1910,11 @@ function IndustryDomainManager({
   }
 
   return (
-    <Panel
-      actionSlot={
+    <section className="mt-5 min-w-0 overflow-hidden rounded-md border border-black/8 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
+      <div className="flex min-h-[54px] flex-wrap items-center justify-between gap-4 border-b border-black/[0.08] px-5">
+        <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
+          Industry and domain mapping
+        </p>
         <div
           aria-label="Industry and domain mapping view"
           className="inline-flex h-8 items-center rounded-md border border-black/[0.08] bg-[#F5F5F7] p-0.5"
@@ -1847,26 +1949,24 @@ function IndustryDomainManager({
             Relations
           </button>
         </div>
-      }
-      className="mt-5"
-      title="Industry and domain mapping"
-    >
-      {isCatalogLoading ? (
-        <IndustryDomainSkeleton />
-      ) : mappingView === "table" ? (
-        <IndustryDomainRelationTable
-          domains={uniqueDomains}
-          industries={orderedIndustries}
-          isMappingDomain={isMappingDomain}
-          libraries={libraries}
-          onMapDomain={mapDomainToIndustry}
-        />
-      ) : (
-        <div className={mappingGridClassName}>
-          <section
-            className={mappingPanelClassName}
-            style={mappingColumnStyle}
-          >
+      </div>
+      <div className="px-5 py-5">
+        {isCatalogLoading ? (
+          <IndustryDomainSkeleton />
+        ) : mappingView === "table" ? (
+          <IndustryDomainRelationTable
+            domains={uniqueDomains}
+            industries={orderedIndustries}
+            isMappingDomain={isMappingDomain}
+            libraries={libraries}
+            onMapDomain={mapDomainToIndustry}
+          />
+        ) : (
+          <div className={mappingGridClassName}>
+            <section
+              className={mappingPanelClassName}
+              style={mappingColumnStyle}
+            >
             <div className="min-h-8 border-b border-black/[0.06]">
               <div className="flex min-h-5 items-center justify-between gap-3">
                 <p className="min-w-0 text-[11px] leading-4 font-bold tracking-[0.08em] text-[#86868B] uppercase">
@@ -2227,6 +2327,7 @@ function IndustryDomainManager({
           </section>
         </div>
       )}
+      </div>
       {industryDeleteImpact ? (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/20 px-4"
@@ -2310,7 +2411,7 @@ function IndustryDomainManager({
         </div>
       ) : null}
       <ReorderToastStack toasts={reorderToasts} />
-    </Panel>
+    </section>
   );
 }
 
@@ -2447,7 +2548,7 @@ function ReorderToastStack({
           ? "Changes are being saved."
           : isError
             ? "Please retry this action."
-            : successDescription;
+            : toast.description || successDescription;
 
         return (
           <div
@@ -2613,7 +2714,7 @@ function IndustryDomainRelationTable({
 
   return (
     <div
-      className="mt-6 overflow-hidden rounded-md border border-black/[0.08] bg-white"
+      className="overflow-hidden rounded-md border border-black/[0.08] bg-white"
       style={mappingColumnStyle}
     >
       <div className="max-h-[420px] max-w-full overflow-auto">
@@ -2819,12 +2920,12 @@ function ProcessLibraryCard({
   onSaveCurrencyRate: () => void;
   onToggleProcessStatus: (process: DictionaryProcess) => void;
 }) {
-  const totalProcessPages = Math.ceil(filteredProcesses.length / libraryPageSize);
+  const totalProcessPages = Math.ceil(filteredProcesses.length / processLibraryPageSize);
   const safeProcessPage = Math.min(Math.max(processPage, 1), Math.max(totalProcessPages, 1));
-  const processStartIndex = (safeProcessPage - 1) * libraryPageSize;
+  const processStartIndex = (safeProcessPage - 1) * processLibraryPageSize;
   const visibleProcesses = filteredProcesses.slice(
     processStartIndex,
-    processStartIndex + libraryPageSize,
+    processStartIndex + processLibraryPageSize,
   );
   const domainFilterOptions = useMemo(() => getUniqueDomains(domains), [domains]);
   const hasProcessFilters =
@@ -2833,158 +2934,195 @@ function ProcessLibraryCard({
     processDomainFilter !== "all";
 
   return (
-    <Panel
-      className="mt-5"
-      title={`Process Library (${processes.length})`}
-      actionLabel="Add Process"
-      onAction={onOpenNewProcessForm}
-    >
-      <div className="mt-7 flex flex-wrap gap-2">
-        <SearchInput
-          value={processSearch}
-          onChange={setProcessSearch}
-          placeholder="Search processes..."
-          className="w-full sm:w-[280px]"
-        />
-        <label
-          className="relative flex h-10 w-full min-w-0 items-center sm:w-[224px]"
-          title="Filter processes by industry"
-        >
-          <Building2
-            size={14}
-            className="pointer-events-none absolute left-3 text-[#A1A1AA]"
-            aria-hidden="true"
-          />
-          <select
-            value={processIndustryFilter}
-            onChange={(event) => {
-              const nextIndustryFilter = event.target.value;
-              setProcessIndustryFilter(nextIndustryFilter);
-              if (nextIndustryFilter !== "all") {
-                setProcessDomainFilter(industryDefaultDomainFilter);
-              }
-            }}
-            aria-label="Filter processes by industry"
-            className="h-10 w-full appearance-none rounded-lg border border-[#D9E3F0] bg-white pr-9 pl-9 text-sm font-semibold text-[#333333] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition hover:border-[#B8D8FF] focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10"
-          >
-            <option value="all">All industries</option>
-            {industries.map((industry) => (
-              <option key={industry.id} value={industry.id}>
-                {industry.name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            size={14}
-            className="pointer-events-none absolute right-3 text-[#86868B]"
-            aria-hidden="true"
-          />
-        </label>
-        <label
-          className="relative flex h-10 w-full min-w-0 items-center sm:w-[224px]"
-          title="Filter processes by domain"
-        >
-          <Database
-            size={14}
-            className="pointer-events-none absolute left-3 text-[#A1A1AA]"
-            aria-hidden="true"
-          />
-          <select
-            value={processDomainFilter}
-            onChange={(event) => setProcessDomainFilter(event.target.value)}
-            aria-label="Filter processes by domain"
-            className="h-10 w-full appearance-none rounded-lg border border-[#D9E3F0] bg-white pr-9 pl-9 text-sm font-semibold text-[#333333] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition hover:border-[#B8D8FF] focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10"
-          >
-            <option value="all">All domains</option>
-            <option value={industryDefaultDomainFilter}>Industry default</option>
-            {domainFilterOptions.map((domain) => (
-              <option key={getDomainIdentity(domain)} value={domain.id}>
-                {getDomainDisplayTitle(domain.name)}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            size={14}
-            className="pointer-events-none absolute right-3 text-[#86868B]"
-            aria-hidden="true"
-          />
-        </label>
+    <section className="mt-5 min-w-0 overflow-hidden rounded-md border border-black/8 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
+      <div className="flex min-h-[54px] flex-wrap items-center justify-between gap-4 border-b border-black/[0.08] px-5">
+        <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
+          Process Library ({processes.length})
+        </p>
         <button
           type="button"
-          onClick={() => {
-            setProcessSearch("");
-            setProcessIndustryFilter("all");
-            setProcessDomainFilter("all");
-            setProcessPage(1);
-          }}
-          disabled={!hasProcessFilters}
-          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-[#D9E3F0] bg-white px-3 text-xs font-bold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#B8D8FF] hover:text-[#007AFF] disabled:cursor-not-allowed disabled:border-black/[0.06] disabled:bg-[#F5F5F7] disabled:text-[#A1A1AA] sm:w-auto"
-          aria-label="Reset process filters"
-          title="Reset process filters"
+          onClick={onOpenNewProcessForm}
+          className="inline-flex items-center gap-1 text-xs font-bold text-[#007AFF]"
         >
-          <RotateCcw size={13} aria-hidden="true" />
-          Reset filters
+          <Plus size={12} aria-hidden="true" />
+          Add Process
         </button>
       </div>
-      {isProcessFormOpen ? (
-        <NewProcessModal
-          domains={domains}
-          industries={industries}
-          isCurrencyRateSaving={isCurrencyRateSaving}
-          isEditing={Boolean(editingProcess)}
-          isProcessSaving={isProcessSaving}
-          categoryOptions={categoryOptions}
-          tierOptions={tierOptions}
-          currencyRateInput={currencyRateInput}
-          processForm={processForm}
-          savedUsdToAedRate={savedUsdToAedRate}
-          setCurrencyRateInput={setCurrencyRateInput}
-          setIsProcessFormOpen={setIsProcessFormOpen}
-          setProcessForm={setProcessForm}
-          submitLabel={editingProcess ? "Save Changes" : "Add Process"}
-          onAddProcess={onAddProcess}
-          onSaveCurrencyRate={onSaveCurrencyRate}
-        />
-      ) : null}
-      <div className="mt-4 min-h-[170px] max-w-full overflow-x-auto rounded-md border border-black/[0.06] bg-white">
-        <div className="min-w-[860px] lg:min-w-[1040px]">
-          {isCatalogLoading ? <ProcessRowsSkeleton /> : null}
-          {!isCatalogLoading && filteredProcesses.length === 0 ? (
-            <ProcessListState label={dictionaryError || "No mapped processes found."} />
-          ) : null}
-          {!isCatalogLoading
-            ? visibleProcesses.map((process) => (
-                <ProcessRow
-                  key={process.id}
-                  expanded={expandedProcessId === process.id}
-                  industries={industries}
-                  isBusy={processActionId === process.id}
-                  process={process}
-                  onDelete={() => onDeleteProcess(process)}
-                  onEdit={() => onEditProcess(process)}
-                  onToggle={() =>
-                    setExpandedProcessId(expandedProcessId === process.id ? "" : process.id)
-                  }
-                  onToggleStatus={() => onToggleProcessStatus(process)}
-                />
-              ))
-            : null}
+      <div className="px-5 pt-4">
+        <div className="flex flex-wrap gap-2">
+          <SearchInput
+            value={processSearch}
+            onChange={setProcessSearch}
+            placeholder="Search processes..."
+            className="w-full sm:w-[238px]"
+          />
+          <label
+            className="relative flex h-9 w-full min-w-0 items-center sm:w-[190px]"
+            title="Filter processes by industry"
+          >
+            <Building2
+              size={14}
+              className="pointer-events-none absolute left-3 text-[#A1A1AA]"
+              aria-hidden="true"
+            />
+            <select
+              value={processIndustryFilter}
+              onChange={(event) => {
+                const nextIndustryFilter = event.target.value;
+                setProcessIndustryFilter(nextIndustryFilter);
+                if (nextIndustryFilter !== "all") {
+                  setProcessDomainFilter(industryDefaultDomainFilter);
+                }
+              }}
+              aria-label="Filter processes by industry"
+              className="h-9 w-full appearance-none rounded-md border border-[#D9E3F0] bg-white pr-9 pl-9 text-sm font-semibold text-[#333333] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition hover:border-[#B8D8FF] focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10"
+            >
+              <option value="all">All industries</option>
+              {industries.map((industry) => (
+                <option key={industry.id} value={industry.id}>
+                  {industry.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={14}
+              className="pointer-events-none absolute right-3 text-[#86868B]"
+              aria-hidden="true"
+            />
+          </label>
+          <label
+            className="relative flex h-9 w-full min-w-0 items-center sm:w-[190px]"
+            title="Filter processes by domain"
+          >
+            <Database
+              size={14}
+              className="pointer-events-none absolute left-3 text-[#A1A1AA]"
+              aria-hidden="true"
+            />
+            <select
+              value={processDomainFilter}
+              onChange={(event) => setProcessDomainFilter(event.target.value)}
+              aria-label="Filter processes by domain"
+              className="h-9 w-full appearance-none rounded-md border border-[#D9E3F0] bg-white pr-9 pl-9 text-sm font-semibold text-[#333333] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition hover:border-[#B8D8FF] focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10"
+            >
+              <option value="all">All domains</option>
+              <option value={industryDefaultDomainFilter}>Industry default</option>
+              {domainFilterOptions.map((domain) => (
+                <option key={getDomainIdentity(domain)} value={domain.id}>
+                  {getDomainDisplayTitle(domain.name)}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={14}
+              className="pointer-events-none absolute right-3 text-[#86868B]"
+              aria-hidden="true"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              setProcessSearch("");
+              setProcessIndustryFilter("all");
+              setProcessDomainFilter("all");
+              setProcessPage(1);
+            }}
+            disabled={!hasProcessFilters}
+            className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-[#D9E3F0] bg-white px-3 text-xs font-bold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#B8D8FF] hover:text-[#007AFF] disabled:cursor-not-allowed disabled:border-black/[0.06] disabled:bg-[#F5F5F7] disabled:text-[#A1A1AA] sm:w-auto"
+            aria-label="Reset process filters"
+            title="Reset process filters"
+          >
+            <RotateCcw size={13} aria-hidden="true" />
+            Reset filters
+          </button>
         </div>
+        {isProcessFormOpen ? (
+          <NewProcessModal
+            domains={domains}
+            industries={industries}
+            isCurrencyRateSaving={isCurrencyRateSaving}
+            isEditing={Boolean(editingProcess)}
+            isProcessSaving={isProcessSaving}
+            categoryOptions={categoryOptions}
+            tierOptions={tierOptions}
+            currencyRateInput={currencyRateInput}
+            processForm={processForm}
+            savedUsdToAedRate={savedUsdToAedRate}
+            setCurrencyRateInput={setCurrencyRateInput}
+            setIsProcessFormOpen={setIsProcessFormOpen}
+            setProcessForm={setProcessForm}
+            submitLabel={editingProcess ? "Save Changes" : "Add Process"}
+            onAddProcess={onAddProcess}
+            onSaveCurrencyRate={onSaveCurrencyRate}
+          />
+        ) : null}
+        <div className="mt-4 min-h-[584px] max-w-full border-t border-black/[0.05] bg-white transition-[min-height] duration-200 ease-out">
+          <div className="md:hidden">
+            {isCatalogLoading ? <ProcessMobileRowsSkeleton /> : null}
+            {!isCatalogLoading && filteredProcesses.length === 0 ? (
+              <ProcessListState label={dictionaryError || "No mapped processes found."} />
+            ) : null}
+            {!isCatalogLoading
+              ? visibleProcesses.map((process) => (
+                  <ProcessMobileRow
+                    key={process.id}
+                    expanded={expandedProcessId === process.id}
+                    industries={industries}
+                    isBusy={processActionId === process.id}
+                    process={process}
+                    onDelete={() => onDeleteProcess(process)}
+                    onEdit={() => onEditProcess(process)}
+                    onToggle={() =>
+                      setExpandedProcessId(expandedProcessId === process.id ? "" : process.id)
+                    }
+                    onToggleStatus={() => onToggleProcessStatus(process)}
+                  />
+                ))
+              : null}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
+            <div className="min-w-[860px] lg:min-w-[1040px]">
+              {isCatalogLoading ? <ProcessRowsSkeleton /> : null}
+              {!isCatalogLoading && filteredProcesses.length === 0 ? (
+                <ProcessListState label={dictionaryError || "No mapped processes found."} />
+              ) : null}
+              {!isCatalogLoading
+                ? visibleProcesses.map((process) => (
+                    <ProcessRow
+                      key={process.id}
+                      expanded={expandedProcessId === process.id}
+                      industries={industries}
+                      isBusy={processActionId === process.id}
+                      process={process}
+                      onDelete={() => onDeleteProcess(process)}
+                      onEdit={() => onEditProcess(process)}
+                      onToggle={() =>
+                        setExpandedProcessId(expandedProcessId === process.id ? "" : process.id)
+                      }
+                      onToggleStatus={() => onToggleProcessStatus(process)}
+                    />
+                  ))
+                : null}
+            </div>
+          </div>
+        </div>
+        <PaginationSummary
+          currentPage={safeProcessPage}
+          label={
+            filteredProcesses.length
+              ? `Showing ${processStartIndex + 1}-${Math.min(
+                  processStartIndex + processLibraryPageSize,
+                  filteredProcesses.length,
+                )} of ${filteredProcesses.length}`
+              : "Showing 0 of 0"
+          }
+          onPageChange={setProcessPage}
+          pages={getPaginationPages(totalProcessPages, safeProcessPage)}
+          variant="processLibrary"
+        />
       </div>
-      <PaginationSummary
-        currentPage={safeProcessPage}
-        label={
-          filteredProcesses.length
-            ? `Showing ${processStartIndex + 1}-${Math.min(
-                processStartIndex + libraryPageSize,
-                filteredProcesses.length,
-              )} of ${filteredProcesses.length}`
-            : "Showing 0 of 0"
-        }
-        onPageChange={setProcessPage}
-        pages={getPaginationPages(totalProcessPages, safeProcessPage)}
-      />
-    </Panel>
+    </section>
   );
 }
 
@@ -3019,7 +3157,11 @@ function ProcessRow({
         isActive ? "" : "opacity-75"
       }`}
     >
-      <div className="flex min-h-[46px] w-full items-center gap-3 border-b border-black/[0.05] bg-white px-4 transition hover:bg-[#FAFAFA]">
+      <div
+        className={`flex min-h-[46px] w-full items-center gap-3 bg-white px-4 transition hover:bg-[#FAFAFA] ${
+          expanded ? "border-b border-black/[0.05]" : ""
+        }`}
+      >
         <button
           type="button"
           onClick={onToggle}
@@ -3105,7 +3247,7 @@ function ProcessRow({
         </div>
       </div>
       {expanded ? (
-        <div className="min-h-[124px] bg-[#FAFAFA] ps-14 pe-8 pt-2 pb-5">
+        <div className="min-h-[124px] bg-[#FAFAFA] ps-12 pe-8 pt-3 pb-5">
           <p className="max-w-[620px] text-[11px] leading-5 font-semibold text-[#86868B]">
             {process.description || "Process details are available for this mapped COS process."}
           </p>
@@ -3121,39 +3263,184 @@ function ProcessRow({
   );
 }
 
+function ProcessMobileRow({
+  expanded,
+  industries,
+  isBusy,
+  process,
+  onDelete,
+  onEdit,
+  onToggle,
+  onToggleStatus,
+}: {
+  expanded: boolean;
+  industries: DictionaryIndustry[];
+  isBusy: boolean;
+  process: DictionaryProcess;
+  onDelete: () => void;
+  onEdit: () => void;
+  onToggle: () => void;
+  onToggleStatus: () => void;
+}) {
+  const industryLabel =
+    process.industryIds.length === industries.length
+      ? "All industries"
+      : process.industryLabel || `${process.industryIds.length} industries`;
+  const isActive = process.isActive !== false;
+
+  return (
+    <article
+      className={`border-b border-black/[0.05] bg-white last:border-b-0 ${
+        isActive ? "" : "opacity-75"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="w-full px-4 py-4 text-left transition hover:bg-[#FAFAFA]"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold tracking-[0.02em] text-[#AAAAAA]">
+              {process.code}
+            </p>
+            <h3 className="mt-1 break-words text-sm font-bold text-[#333333]">
+              {process.name}
+            </h3>
+            <p className="mt-1 break-words text-xs font-semibold leading-5 text-[#86868B]">
+              {process.description || "Process details are available for this mapped COS process."}
+            </p>
+          </div>
+          <TierPill compact tier={process.tier} />
+        </div>
+        <span className="mt-3 inline-flex text-[11px] font-bold text-[#007AFF]">
+          {expanded ? "Hide details" : "View details"}
+        </span>
+      </button>
+
+      {expanded ? (
+        <div className="border-t border-black/[0.05] bg-[#FAFAFA] px-4 py-4">
+          <div className="grid grid-cols-2 gap-3 text-xs font-semibold text-[#86868B]">
+            <Metric label="Domain" value={process.domain} />
+            <Metric label="Default Cost / Yr" value={process.cost} />
+            <Metric label="Default Hours / Yr" value={process.hours} />
+            <Metric label="Source" value={process.source} />
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-3 gap-2 px-4 pb-4">
+        <button
+          type="button"
+          onClick={onEdit}
+          disabled={isBusy}
+          className="inline-flex h-9 items-center justify-center rounded-md border border-black/[0.08] bg-white text-xs font-bold text-[#007AFF] transition hover:border-[#007AFF] hover:bg-[#F4FAFF] disabled:cursor-not-allowed disabled:opacity-60"
+          aria-label={`Edit ${process.name}`}
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={isBusy}
+          className="inline-flex h-9 items-center justify-center rounded-md border border-[#FECACA] bg-white text-xs font-bold text-[#EF4444] transition hover:bg-[#FEF2F2] disabled:cursor-not-allowed disabled:opacity-60"
+          aria-label={`Delete ${process.name}`}
+        >
+          Delete
+        </button>
+        <button
+          type="button"
+          onClick={onToggleStatus}
+          disabled={isBusy}
+          className={`inline-flex h-9 items-center justify-center rounded-md border text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+            isActive
+              ? "border-[#B7E4CE] bg-[#F0FDF4] text-[#10B981]"
+              : "border-black/[0.08] bg-[#F5F5F7] text-[#86868B]"
+          }`}
+          aria-label={isActive ? `Deactivate ${process.name}` : `Activate ${process.name}`}
+        >
+          {isBusy ? "Saving" : isActive ? "Active" : "Inactive"}
+        </button>
+      </div>
+
+      <p className="px-4 pb-4 text-[11px] font-semibold text-[#AAAAAA]">
+        {getDomainCode(process.domain)} - {industryLabel}
+      </p>
+    </article>
+  );
+}
+
 function ProcessRowsSkeleton() {
   return (
-    <div className="animate-pulse bg-white" aria-label="Loading mapped COS processes">
-      <div className="flex min-h-[46px] w-full items-center gap-3 px-4">
-        <div className="grid min-w-0 flex-1 grid-cols-[32px_78px_minmax(240px,1fr)] items-center gap-2">
-          <div className="mx-auto size-3 rounded-full bg-[#EEF0F3]" />
-          <div className="h-3 w-10 rounded bg-[#EEF0F3]" />
-          <div className="h-4 w-40 rounded bg-[#EEF0F3]" />
-        </div>
-        <div className="ml-auto flex shrink-0 items-center justify-end gap-10">
-          <div className="flex shrink-0 items-center justify-end gap-2">
-            <div className="h-3 w-5 rounded bg-[#EEF0F3]" />
-            <div className="h-6 w-28 rounded-full bg-[#E8F6EF]" />
-            <div className="h-3 w-16 rounded bg-[#EEF0F3]" />
-          </div>
-          <div className="flex shrink-0 items-center justify-end gap-2.5">
-            <div className="size-7 rounded-md bg-[#EEF0F3]" />
-            <div className="size-7 rounded-md bg-[#EEF0F3]" />
-            <div className="h-4 w-12 rounded bg-[#EEF0F3]" />
-          </div>
-        </div>
-      </div>
-      <div className="min-h-[124px] bg-[#FAFAFA] ps-14 pe-8 pt-4 pb-5">
-        <div className="h-3 w-56 rounded bg-[#EEF0F3]" />
-        <div className="mt-7 grid gap-6 md:grid-cols-[210px_190px_190px_140px]">
-          {[0, 1, 2, 3].map((item) => (
-            <div key={item}>
-              <div className="h-3 w-24 rounded bg-[#EEF0F3]" />
-              <div className="mt-3 h-4 w-28 rounded bg-[#EEF0F3]" />
+    <div
+      className="animate-pulse bg-white transition-opacity duration-200 ease-out"
+      aria-label="Loading mapped COS processes"
+    >
+      {Array.from({ length: processLibraryPageSize }).map((_, rowIndex) => (
+        <div key={rowIndex} className={rowIndex > 0 ? "border-t border-black/[0.05]" : ""}>
+          <div className="flex min-h-[46px] w-full items-center gap-3 px-4">
+            <div className="grid min-w-0 flex-1 grid-cols-[32px_78px_minmax(240px,1fr)] items-center gap-2">
+              <div className="mx-auto size-3 rounded-full bg-[#EEF0F3]" />
+              <div className="h-3 w-10 rounded bg-[#EEF0F3]" />
+              <div className="h-4 w-40 rounded bg-[#EEF0F3]" />
             </div>
-          ))}
+            <div className="ml-auto flex shrink-0 items-center justify-end gap-10">
+              <div className="flex shrink-0 items-center justify-end gap-2">
+                <div className="h-3 w-5 rounded bg-[#EEF0F3]" />
+                <div className="h-6 w-28 rounded-full bg-[#E8F6EF]" />
+                <div className="h-3 w-16 rounded bg-[#EEF0F3]" />
+              </div>
+              <div className="flex shrink-0 items-center justify-end gap-2.5">
+                <div className="size-7 rounded-md bg-[#EEF0F3]" />
+                <div className="size-7 rounded-md bg-[#EEF0F3]" />
+                <div className="h-4 w-12 rounded bg-[#EEF0F3]" />
+              </div>
+            </div>
+          </div>
+          {rowIndex === 0 ? (
+            <div className="min-h-[124px] bg-[#FAFAFA] ps-12 pe-8 pt-3 pb-5">
+              <div className="h-3 w-56 rounded bg-[#EEF0F3]" />
+              <div className="mt-7 grid gap-6 md:grid-cols-[210px_190px_190px_140px]">
+                {[0, 1, 2, 3].map((item) => (
+                  <div key={item}>
+                    <div className="h-3 w-24 rounded bg-[#EEF0F3]" />
+                    <div className="mt-3 h-4 w-28 rounded bg-[#EEF0F3]" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
-      </div>
+      ))}
+    </div>
+  );
+}
+
+function ProcessMobileRowsSkeleton() {
+  return (
+    <div
+      className="animate-pulse divide-y divide-black/[0.05] bg-white transition-opacity duration-200 ease-out"
+      aria-label="Loading mapped COS processes"
+    >
+      {Array.from({ length: processLibraryPageSize }).map((_, rowIndex) => (
+        <div key={rowIndex} className="p-4">
+          <div className="h-3 w-12 rounded bg-[#EEF0F3]" />
+          <div className="mt-2 h-4 w-48 max-w-full rounded bg-[#EEF0F3]" />
+          <div className="mt-2 h-3 w-full rounded bg-[#EEF0F3]" />
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="h-12 rounded-md bg-[#EEF0F3]" />
+            <div className="h-12 rounded-md bg-[#EEF0F3]" />
+            <div className="h-12 rounded-md bg-[#EEF0F3]" />
+            <div className="h-12 rounded-md bg-[#EEF0F3]" />
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="h-9 rounded-md bg-[#EEF0F3]" />
+            <div className="h-9 rounded-md bg-[#EEF0F3]" />
+            <div className="h-9 rounded-md bg-[#EEF0F3]" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -3184,7 +3471,7 @@ function TechnologyStackCard({
   toolPage,
   toolScopeFilter,
   toolSearch,
-  tools,
+  toolTotalCount,
   editingTool,
   onAddTool,
   onCloseToolForm,
@@ -3210,7 +3497,7 @@ function TechnologyStackCard({
   toolPage: number;
   toolScopeFilter: string;
   toolSearch: string;
-  tools: TechStackTool[];
+  toolTotalCount: number;
   editingTool: TechStackTool | null;
   onAddTool: (event: FormEvent<HTMLFormElement>) => void;
   onCloseToolForm: () => void;
@@ -3219,10 +3506,10 @@ function TechnologyStackCard({
   onEditTool: (tool: TechStackTool) => void;
   onOpenNewToolForm: () => void;
 }) {
-  const totalToolPages = Math.ceil(filteredTools.length / libraryPageSize);
+  const totalToolPages = Math.ceil(toolTotalCount / technologyStackLibraryPageSize);
   const safeToolPage = Math.min(Math.max(toolPage, 1), Math.max(totalToolPages, 1));
-  const toolStartIndex = (safeToolPage - 1) * libraryPageSize;
-  const visibleTools = filteredTools.slice(toolStartIndex, toolStartIndex + libraryPageSize);
+  const toolStartIndex = (safeToolPage - 1) * technologyStackLibraryPageSize;
+  const visibleTools = filteredTools;
   const selectedToolIndustryId = toolForm.industryId || industries[0]?.id || "";
   const toolDomains = domains.filter((domain) =>
     selectedToolIndustryId ? domain.industryIds.includes(selectedToolIndustryId) : true,
@@ -3237,17 +3524,22 @@ function TechnologyStackCard({
         (toolForm.scope === "industry" && selectedToolIndustryId) ||
         (toolForm.scope === "domain" && selectedToolIndustryId && toolForm.domainId)),
   );
+  const hasToolFilters = Boolean(toolSearch.trim() || toolScopeFilter !== "all");
+  const emptyToolMessage = hasToolFilters
+    ? "No tools match the selected filters. Reset filters to view all tools."
+    : "No tools added yet. Add a tool to build the technology stack library.";
 
   return (
-    <Panel
-      className="mt-5"
-      title={`Technology Stack Library (${tools.length} of 50)`}
-      actionSlot={
+    <section className="mt-5 min-w-0 overflow-hidden rounded-md border border-black/8 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
+      <div className="flex min-h-[54px] flex-wrap items-center justify-between gap-4 border-b border-black/[0.08] px-6">
+        <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
+          Technology Stack Library ({toolTotalCount} of 50)
+        </p>
         <div className="flex flex-wrap items-center justify-end gap-3">
           <button
             type="button"
             onClick={onDeleteAllTools}
-            disabled={tools.length === 0 || isToolDeleting || isToolSaving}
+            disabled={toolTotalCount === 0 || isToolDeleting || isToolSaving}
             className="inline-flex items-center gap-1 text-xs font-bold text-[#EF4444] transition hover:text-[#DC2626] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isDeletingAllTools ? (
@@ -3267,121 +3559,145 @@ function TechnologyStackCard({
             Add Tool
           </button>
         </div>
-      }
-    >
-      {isCatalogLoading ? (
-        <TechnologyStackSkeleton />
-      ) : (
-        <>
-          <div className="mt-7 flex flex-wrap gap-2">
-            <SearchInput
-              value={toolSearch}
-              onChange={setToolSearch}
-              placeholder="Search tools or vendors..."
-              className="w-full sm:w-[280px]"
-            />
-            <select
-              value={toolScopeFilter}
-              onChange={(event) => setToolScopeFilter(event.target.value)}
-              className="h-9 w-full rounded-md border border-black/[0.08] bg-white px-3 text-xs font-semibold text-[#555555] outline-none focus:border-[#007AFF] sm:w-[180px]"
-            >
-              <option value="all">All tools</option>
-              <option value="common">Global tools</option>
-              <option value="industry">Industry default</option>
-              <option value="domain">Industry + domain</option>
-            </select>
-          </div>
-          {isToolFormOpen ? (
-            <TechStackToolModal
-              canAddTool={canAddTool}
-              domains={toolDomains}
-              industries={industries}
-              isToolSaving={isToolSaving}
-              editingTool={editingTool}
-              selectedIndustryId={selectedToolIndustryId}
-              onClose={onCloseToolForm}
-              setToolForm={setToolForm}
-              toolForm={toolForm}
-              onAddTool={onAddTool}
-            />
-          ) : null}
-          {visibleTools.length ? (
-            <div className="mt-5 grid min-h-[82px] gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {visibleTools.map((tool) => (
-                <article
-                  key={tool.id}
-                  className="relative min-h-[82px] min-w-0 rounded-md border border-black/[0.08] bg-white px-4 py-3 pr-20"
-                >
-                  <p className="truncate text-sm font-bold" title={tool.name}>{tool.name}</p>
-                  <p className="mt-1 text-xs font-semibold text-[#86868B]">
-                    {tool.vendor} - {tool.category} - {getTechStackScopeLabel(tool)}
-                  </p>
-                  <button
-                    type="button"
-                    aria-label={`Edit ${tool.name}`}
-                    title={`Edit ${tool.name}`}
-                    disabled={isToolDeleting || isToolSaving}
-                    onClick={() => onEditTool(tool)}
-                    className="absolute top-3 right-11 inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[#86868B] transition hover:bg-[#F5F5F7] hover:text-[#007AFF] focus-visible:bg-[#F5F5F7] focus-visible:text-[#007AFF] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {toolActionId === tool.id && isToolSaving ? (
-                      <span className="size-3 animate-spin rounded-full border border-[#86868B]/30 border-t-[#007AFF]" />
-                    ) : (
-                      <Pencil size={14} aria-hidden="true" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Delete ${tool.name}`}
-                    title={`Delete ${tool.name}`}
-                    disabled={isToolDeleting || isToolSaving}
-                    onClick={() => onDeleteTool(tool)}
-                    className="absolute top-3 right-3 inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[#86868B] transition hover:bg-[#F5F5F7] hover:text-[#EF4444] focus-visible:bg-[#F5F5F7] focus-visible:text-[#EF4444] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {toolActionId === tool.id ? (
-                      <span className="size-3 animate-spin rounded-full border border-[#86868B]/30 border-t-[#EF4444]" />
-                    ) : (
-                      <Trash2 size={14} aria-hidden="true" />
-                    )}
-                  </button>
-                </article>
-              ))}
+      </div>
+      <div className="px-6 pt-5">
+        {isCatalogLoading ? (
+          <TechnologyStackSkeleton />
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <SearchInput
+                value={toolSearch}
+                onChange={setToolSearch}
+                placeholder="Search tools or vendors..."
+                className="w-full sm:w-[280px]"
+              />
+              <select
+                value={toolScopeFilter}
+                onChange={(event) => setToolScopeFilter(event.target.value)}
+                className="h-9 w-full rounded-md border border-black/[0.08] bg-white px-3 text-xs font-semibold text-[#555555] outline-none focus:border-[#007AFF] sm:w-[180px]"
+              >
+                <option value="all">All tools</option>
+                <option value="common">Global tools</option>
+                <option value="industry">Industry default</option>
+                <option value="domain">Industry + domain</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  setToolSearch("");
+                  setToolScopeFilter("all");
+                  setToolPage(1);
+                }}
+                disabled={!hasToolFilters}
+                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-[#D9E3F0] bg-white px-3 text-xs font-bold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#B8D8FF] hover:text-[#007AFF] disabled:cursor-not-allowed disabled:border-black/[0.06] disabled:bg-[#F5F5F7] disabled:text-[#A1A1AA] sm:w-auto"
+                aria-label="Reset technology stack filters"
+                title="Reset technology stack filters"
+              >
+                <RotateCcw size={13} aria-hidden="true" />
+                Reset filters
+              </button>
             </div>
-          ) : null}
-          <PaginationSummary
-            currentPage={safeToolPage}
-            label={
-              filteredTools.length
-                ? `Showing ${toolStartIndex + 1}-${Math.min(
-                    toolStartIndex + libraryPageSize,
-                    filteredTools.length,
-                  )} of ${filteredTools.length}`
+            {isToolFormOpen ? (
+              <TechStackToolModal
+                canAddTool={canAddTool}
+                domains={toolDomains}
+                industries={industries}
+                isToolSaving={isToolSaving}
+                editingTool={editingTool}
+                selectedIndustryId={selectedToolIndustryId}
+                onClose={onCloseToolForm}
+                setToolForm={setToolForm}
+                toolForm={toolForm}
+                onAddTool={onAddTool}
+              />
+            ) : null}
+            {visibleTools.length ? (
+              <div className="mt-5 grid min-h-[48px] gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleTools.map((tool) => (
+                  <article
+                    key={tool.id}
+                    className="relative min-h-[48px] min-w-0 rounded-md border border-black/[0.08] bg-white px-3 py-2 pr-16"
+                  >
+                    <p className="truncate text-[12px] leading-4 font-bold" title={tool.name}>
+                      {tool.name}
+                    </p>
+                    <p className="mt-0.5 truncate text-[11px] leading-4 font-semibold text-[#86868B]">
+                      {tool.vendor} - {tool.category} - {getTechStackScopeLabel(tool)}
+                    </p>
+                    <button
+                      type="button"
+                      aria-label={`Edit ${tool.name}`}
+                      title={`Edit ${tool.name}`}
+                      disabled={isToolDeleting || isToolSaving}
+                      onClick={() => onEditTool(tool)}
+                      className="absolute top-2 right-9 inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[#86868B] transition hover:bg-[#F5F5F7] hover:text-[#007AFF] focus-visible:bg-[#F5F5F7] focus-visible:text-[#007AFF] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {toolActionId === tool.id && isToolSaving ? (
+                        <span className="size-3 animate-spin rounded-full border border-[#86868B]/30 border-t-[#007AFF]" />
+                      ) : (
+                        <Pencil size={14} aria-hidden="true" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${tool.name}`}
+                      title={`Delete ${tool.name}`}
+                      disabled={isToolDeleting || isToolSaving}
+                      onClick={() => onDeleteTool(tool)}
+                      className="absolute top-2 right-2 inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[#86868B] transition hover:bg-[#F5F5F7] hover:text-[#EF4444] focus-visible:bg-[#F5F5F7] focus-visible:text-[#EF4444] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {toolActionId === tool.id ? (
+                        <span className="size-3 animate-spin rounded-full border border-[#86868B]/30 border-t-[#EF4444]" />
+                      ) : (
+                        <Trash2 size={14} aria-hidden="true" />
+                      )}
+                    </button>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <EmptyState className="mt-5 min-h-[78px]" label={emptyToolMessage} />
+            )}
+            <PaginationSummary
+              currentPage={safeToolPage}
+              label={
+                toolTotalCount
+                  ? `Showing ${toolStartIndex + 1}-${Math.min(
+                      toolStartIndex + technologyStackLibraryPageSize,
+                      toolTotalCount,
+                    )} of ${toolTotalCount}`
                 : "Showing 0 of 0"
-            }
-            onPageChange={setToolPage}
-            pages={getPaginationPages(totalToolPages, safeToolPage)}
-          />
-        </>
-      )}
-    </Panel>
+              }
+              onPageChange={setToolPage}
+              pages={getPaginationPages(totalToolPages, safeToolPage)}
+              variant="technologyStack"
+            />
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 
 function TechnologyStackSkeleton() {
   return (
-    <div className="animate-pulse" aria-label="Loading technology stack library">
-      <div className="mt-7 flex flex-wrap gap-2">
+    <div
+      className="animate-pulse transition-opacity duration-200 ease-out"
+      aria-label="Loading technology stack library"
+    >
+      <div className="flex flex-wrap gap-2">
         <div className="h-9 w-full rounded-md border border-black/[0.06] bg-[#F8F8FA] sm:w-[280px]" />
         <div className="h-9 w-full rounded-md border border-black/[0.06] bg-[#F8F8FA] sm:w-[180px]" />
       </div>
-      <div className="mt-5 grid min-h-[82px] gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[0, 1, 2, 3].map((item) => (
+      <div className="mt-5 grid min-h-[384px] gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: technologyStackLibraryPageSize }).map((_, item) => (
           <div
             key={item}
-            className="min-h-[82px] rounded-md border border-black/[0.06] bg-white px-4 py-3"
+            className="min-h-[48px] rounded-md border border-black/[0.06] bg-white px-3 py-2"
           >
-            <div className="h-4 w-32 rounded bg-[#EEF0F3]" />
-            <div className="mt-3 h-3 w-52 max-w-full rounded bg-[#EEF0F3]" />
+            <div className="h-3.5 w-32 rounded bg-[#EEF0F3]" />
+            <div className="mt-2 h-3 w-52 max-w-full rounded bg-[#EEF0F3]" />
           </div>
         ))}
       </div>
@@ -3450,14 +3766,67 @@ function PaginationSummary({
   label,
   onPageChange,
   pages,
+  variant = "default",
 }: {
   currentPage: number;
   label: string;
   onPageChange: (page: number) => void;
   pages: readonly number[];
+  variant?: "default" | "processLibrary" | "technologyStack";
 }) {
   const hasPreviousPage = currentPage > 1;
   const hasNextPage = pages.length > 0 && currentPage < pages[pages.length - 1];
+
+  if (variant === "processLibrary" || variant === "technologyStack") {
+    return (
+      <div
+        className={`mt-5 flex h-[41px] items-center justify-between border-t border-black/[0.05] text-[10px] leading-none font-medium text-[#86868B] ${
+          variant === "processLibrary" ? "-mx-5 px-5" : "-mx-6 px-6"
+        }`}
+      >
+        <span>{label}</span>
+        {pages.length ? (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onPageChange(currentPage - 1)}
+              disabled={!hasPreviousPage}
+              className="flex size-7 items-center justify-center rounded-md border border-black/[0.08] bg-white text-[#555555] transition hover:border-[#B8D8FF] hover:text-[#007AFF] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-black/[0.08] disabled:hover:text-[#555555]"
+              aria-label="Previous page"
+              title="Previous page"
+            >
+              <ChevronLeft size={13} aria-hidden="true" />
+            </button>
+            {pages.map((page) => (
+              <button
+                key={page}
+                type="button"
+                onClick={() => onPageChange(page)}
+                aria-current={page === currentPage ? "page" : undefined}
+                className={`flex size-7 items-center justify-center rounded-md border text-[13px] leading-none font-bold transition ${
+                  page === currentPage
+                    ? "border-[#007AFF] bg-[#007AFF] text-white"
+                    : "border-black/[0.08] bg-white text-[#555555] hover:border-[#B8D8FF] hover:text-[#007AFF]"
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => onPageChange(currentPage + 1)}
+              disabled={!hasNextPage}
+              className="flex size-7 items-center justify-center rounded-md border border-black/[0.08] bg-white text-[#555555] transition hover:border-[#B8D8FF] hover:text-[#007AFF] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-black/[0.08] disabled:hover:text-[#555555]"
+              aria-label="Next page"
+              title="Next page"
+            >
+              <ChevronRight size={13} aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="mt-5 flex flex-wrap items-center justify-between gap-4 text-xs font-semibold text-[#86868B]">
@@ -3531,7 +3900,7 @@ function Panel({
 }) {
   return (
     <section
-      className={`min-w-0 rounded-md border border-black/[0.08] bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] sm:p-5 ${className}`}
+      className={`min-w-0 rounded-md border border-black/8 bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.05)] ${className}`}
     >
       {title || actionLabel || actionSlot ? (
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -3856,7 +4225,7 @@ function getMappedDomainsForIndustry(
         id: library.domainId,
         industryIds: [industryId],
         isActive: library.isActive,
-        name: library.domainDisplayName || library.domainName,
+        name: library.domainName,
         slug: domainKey,
       }),
       displayOrder: library.displayOrder || domain?.displayOrder || 0,
@@ -3866,7 +4235,7 @@ function getMappedDomainsForIndustry(
         : [...(domain?.industryIds ?? []), industryId],
       isActive: domain?.isActive ?? library.isActive,
       key: domainKey,
-      name: domain?.name || library.domainDisplayName || library.domainName,
+      name: domain?.name || library.domainName,
       processCount: library.processCount ?? 0,
       slug: domain?.slug || domainKey,
     });
