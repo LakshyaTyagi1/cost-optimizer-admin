@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { getAdminUserInfo, loginAdmin } from "@/api/admin-auth.api";
+import { getAdminUserInfo, loginAdmin } from "@/features/auth/api";
 import {
   clearAuthStorage,
   getAccessToken,

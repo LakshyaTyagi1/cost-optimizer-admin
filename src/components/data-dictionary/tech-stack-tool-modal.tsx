@@ -3,7 +3,8 @@
 import { useEffect, type FormEvent, type ReactNode } from "react";
 import { Check, Plus, X } from "lucide-react";
 
-import type { DictionaryDomain, DictionaryIndustry, TechStackTool } from "./data-dictionary-data";
+import type { DictionaryDomain, DictionaryIndustry, TechStackTool } from "@/features/data-dictionary/model";
+import { getDomainDisplayTitle } from "@/features/data-dictionary/utils/domain-mapping";
 
 export type ToolFormState = {
   category: string;
@@ -222,25 +223,4 @@ function Field({
       {children}
     </label>
   );
-}
-
-function getDomainDisplayTitle(name: string) {
-  const normalizedName = toSlug(name);
-  const expandedNames: Record<string, string> = {
-    cx: "Customer Experience (CX)",
-    hr: "Human Resources (HR)",
-    "it-ops": "IT Operations (IT Ops)",
-    mktg: "Marketing (Mktg)",
-  };
-
-  return expandedNames[normalizedName] || name;
-}
-
-function toSlug(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }

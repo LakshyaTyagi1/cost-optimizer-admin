@@ -2,7 +2,7 @@
 
 import { Trash2, X } from "lucide-react";
 
-import type { DictionaryProcess, TechStackTool } from "./data-dictionary-data";
+import type { DictionaryProcess, TechStackTool } from "@/features/data-dictionary/model";
 
 export type DeleteProcessConfirmationModalProps = {
   isDeleting: boolean;

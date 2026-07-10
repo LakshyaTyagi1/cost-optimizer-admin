@@ -8,7 +8,12 @@ import {
   type DictionaryIndustry,
   type ProcessOption,
   type ProcessTier,
-} from "./data-dictionary-data";
+} from "@/features/data-dictionary/model";
+import {
+  formatConversionRateInput,
+  parseAmount,
+} from "@/features/data-dictionary/utils/amount";
+import { toSlug } from "@/features/data-dictionary/utils/domain-mapping";
 
 export type ProcessFormState = {
   category: string;
@@ -31,7 +36,7 @@ export type NewProcessModalProps = {
   isEditing?: boolean;
   isProcessSaving: boolean;
   processForm: ProcessFormState;
-  savedUsdToAedRate: number;
+  savedDisplayToBaseCurrencyRate: number;
   submitLabel?: string;
   tierOptions: readonly ProcessOption[];
   setCurrencyRateInput: (value: string) => void;
@@ -45,7 +50,6 @@ export type NewProcessModalProps = {
 
 const fieldInputClass =
   "h-10 w-full rounded-lg border border-[#D9E3F0] bg-white px-3 text-sm font-semibold text-[#333333] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition placeholder:text-[#A1A1AA] focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10 disabled:cursor-not-allowed disabled:bg-[#F5F5F7] disabled:text-[#A1A1AA]";
-const usdToAedRate = 3.6725;
 
 export function NewProcessModal({
   categoryOptions,
@@ -56,7 +60,7 @@ export function NewProcessModal({
   isEditing = false,
   isProcessSaving,
   processForm,
-  savedUsdToAedRate,
+  savedDisplayToBaseCurrencyRate,
   submitLabel = "Add Process",
   tierOptions,
   setCurrencyRateInput,
@@ -79,7 +83,7 @@ export function NewProcessModal({
   const canSaveCurrencyRate =
     currencyRateValue > 0 &&
     !isCurrencyRateSaving &&
-    Math.abs(currencyRateValue - savedUsdToAedRate) > 0.0001;
+    Math.abs(currencyRateValue - savedDisplayToBaseCurrencyRate) > 0.0001;
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -108,7 +112,7 @@ export function NewProcessModal({
           current.cost,
           current.costCurrency,
           currency,
-          savedUsdToAedRate,
+          savedDisplayToBaseCurrencyRate,
         ),
         costCurrency: currency,
       };
@@ -272,7 +276,7 @@ export function NewProcessModal({
                       <Repeat2 size={14} aria-hidden="true" />
                     </span>
                     <span className="truncate text-[10px] font-semibold text-[#86868B]">
-                      Saved: 1 USD = {formatConversionRateInput(savedUsdToAedRate)} AED
+                      Saved: 1 USD = {formatConversionRateInput(savedDisplayToBaseCurrencyRate)} AED
                     </span>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
@@ -432,20 +436,6 @@ function hasMatchingOption(options: readonly ProcessOption[], value: string) {
   );
 }
 
-function toSlug(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function parseAmount(value: string) {
-  const numericValue = Number(value.replace(/[^0-9.]/g, ""));
-  return Number.isFinite(numericValue) ? Math.max(0, numericValue) : 0;
-}
-
 function formatProcessCostInput(value: number) {
   if (!Number.isFinite(value) || value <= 0) {
     return "0";
@@ -455,16 +445,6 @@ function formatProcessCostInput(value: number) {
   return Number.isInteger(roundedValue)
     ? String(roundedValue)
     : roundedValue.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
-}
-
-function formatConversionRateInput(value: number) {
-  if (!Number.isFinite(value) || value <= 0) {
-    return String(usdToAedRate);
-  }
-
-  return Number.isInteger(value)
-    ? String(value)
-    : value.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 function convertProcessCost(

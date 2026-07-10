@@ -1,20 +1,22 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Archive, RotateCcw, Search, Trash2 } from "lucide-react";
 
 import {
-  fetchArchivedDataDictionaryProcesses,
   permanentlyDeleteDataDictionaryProcess,
   restoreDataDictionaryProcess,
-} from "@/api/data-dictionary.api";
+} from "@/features/data-dictionary/api";
+import {
+  archiveProcessesQueryKey,
+  dataDictionaryQueryKey,
+  useArchivedDataDictionaryProcesses,
+} from "@/features/data-dictionary/queries";
 import { AdminShell } from "@/components/admin-shell/admin-shell";
-import type { DictionaryProcess } from "@/components/data-dictionary/data-dictionary-data";
+import type { DictionaryProcess } from "@/features/data-dictionary/model";
 
-const archiveProcessesQueryKey = ["data-dictionary", "archive", "processes"] as const;
-const dataDictionaryQueryKey = ["data-dictionary"] as const;
 const archiveRowHeight = 54;
 
 export function ArchivePage() {
@@ -28,10 +30,7 @@ export function ArchivePage() {
     data: archivedProcesses = [],
     error,
     isLoading,
-  } = useQuery({
-    queryKey: archiveProcessesQueryKey,
-    queryFn: fetchArchivedDataDictionaryProcesses,
-  });
+  } = useArchivedDataDictionaryProcesses();
   const restoreProcessMutation = useMutation({
     mutationFn: restoreDataDictionaryProcess,
   });
@@ -235,65 +234,52 @@ const VirtualizedArchiveList = memo(function VirtualizedArchiveList({
   restoringProcessId: string;
 }) {
   const listRef = useRef<HTMLDivElement | null>(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-  const rowVirtualizer = useWindowVirtualizer({
+  const rowVirtualizer = useVirtualizer({
     count: processes.length,
     estimateSize: () => archiveRowHeight,
     getItemKey: (index) => processes[index]?.id ?? index,
+    getScrollElement: () => listRef.current,
     overscan: 8,
-    scrollMargin,
   });
-
-  useEffect(() => {
-    function updateScrollMargin() {
-      const nextScrollMargin = listRef.current
-        ? listRef.current.getBoundingClientRect().top + window.scrollY
-        : 0;
-
-      setScrollMargin((current) => (current === nextScrollMargin ? current : nextScrollMargin));
-    }
-
-    updateScrollMargin();
-    window.addEventListener("resize", updateScrollMargin);
-
-    return () => {
-      window.removeEventListener("resize", updateScrollMargin);
-    };
-  }, [processes.length]);
 
   return (
     <div
       ref={listRef}
-      className="relative"
-      style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+      className="relative overflow-y-auto"
+      style={{ maxHeight: "calc(100vh - 260px)" }}
     >
-      {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-        const process = processes[virtualRow.index];
+      <div
+        className="relative"
+        style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+      >
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const process = processes[virtualRow.index];
 
-        if (!process) {
-          return null;
-        }
+          if (!process) {
+            return null;
+          }
 
-        return (
-          <div
-            key={virtualRow.key}
-            className="absolute top-0 left-0 w-full"
-            style={{
-              height: `${virtualRow.size}px`,
-              transform: `translateY(${virtualRow.start - rowVirtualizer.options.scrollMargin}px)`,
-            }}
-          >
-            <ArchiveProcessRow
-              isDeleting={isDeletePending && deletingProcessId === process.id}
-              isLast={virtualRow.index === processes.length - 1}
-              isRestoring={isRestorePending && restoringProcessId === process.id}
-              process={process}
-              onDelete={onDeleteProcess}
-              onRestore={onRestoreProcess}
-            />
-          </div>
-        );
-      })}
+          return (
+            <div
+              key={virtualRow.key}
+              className="absolute top-0 left-0 w-full"
+              style={{
+                height: `${virtualRow.size}px`,
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+            >
+              <ArchiveProcessRow
+                isDeleting={isDeletePending && deletingProcessId === process.id}
+                isLast={virtualRow.index === processes.length - 1}
+                isRestoring={isRestorePending && restoringProcessId === process.id}
+                process={process}
+                onDelete={onDeleteProcess}
+                onRestore={onRestoreProcess}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 });
