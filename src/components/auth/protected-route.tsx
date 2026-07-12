@@ -16,7 +16,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   }, [isAuthenticated, isLoading, router]);
 
   if (isLoading || !isAuthenticated) {
-    return <AuthLoadingScreen label="Checking admin session..." />;
+    return <AuthLoadingScreen label="Loading your dashboard..." />;
   }
 
   return children;

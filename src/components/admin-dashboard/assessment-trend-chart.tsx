@@ -17,24 +17,25 @@ type AssessmentTrendPoint = {
 
 export function AssessmentTrendChart({ data }: { data: readonly AssessmentTrendPoint[] }) {
   const maxValue = Math.max(5, ...data.map((point) => point.value));
+  const yAxisTicks = Array.from({ length: 5 }, (_, index) => (maxValue / 4) * index);
 
   return (
     <div
-      className="mt-7 h-[180px] w-full"
+      className="mt-6 h-[190px] w-full pb-3 sm:mt-7 sm:h-[200px]"
       aria-label="New assessments trend over the last six months"
     >
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 6, right: 18, bottom: 0, left: 10 }}>
-          <CartesianGrid vertical={false} stroke="#E5E7EB" strokeDasharray="2 4" />
+        <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: 10 }}>
+          <CartesianGrid vertical={false} stroke="#F0F0F0" strokeDasharray="3 3" />
           <XAxis
             dataKey="month"
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "#A1A1AA", fontSize: 11, fontWeight: 600 }}
-            dy={8}
+            tick={{ fill: "#86868B", fontSize: 12, fontWeight: 400 }}
+            dy={10}
             interval={0}
           />
-          <YAxis domain={[0, maxValue]} hide tickCount={5} />
+          <YAxis domain={[0, maxValue]} hide tickCount={5} ticks={yAxisTicks} />
           <Tooltip
             cursor={{ stroke: "#007AFF", strokeDasharray: "3 3", strokeOpacity: 0.24 }}
             contentStyle={{
@@ -48,13 +49,14 @@ export function AssessmentTrendChart({ data }: { data: readonly AssessmentTrendP
             labelStyle={{ color: "#86868B", fontWeight: 700 }}
           />
           <Line
-            type="linear"
+            type="monotone"
             dataKey="value"
             stroke="#007AFF"
-            strokeWidth={3}
-            dot={{ r: 4, fill: "#007AFF", stroke: "#FFFFFF", strokeWidth: 2 }}
-            activeDot={{ r: 5, fill: "#007AFF", stroke: "#FFFFFF", strokeWidth: 2 }}
-            isAnimationActive={false}
+            strokeWidth={2}
+            dot={{ r: 3, fill: "#007AFF", stroke: "#007AFF", strokeWidth: 2 }}
+            activeDot={{ r: 4, fill: "#007AFF", stroke: "#007AFF", strokeWidth: 2 }}
+            animationDuration={700}
+            animationEasing="ease-out"
           />
         </LineChart>
       </ResponsiveContainer>

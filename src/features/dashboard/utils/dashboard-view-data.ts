@@ -39,12 +39,33 @@ export type DashboardViewData = {
   weightedPipelineBaseCurrencyValue: number;
 };
 
+const companySizeBuckets = [
+  { key: "1-50", label: "1–50\nemployees" },
+  { key: "51-200", label: "51–200\nemployees" },
+  { key: "201-1000", label: "201–1,000\nemployees" },
+  { key: "1001-5000", label: "1,001–5,000\nemployees" },
+  { key: "5001-20000", label: "5,001–20,000\nemployees" },
+  { key: "20000-plus", label: "20,000+\nemployees" },
+] as const;
+
+type CompanySizeBucketKey = (typeof companySizeBuckets)[number]["key"];
+
+const industryBreakdownBuckets = [
+  { key: "banking", label: "Banking" },
+  { key: "healthcare", label: "Healthcare" },
+  { key: "insurance", label: "Insurance" },
+  { key: "retail", label: "Retail" },
+  { key: "public-sector", label: "Public Sector" },
+  { key: "real-estate", label: "Real Estate" },
+  { key: "automotive", label: "Automotive" },
+] as const;
+
 export function createDashboardViewData(dashboardData?: DashboardData): DashboardViewData {
   const statuses = getDashboardStatuses(dashboardData);
   const companySizeDistribution = getCompanySizeDistributionData(dashboardData);
-  const companySizeAxisMax = getChartAxisMax(companySizeDistribution.map((companySizeEntry) => companySizeEntry.value));
+  const companySizeAxisMax = getChartAxisMax(companySizeDistribution.map((companySizeEntry) => companySizeEntry.value), 8);
   const selectedProcesses = getSelectedProcessesData(dashboardData);
-  const selectedProcessesAxisMax = getChartAxisMax(selectedProcesses.map((selectedProcessEntry) => selectedProcessEntry.value));
+  const selectedProcessesAxisMax = getChartAxisMax(selectedProcesses.map((selectedProcessEntry) => selectedProcessEntry.value), 12);
   const weightedPipelineStages = getWeightedPipelineStages(dashboardData);
 
   return {
@@ -75,11 +96,79 @@ function getDashboardStatuses(dashboardData?: DashboardData) {
 }
 
 function getIndustryBreakdownData(dashboardData?: DashboardData) {
-  return normalizeDashboardCounts(dashboardData?.industryBreakdown) ?? [];
+  const normalizedIndustries = normalizeDashboardCounts(dashboardData?.industryBreakdown) ?? [];
+  const countByIndustryKey = new Map<string, number>();
+  const labelByIndustryKey = new Map<string, string>();
+
+  normalizedIndustries.forEach((industryEntry) => {
+    const industryKey = getIndustryBreakdownKey(industryEntry.label);
+
+    if (!industryKey) {
+      return;
+    }
+
+    countByIndustryKey.set(
+      industryKey,
+      (countByIndustryKey.get(industryKey) || 0) + industryEntry.count,
+    );
+    labelByIndustryKey.set(industryKey, labelByIndustryKey.get(industryKey) || industryEntry.label);
+  });
+
+  const knownIndustryKeys = new Set<string>(industryBreakdownBuckets.map((industry) => industry.key));
+  const knownIndustries = industryBreakdownBuckets.map((industry) => ({
+    label: industry.label,
+    count: countByIndustryKey.get(industry.key) || 0,
+  }));
+  const extraIndustries = Array.from(countByIndustryKey.entries())
+    .filter(([industryKey]) => !knownIndustryKeys.has(industryKey) && industryKey !== "not-specified")
+    .map(([industryKey, count]) => ({
+      label: labelByIndustryKey.get(industryKey) || industryKey,
+      count,
+    }));
+  const notSpecifiedCount = countByIndustryKey.get("not-specified") || 0;
+  const industries = [
+    ...knownIndustries,
+    ...extraIndustries,
+    ...(notSpecifiedCount > 0 ? [{ label: "Not specified", count: notSpecifiedCount }] : []),
+  ];
+
+  return industries.sort(
+    (firstIndustry, secondIndustry) =>
+      secondIndustry.count - firstIndustry.count ||
+      getIndustryBreakdownSortRank(firstIndustry.label) - getIndustryBreakdownSortRank(secondIndustry.label) ||
+      firstIndustry.label.localeCompare(secondIndustry.label),
+  );
 }
 
 function getAssessmentTrendData(dashboardData?: DashboardData) {
   return normalizeDashboardTrend(dashboardData?.assessmentTrend) ?? [];
+}
+
+function getIndustryBreakdownKey(label: string) {
+  const industryKey = normalizeDashboardLabel(label)
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (!industryKey || industryKey === "unknown" || industryKey === "not-specified") {
+    return "not-specified";
+  }
+
+  return industryKey;
+}
+
+function getIndustryBreakdownSortRank(label: string) {
+  const industryKey = getIndustryBreakdownKey(label);
+  const bucketIndex = industryBreakdownBuckets.findIndex((industry) => industry.key === industryKey);
+
+  if (bucketIndex >= 0) {
+    return bucketIndex;
+  }
+
+  return industryKey === "not-specified"
+    ? industryBreakdownBuckets.length + 1
+    : industryBreakdownBuckets.length;
 }
 
 function createDashboardStats({
@@ -157,10 +246,15 @@ function normalizeDashboardValues(values?: DashboardValue[]) {
   }
 
   return values
-    .map((valueEntry) => ({
-      label: normalizeDashboardLabel(valueEntry.label),
-      value: Math.max(0, Math.round(Number(valueEntry.value) || 0)),
-    }))
+    .map((valueEntry) => {
+      const rawValue =
+        valueEntry.value ?? (valueEntry as DashboardValue & { count?: unknown }).count;
+
+      return {
+        label: normalizeDashboardLabel(valueEntry.label),
+        value: Math.max(0, Math.round(Number(rawValue) || 0)),
+      };
+    })
     .filter((valueEntry) => valueEntry.label);
 }
 
@@ -193,19 +287,95 @@ function createPipelineConversion(statuses: PipelineStatus[]) {
 }
 
 function getCompanySizeDistributionData(dashboardData?: DashboardData) {
-  return (
-    normalizeDashboardValues(dashboardData?.companySizeDistribution)?.map((companySizeEntry) => ({
-      ...companySizeEntry,
-      label: companySizeEntry.label.includes("employees") ? companySizeEntry.label : `${companySizeEntry.label}\nemployees`,
-    })) ?? []
+  const valueByBucket = new Map<CompanySizeBucketKey, number>(
+    companySizeBuckets.map((bucket) => [bucket.key, 0]),
   );
+
+  normalizeDashboardValues(dashboardData?.companySizeDistribution)?.forEach((companySizeEntry) => {
+    const bucketKey = getCompanySizeBucketKey(companySizeEntry.label);
+
+    if (!bucketKey) {
+      return;
+    }
+
+    valueByBucket.set(bucketKey, (valueByBucket.get(bucketKey) || 0) + companySizeEntry.value);
+  });
+
+  return companySizeBuckets.map((bucket) => ({
+    label: bucket.label,
+    value: valueByBucket.get(bucket.key) || 0,
+  }));
+}
+
+function getCompanySizeBucketKey(label: string): CompanySizeBucketKey | null {
+  const normalizedLabel = label
+    .toLowerCase()
+    .replace(/[–—]/g, "-")
+    .replace(/\bemployees?\b/g, "")
+    .replace(/\bftes?\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (
+    !normalizedLabel ||
+    normalizedLabel === "--" ||
+    normalizedLabel.includes("not specified") ||
+    normalizedLabel.includes("unknown")
+  ) {
+    return null;
+  }
+
+  const numbers = normalizedLabel
+    .match(/\d[\d,]*/g)
+    ?.map((value) => Number(value.replace(/,/g, "")))
+    .filter((value) => Number.isFinite(value));
+
+  if (!numbers?.length) {
+    return null;
+  }
+
+  const lowerBound = numbers[0];
+  const upperBound = numbers[1];
+  const isOpenEnded = normalizedLabel.includes("+");
+
+  if (isOpenEnded) {
+    if (lowerBound >= 20000) {
+      return "20000-plus";
+    }
+
+    if (lowerBound >= 5001) {
+      return "5001-20000";
+    }
+  }
+
+  if (lowerBound >= 5001 || upperBound === 20000) {
+    return "5001-20000";
+  }
+
+  if (lowerBound >= 1001 || upperBound === 5000) {
+    return "1001-5000";
+  }
+
+  if (lowerBound >= 201 || upperBound === 1000) {
+    return "201-1000";
+  }
+
+  if (lowerBound >= 51 || (upperBound !== undefined && upperBound > 50 && upperBound <= 250)) {
+    return "51-200";
+  }
+
+  if (lowerBound >= 1 || upperBound === 50) {
+    return "1-50";
+  }
+
+  return null;
 }
 
 function getSelectedProcessesData(dashboardData?: DashboardData) {
   return (
     normalizeDashboardValues(dashboardData?.selectedProcesses)?.map((selectedProcessEntry) => ({
       ...selectedProcessEntry,
-      label: wrapChartLabel(selectedProcessEntry.label, 18),
+      label: wrapChartLabel(selectedProcessEntry.label, 30),
     })) ?? []
   );
 }
@@ -331,10 +501,10 @@ function formatCompactNumber(value: number) {
     : value.toFixed(1).replace(/\.0$/, "");
 }
 
-function getChartAxisMax(values: number[]) {
+function getChartAxisMax(values: number[], minimumMax = 4) {
   const maxValue = Math.max(1, ...values);
 
-  return Math.max(4, Math.ceil(maxValue / 4) * 4);
+  return Math.max(minimumMax, Math.ceil(maxValue / 4) * 4);
 }
 
 function createChartTicks(maxValue: number) {

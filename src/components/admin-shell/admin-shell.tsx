@@ -5,19 +5,19 @@ import {
   Archive,
   BookOpen,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ClipboardCheck,
   LogOut,
   LayoutDashboard,
-  Menu,
   Settings,
   ShieldCheck,
   UserRound,
   Users,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import type { AdminUser } from "@/lib/auth/storage";
@@ -44,13 +44,28 @@ const navigationItems: readonly NavigationItem[] = [
   { label: "Experts", href: "/experts", icon: Users },
   { label: "Team", href: "#team", icon: UserRound },
   { label: "Archive", href: "/archive", icon: Archive },
-  { label: "Settings", href: "#settings", icon: Settings },
+  { label: "Settings", href: "/settings", icon: Settings },
 ];
 
-const mobileNavigationId = "mobile-admin-navigation";
-const mobileNavigationTitleId = "mobile-admin-navigation-title";
 const desktopSidebarTitleId = "desktop-admin-sidebar-title";
+const mobileSidebarTitleId = "mobile-admin-sidebar-title";
 const desktopProfileMenuId = "desktop-admin-profile-menu";
+const mobileProfileMenuId = "mobile-admin-profile-menu";
+const desktopSidebarStateStorageKey = "cost-optimizer-admin:desktop-sidebar-state";
+
+function getInitialDesktopSidebarCollapsedState() {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  try {
+    const savedSidebarState = window.localStorage.getItem(desktopSidebarStateStorageKey);
+
+    return savedSidebarState !== "expanded";
+  } catch {
+    return true;
+  }
+}
 
 export function AdminShell({
   activeItem,
@@ -59,13 +74,36 @@ export function AdminShell({
   activeItem: NavigationLabel;
   children: ReactNode;
 }) {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(getInitialDesktopSidebarCollapsedState);
+  const sidebarGridClassName = isSidebarCollapsed
+    ? "lg:grid-cols-[88px_minmax(0,1fr)]"
+    : "lg:grid-cols-[220px_minmax(0,1fr)]";
+  const handleToggleSidebarCollapsed = useCallback(() => {
+    setIsSidebarCollapsed((currentValue) => !currentValue);
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        desktopSidebarStateStorageKey,
+        isSidebarCollapsed ? "collapsed" : "expanded",
+      );
+    } catch {
+      // Ignore storage failures; the sidebar still works for the current session.
+    }
+  }, [isSidebarCollapsed]);
+
   return (
     <div className="min-h-screen bg-white text-[#171717]">
-      <MobileNavigation activeItem={activeItem} />
-      <div className="grid min-h-[calc(100vh-56px)] lg:min-h-screen lg:grid-cols-[220px_minmax(0,1fr)]">
-        <Sidebar activeItem={activeItem} />
+      <div className={`grid min-h-screen grid-cols-[56px_minmax(0,1fr)] transition-[grid-template-columns] duration-200 ease-out md:grid-cols-1 motion-reduce:transition-none ${sidebarGridClassName}`}>
+        <MobileSidebar activeItem={activeItem} />
+        <Sidebar
+          activeItem={activeItem}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapsed={handleToggleSidebarCollapsed}
+        />
         <main className="min-w-0 bg-white">
-          <div className="h-full px-4 pt-6 pb-6 sm:px-6 sm:pt-8 lg:ml-6 lg:max-w-none lg:px-0 lg:pt-8 lg:pb-4">
+          <div className="h-full px-3 pt-6 pb-6 sm:px-6 sm:pt-8 lg:ml-6 lg:max-w-none lg:px-0 lg:pt-8 lg:pb-4">
             {children}
           </div>
         </main>
@@ -74,147 +112,169 @@ export function AdminShell({
   );
 }
 
-function MobileNavigation({ activeItem }: { activeItem: NavigationLabel }) {
+const MobileSidebar = memo(function MobileSidebar({
+  activeItem,
+}: {
+  activeItem: NavigationLabel;
+}) {
   const router = useRouter();
   const { logout, user } = useAuth();
-  const [isOpen, setIsOpen] = useState(false);
-  const adminName = getAdminDisplayName(user);
-  const adminEmail = user?.email_id?.trim() || "Admin console";
-  const initials = getAdminInitials(user);
-  const profileImageUrl = getAdminProfileImageUrl(user);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const { adminEmail, adminName, initials, profileImageUrl } = useMemo(
+    () => ({
+      adminEmail: user?.email_id?.trim() || "Admin console",
+      adminName: getAdminDisplayName(user),
+      initials: getAdminInitials(user),
+      profileImageUrl: getAdminProfileImageUrl(user),
+    }),
+    [user],
+  );
+  const handleLogout = useCallback(() => {
+    setShowProfileMenu(false);
+    logout();
+    router.replace("/login");
+  }, [logout, router]);
+  const handleProfileMenuToggle = useCallback(() => {
+    setShowProfileMenu((currentValue) => !currentValue);
+  }, []);
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!showProfileMenu) {
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
-
-    document.body.style.overflow = "hidden";
-
-    function handleKeyDown(event: KeyboardEvent) {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key === "Escape") {
-        setIsOpen(false);
+        setShowProfileMenu(false);
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen]);
-
-  function handleLogout() {
-    setIsOpen(false);
-    logout();
-    router.replace("/login");
-  }
+  }, [showProfileMenu]);
 
   return (
-    <>
-      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-black/[0.08] bg-white px-4 lg:hidden">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-black text-white" aria-hidden="true">
-            <ShieldCheck size={17} aria-hidden="true" />
-          </span>
-          <span className="min-w-0">
-            <p className="truncate text-sm font-bold">Admin Panel</p>
-            <p className="truncate text-[11px] font-semibold text-[#86868B]">
-              {activeItem}
-            </p>
-          </span>
-        </div>
-        <button
-          type="button"
-          aria-controls={mobileNavigationId}
-          aria-expanded={isOpen}
-          aria-label={isOpen ? "Close admin navigation" : "Open admin navigation"}
-          onClick={() => setIsOpen((currentValue) => !currentValue)}
-          className="inline-flex size-10 items-center justify-center rounded-md border border-black/[0.08] bg-white text-[#171717] transition hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2"
-        >
-          {isOpen ? <X size={18} aria-hidden="true" /> : <Menu size={18} aria-hidden="true" />}
-        </button>
+    <aside
+      aria-labelledby={mobileSidebarTitleId}
+      className="sticky top-0 z-30 flex h-screen flex-col overflow-visible border-r border-[#00000014] bg-white md:hidden"
+    >
+      <header className="flex h-14 shrink-0 items-center justify-center border-b border-[#00000014]">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-black text-white" aria-hidden="true">
+          <ShieldCheck size={16} aria-hidden="true" />
+        </span>
+        <p id={mobileSidebarTitleId} className="sr-only">
+          Admin Panel
+        </p>
       </header>
 
-      {isOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden" role="presentation">
-          <button
-            type="button"
-            aria-label="Close admin navigation"
-            aria-hidden="true"
-            tabIndex={-1}
-            className="absolute inset-0 h-full w-full bg-black/30"
-            onClick={() => setIsOpen(false)}
-          />
-          <aside
-            id={mobileNavigationId}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={mobileNavigationTitleId}
-            className="absolute inset-y-0 left-0 flex w-[min(320px,calc(100vw-32px))] flex-col bg-white shadow-[18px_0_60px_rgba(15,23,42,0.18)]"
+      <nav className="flex-1 overflow-y-auto px-2 py-4" aria-label="Mobile primary navigation">
+        <ul className="space-y-1">
+          {navigationItems.map((item) => {
+            const Icon = item.icon;
+            const active = item.label === activeItem;
+
+            return (
+              <li key={item.label}>
+                <Link
+                  href={item.href}
+                  prefetch={false}
+                  className={`mx-auto flex size-10 items-center justify-center rounded-xl text-[13px] font-medium leading-[19.5px] tracking-[-0.8px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 ${
+                    active
+                      ? "bg-[#007AFF] text-white"
+                      : "text-[#555555] hover:bg-black/[0.04] hover:text-[#171717]"
+                  }`}
+                  aria-current={active ? "page" : undefined}
+                  title={item.label}
+                >
+                  <Icon size={17} strokeWidth={1.9} aria-hidden="true" />
+                  <span className="sr-only">{item.label}</span>
+                  {active ? <span className="sr-only">current page</span> : null}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      <footer
+        className="relative mt-auto border-t border-black/[0.08] px-2 py-3"
+        aria-labelledby="mobile-admin-account-title"
+      >
+        <p id="mobile-admin-account-title" className="sr-only">Signed-in admin account</p>
+        {showProfileMenu ? (
+          <div
+            id={mobileProfileMenuId}
+            role="menu"
+            aria-label="Admin account actions"
+            className="absolute bottom-3 left-[calc(100%+8px)] z-50 w-44 origin-bottom-left rounded-md border border-black/[0.08] bg-white p-1 shadow-[0_8px_30px_rgba(15,23,42,0.12)]"
           >
-            <header className="flex h-14 shrink-0 items-center justify-between border-b border-black/[0.08] px-4">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-black text-white" aria-hidden="true">
-                  <ShieldCheck size={17} aria-hidden="true" />
-                </span>
-                <p id={mobileNavigationTitleId} className="truncate text-sm font-bold">
-                  Admin Panel
-                </p>
-              </div>
-              <button
-                type="button"
-                aria-label="Close admin navigation"
-                onClick={() => setIsOpen(false)}
-                className="inline-flex size-9 items-center justify-center rounded-md text-[#86868B] transition hover:bg-black/[0.04] hover:text-[#171717] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2"
-              >
-                <X size={18} aria-hidden="true" />
-              </button>
-            </header>
-
-            <NavigationList activeItem={activeItem} variant="mobile" onNavigate={() => setIsOpen(false)} />
-
-            <footer className="mt-auto border-t border-black/[0.08] p-4" aria-labelledby="mobile-admin-account-title">
-              <p id="mobile-admin-account-title" className="sr-only">Signed-in admin account</p>
-              <div className="flex min-w-0 items-center gap-2.5">
-                <AdminAvatar initials={initials} profileImageUrl={profileImageUrl} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold">{adminName}</p>
-                  <p className="truncate text-xs text-[#86868B]">{adminEmail}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-[#FECACA] bg-[#FEF2F2] px-3 text-sm font-bold text-[#EF4444] transition hover:bg-[#FEE2E2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EF4444] focus-visible:ring-offset-2"
-                onClick={handleLogout}
-              >
-                <LogOut size={15} aria-hidden="true" />
-                Logout
-              </button>
-            </footer>
-          </aside>
-        </div>
-      ) : null}
-    </>
+            <div className="border-b border-black/[0.06] px-3 py-2">
+              <p className="truncate text-xs font-semibold leading-4.5 text-[#000000] capitalize">{adminName}</p>
+              <p className="truncate text-[10px] font-normal leading-3.75 tracking-[0.12px] text-[#86868B]">{adminEmail}</p>
+            </div>
+            <button
+              type="button"
+              className="mt-1 flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-bold text-[#EF4444] transition hover:bg-[#FEF2F2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EF4444] focus-visible:ring-offset-2"
+              role="menuitem"
+              onClick={handleLogout}
+            >
+              <LogOut size={14} aria-hidden="true" />
+              Logout
+            </button>
+          </div>
+        ) : null}
+        <button
+          type="button"
+          className="mx-auto flex size-10 items-center justify-center rounded-xl border border-transparent transition hover:border-[#007AFF1F] hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2"
+          aria-label={`${showProfileMenu ? "Close" : "Open"} admin account menu for ${adminName}`}
+          aria-expanded={showProfileMenu}
+          aria-controls={mobileProfileMenuId}
+          aria-haspopup="menu"
+          onClick={handleProfileMenuToggle}
+        >
+          <AdminAvatar initials={initials} profileImageUrl={profileImageUrl} />
+        </button>
+      </footer>
+    </aside>
   );
-}
+});
 
-function Sidebar({ activeItem }: { activeItem: NavigationLabel }) {
+const Sidebar = memo(function Sidebar({
+  activeItem,
+  isCollapsed,
+  onToggleCollapsed,
+}: {
+  activeItem: NavigationLabel;
+  isCollapsed: boolean;
+  onToggleCollapsed: () => void;
+}) {
   const router = useRouter();
   const { logout, user } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const adminName = getAdminDisplayName(user);
-  const adminEmail = user?.email_id?.trim() || "Admin console";
-  const initials = getAdminInitials(user);
-  const profileImageUrl = getAdminProfileImageUrl(user);
-
-  function handleLogout() {
+  const { adminEmail, adminName, initials, profileImageUrl } = useMemo(
+    () => ({
+      adminEmail: user?.email_id?.trim() || "Admin console",
+      adminName: getAdminDisplayName(user),
+      initials: getAdminInitials(user),
+      profileImageUrl: getAdminProfileImageUrl(user),
+    }),
+    [user],
+  );
+  const handleLogout = useCallback(() => {
     setShowProfileMenu(false);
     logout();
     router.replace("/login");
-  }
+  }, [logout, router]);
+  const handleToggleCollapsed = useCallback(() => {
+    setShowProfileMenu(false);
+    onToggleCollapsed();
+  }, [onToggleCollapsed]);
+  const handleProfileMenuToggle = useCallback(() => {
+    setShowProfileMenu((currentValue) => !currentValue);
+  }, []);
 
   useEffect(() => {
     if (!showProfileMenu) {
@@ -237,27 +297,58 @@ function Sidebar({ activeItem }: { activeItem: NavigationLabel }) {
   return (
     <aside
       aria-labelledby={desktopSidebarTitleId}
-      className="hidden border-r border-[#00000014] bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col"
+      className="hidden overflow-visible border-r border-[#00000014] bg-white transition-[box-shadow] duration-300 ease-out lg:sticky lg:top-0 lg:z-30 lg:flex lg:h-screen lg:flex-col"
     >
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-[#00000014] px-5">
-        <span className="flex size-7 items-center justify-center rounded-md bg-black text-white" aria-hidden="true">
+      <header
+        className={`relative flex h-14 shrink-0 items-center border-b border-[#00000014] ${
+          isCollapsed ? "justify-start px-5" : "gap-2 px-5 pr-12"
+        }`}
+      >
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-black text-white" aria-hidden="true">
           <ShieldCheck size={16} aria-hidden="true" />
         </span>
-        <p id={desktopSidebarTitleId} className="text-sm tracking-[-0.5px] leading-5.25 font-bold text-[171717]">
+        <p
+          id={desktopSidebarTitleId}
+          className={
+            isCollapsed
+              ? "sr-only"
+              : "text-sm tracking-[-0.5px] leading-5.25 font-bold text-[171717]"
+          }
+        >
           Admin Panel
         </p>
+        <button
+          type="button"
+          aria-label={isCollapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
+          aria-pressed={isCollapsed}
+          onClick={handleToggleCollapsed}
+          className={`absolute top-1/2 inline-flex -translate-y-1/2 transform-gpu items-center justify-center rounded-full border border-[#00000014] bg-white text-[#86868B] transition-[background-color,border-color,color,transform] duration-200 ease-out hover:scale-105 hover:border-[#007AFF33] hover:bg-[#F8FAFF] hover:text-[#007AFF] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 motion-reduce:transition-none ${
+            isCollapsed ? "-right-3 size-6" : "-right-3.5 size-7"
+          }`}
+        >
+          {isCollapsed ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronLeft size={16} aria-hidden="true" />}
+        </button>
       </header>
 
-      <NavigationList activeItem={activeItem} variant="desktop" />
+      <NavigationList activeItem={activeItem} isCollapsed={isCollapsed} variant="desktop" />
 
-      <footer className="relative mt-auto min-h-[93px] border-t border-black/[0.08] px-5 py-4" aria-labelledby="desktop-admin-account-title">
+      <footer
+        className={`relative mt-auto border-t border-black/[0.08] py-4 ${
+          isCollapsed ? "min-h-[86px] px-4" : "min-h-[93px] px-5"
+        }`}
+        aria-labelledby="desktop-admin-account-title"
+      >
         <p id="desktop-admin-account-title" className="sr-only">Signed-in admin account</p>
         {showProfileMenu ? (
           <div
             id={desktopProfileMenuId}
             role="menu"
             aria-label="Admin account actions"
-            className="absolute right-3 bottom-[96px] left-3 rounded-md border border-black/[0.08] bg-white p-1 shadow-[0_8px_30px_rgba(15,23,42,0.12)]"
+            className={`absolute z-50 origin-bottom transform-gpu rounded-md border border-black/[0.08] bg-white p-1 shadow-[0_8px_30px_rgba(15,23,42,0.12)] ${
+              isCollapsed
+                ? "bottom-4 left-[calc(100%+8px)] w-44"
+                : "right-3 bottom-[96px] left-3"
+            }`}
           >
             <button
               type="button"
@@ -273,42 +364,54 @@ function Sidebar({ activeItem }: { activeItem: NavigationLabel }) {
 
         <button
           type="button"
-          className="flex w-full items-center gap-2.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2"
+          className={`flex w-full items-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 ${
+            isCollapsed
+              ? "justify-center rounded-xl border border-transparent p-1.5 hover:border-[#007AFF1F] hover:bg-[#F8FAFF]"
+              : "gap-2.5 rounded-md text-left"
+          }`}
           aria-label={`${showProfileMenu ? "Close" : "Open"} admin account menu for ${adminName}`}
           aria-expanded={showProfileMenu}
           aria-controls={desktopProfileMenuId}
           aria-haspopup="menu"
-          onClick={() => setShowProfileMenu((currentValue) => !currentValue)}
+          onClick={handleProfileMenuToggle}
         >
           <AdminAvatar initials={initials} profileImageUrl={profileImageUrl} />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold leading-4.5 text-[#000000] capitalize">{adminName}</p>
-            <p className="truncate text-[10px] font-normal leading-3.75 tracking-[0.12px] text-[#86868B]">{adminEmail}</p>
-          </div>
-          <ChevronDown
-            size={14}
-            className={`shrink-0 text-[#86868B] transition ${showProfileMenu ? "rotate-180" : ""}`}
-            aria-hidden="true"
-          />
+          {isCollapsed ? null : (
+            <>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold leading-4.5 text-[#000000] capitalize">{adminName}</p>
+                <p className="truncate text-[10px] font-normal leading-3.75 tracking-[0.12px] text-[#86868B]">{adminEmail}</p>
+              </div>
+              <ChevronDown
+                size={14}
+                className={`shrink-0 text-[#86868B] transition ${showProfileMenu ? "rotate-180" : ""}`}
+                aria-hidden="true"
+              />
+            </>
+          )}
         </button>
       </footer>
     </aside>
   );
-}
+});
 
-function NavigationList({
+const NavigationList = memo(function NavigationList({
   activeItem,
+  isCollapsed = false,
   onNavigate,
   variant,
 }: {
   activeItem: NavigationLabel;
+  isCollapsed?: boolean;
   onNavigate?: () => void;
   variant: "desktop" | "mobile";
 }) {
   const isMobile = variant === "mobile";
   const navClassName = isMobile
     ? "overflow-y-auto px-3 py-4"
-    : "px-3 py-4";
+    : isCollapsed
+      ? "px-4 py-5"
+      : "px-3 py-4";
   const linkClassName = (active: boolean) =>
     isMobile
       ? `flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 ${
@@ -316,10 +419,12 @@ function NavigationList({
             ? "bg-[#007AFF] text-white"
             : "text-[#555555] hover:bg-black/[0.04] hover:text-[#171717]"
         }`
-      : `flex h-9 items-center gap-3 rounded-md px-3 text-[13px] font-medium leading-[19.5px] tracking-[-0.8px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 ${
+      : `flex items-center text-[13px] font-medium leading-[19.5px] tracking-[-0.8px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 ${
+          isCollapsed ? "mx-auto size-11 justify-center rounded-xl" : "h-9 gap-3 rounded-md px-3"
+        } ${
           active
             ? "bg-[#007AFF] text-white"
-            : "text-[#555555] hover:bg-black/4 hover:text-[#171717]"
+            : "text-[#555555] hover:bg-black/[0.04] hover:text-[#171717]"
         }`;
 
   return (
@@ -337,9 +442,14 @@ function NavigationList({
                 className={linkClassName(active)}
                 aria-current={active ? "page" : undefined}
                 onClick={onNavigate}
+                title={!isMobile && isCollapsed ? item.label : undefined}
               >
-                <Icon size={isMobile ? 16 : 15} aria-hidden="true" />
-                <span>{item.label}</span>
+                <Icon
+                  size={isMobile || isCollapsed ? 17 : 15}
+                  strokeWidth={isCollapsed ? 1.9 : 2}
+                  aria-hidden="true"
+                />
+                <span className={!isMobile && isCollapsed ? "sr-only" : undefined}>{item.label}</span>
                 {active ? <span className="sr-only">current page</span> : null}
               </Link>
             </li>
@@ -348,7 +458,7 @@ function NavigationList({
       </ul>
     </nav>
   );
-}
+});
 
 function getAdminDisplayName(user: AdminUser | null) {
   const fullName = [user?.first_name, user?.last_name]
