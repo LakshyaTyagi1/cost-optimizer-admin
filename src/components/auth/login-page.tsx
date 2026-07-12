@@ -62,7 +62,7 @@ export function LoginPage() {
               </span>
               <input
                 autoComplete="email"
-                className="h-10 w-full rounded-md border border-black/[0.1] bg-white px-3 text-sm font-semibold outline-none placeholder:text-[#A1A1AA] focus:border-[#007AFF]"
+                className="h-10 w-full rounded-md border border-black/[0.1] bg-white px-3 text-base font-semibold outline-none placeholder:text-[#A1A1AA] focus:border-[#007AFF]"
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="Enter Your Email ID"
                 type="email"
@@ -80,7 +80,7 @@ export function LoginPage() {
               <div className="relative">
                 <input
                   autoComplete="current-password"
-                  className="h-10 w-full rounded-md border border-black/[0.1] bg-white px-3 pr-10 text-sm font-semibold outline-none placeholder:text-[#A1A1AA] focus:border-[#007AFF]"
+                  className="h-10 w-full rounded-md border border-black/[0.1] bg-white px-3 pr-10 text-base font-semibold outline-none placeholder:text-[#A1A1AA] focus:border-[#007AFF]"
                   id="admin-password"
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="Enter Your Password"
