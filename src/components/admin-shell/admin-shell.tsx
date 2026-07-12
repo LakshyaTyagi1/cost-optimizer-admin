@@ -95,7 +95,7 @@ export function AdminShell({
 
   return (
     <div className="min-h-screen bg-white text-[#171717]">
-      <div className={`grid min-h-screen grid-cols-[56px_minmax(0,1fr)] transition-[grid-template-columns] duration-200 ease-out md:grid-cols-1 motion-reduce:transition-none ${sidebarGridClassName}`}>
+      <div className={`grid min-h-screen grid-cols-[56px_minmax(0,1fr)] transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none ${sidebarGridClassName}`}>
         <MobileSidebar activeItem={activeItem} />
         <Sidebar
           activeItem={activeItem}
@@ -159,7 +159,7 @@ const MobileSidebar = memo(function MobileSidebar({
   return (
     <aside
       aria-labelledby={mobileSidebarTitleId}
-      className="sticky top-0 z-30 flex h-screen flex-col overflow-visible border-r border-[#00000014] bg-white md:hidden"
+      className="sticky top-0 z-30 flex h-screen flex-col overflow-visible border-r border-[#00000014] bg-white lg:hidden"
     >
       <header className="flex h-14 shrink-0 items-center justify-center border-b border-[#00000014]">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-black text-white" aria-hidden="true">
