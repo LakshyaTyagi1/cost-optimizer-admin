@@ -21,17 +21,17 @@ export function AssessmentTrendChart({ data }: { data: readonly AssessmentTrendP
 
   return (
     <div
-      className="mt-6 h-[190px] w-full pb-3 sm:mt-7 sm:h-[200px]"
+      className="mt-5 h-[158px] w-full pb-2 sm:mt-7 sm:h-[200px] sm:pb-3"
       aria-label="New assessments trend over the last six months"
     >
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: 10 }}>
+        <LineChart data={data} margin={{ top: 6, right: 2, bottom: 0, left: 2 }}>
           <CartesianGrid vertical={false} stroke="#F0F0F0" strokeDasharray="3 3" />
           <XAxis
             dataKey="month"
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "#86868B", fontSize: 12, fontWeight: 400 }}
+            tick={{ fill: "#86868B", fontSize: 11, fontWeight: 400 }}
             dy={10}
             interval={0}
           />

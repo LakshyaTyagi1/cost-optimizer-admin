@@ -12,7 +12,7 @@ import type { DashboardQueryProps } from "../dashboard-types";
 export default function PipelineValueSection(dashboardProps: DashboardQueryProps) {
   return (
     <section
-      className="mt-4 grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1.42fr)_minmax(320px,1fr)] xl:mt-5 xl:grid-cols-[minmax(0,1.42fr)_minmax(360px,1fr)]"
+      className="mt-3 grid grid-cols-1 gap-3 sm:mt-4 sm:gap-5 lg:grid-cols-[minmax(0,1.42fr)_minmax(320px,1fr)] xl:mt-5 xl:grid-cols-[minmax(0,1.42fr)_minmax(360px,1fr)]"
       aria-label="Pipeline trend and value"
     >
       <AssessmentTrendCard {...dashboardProps} />
@@ -26,7 +26,7 @@ function AssessmentTrendCard({ dashboardViewData }: DashboardQueryProps) {
   const titleId = useId();
 
   return (
-    <DashboardPanel ariaLabel="New Assessments - Last 6 Months" className="relative min-h-[270px] sm:h-[270px]">
+    <DashboardPanel ariaLabel="New Assessments - Last 6 Months" className="relative min-h-[226px] sm:h-[270px]">
       <div
         className="pointer-events-none absolute inset-x-0 top-[49px] border-t border-[#00000014]"
         aria-hidden="true"

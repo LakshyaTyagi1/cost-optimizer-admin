@@ -95,7 +95,7 @@ export function AdminShell({
 
   return (
     <div className="min-h-screen bg-white text-[#171717]">
-      <div className={`grid min-h-screen grid-cols-[56px_minmax(0,1fr)] transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none ${sidebarGridClassName}`}>
+      <div className={`grid min-h-dvh grid-cols-[48px_minmax(0,1fr)] transition-[grid-template-columns] duration-200 ease-out sm:grid-cols-[56px_minmax(0,1fr)] motion-reduce:transition-none ${sidebarGridClassName}`}>
         <MobileSidebar activeItem={activeItem} />
         <Sidebar
           activeItem={activeItem}
@@ -103,7 +103,7 @@ export function AdminShell({
           onToggleCollapsed={handleToggleSidebarCollapsed}
         />
         <main className="min-w-0 bg-white">
-          <div className="h-full px-3 pt-6 pb-6 sm:px-6 sm:pt-8 lg:ml-6 lg:max-w-none lg:px-0 lg:pt-8 lg:pb-4">
+          <div className="h-full px-2.5 pt-5 pb-5 sm:px-6 sm:pt-8 lg:ml-6 lg:max-w-none lg:px-0 lg:pt-8 lg:pb-4">
             {children}
           </div>
         </main>
@@ -160,6 +160,7 @@ const MobileSidebar = memo(function MobileSidebar({
     <aside
       aria-labelledby={mobileSidebarTitleId}
       className="sticky top-0 z-30 flex h-screen flex-col overflow-visible border-r border-[#00000014] bg-white lg:hidden"
+      style={{ height: "100svh", maxHeight: "100dvh" }}
     >
       <header className="flex h-14 shrink-0 items-center justify-center border-b border-[#00000014]">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-black text-white" aria-hidden="true">
@@ -200,7 +201,7 @@ const MobileSidebar = memo(function MobileSidebar({
       </nav>
 
       <footer
-        className="relative mt-auto border-t border-black/[0.08] px-2 py-3"
+        className="relative mt-auto border-t border-black/[0.08] px-2 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
         aria-labelledby="mobile-admin-account-title"
       >
         <p id="mobile-admin-account-title" className="sr-only">Signed-in admin account</p>

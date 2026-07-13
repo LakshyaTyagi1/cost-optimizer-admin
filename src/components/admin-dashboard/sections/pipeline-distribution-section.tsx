@@ -13,7 +13,7 @@ import { getErrorMessage } from "../dashboard-utils";
 export function PipelineDistributionSection(dashboardProps: DashboardQueryProps) {
   return (
     <section
-      className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 sm:gap-5 xl:mt-5"
+      className="mt-3 grid grid-cols-1 gap-3 sm:mt-4 sm:gap-5 md:grid-cols-2 xl:mt-5"
       aria-label="Pipeline distribution"
     >
       <PipelineStatusCard {...dashboardProps} />
@@ -29,7 +29,7 @@ function PipelineStatusCard({ dashboardQuery, dashboardViewData }: DashboardQuer
   const maxStatusCount = Math.max(1, ...statuses.map((status) => status.count));
 
   return (
-    <DashboardPanel title="Pipeline by Status" className="min-h-[345px] sm:min-h-[365px]" hideHeaderBorder>
+    <DashboardPanel title="Pipeline by Status" className="min-h-0 sm:min-h-[365px]" hideHeaderBorder>
       <ul className="mt-3.25 space-y-2" aria-label="Pipeline status counts">
         {statuses.map((status) => {
           const styles = statusStyles[status.tone];
@@ -87,12 +87,12 @@ function IndustryBreakdownCard({ dashboardQuery, dashboardViewData }: DashboardQ
   const industries = dashboardViewData.industryBreakdown;
   const maxCount = Math.max(1, ...industries.map((industry) => industry.count));
   const errorMessage = error ? getErrorMessage(error) : "";
-  const shouldScrollIndustries = industries.length > 7;
+  const shouldScrollIndustries = industries.length > 5;
 
   return (
-    <DashboardPanel title="By Industry" className="min-h-[345px] sm:min-h-[365px]" hideHeaderBorder>
+    <DashboardPanel title="By Industry" className="min-h-0 sm:min-h-[365px]" hideHeaderBorder>
       <ul
-        className={`mt-3.75 space-y-2 ${shouldScrollIndustries ? "max-h-[300px] overflow-y-auto overflow-x-hidden pr-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" : ""}`}
+        className={`mt-3 space-y-2 sm:mt-3.75 ${shouldScrollIndustries ? "max-h-[220px] overflow-y-auto overflow-x-hidden pr-1 sm:max-h-[300px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" : ""}`}
         aria-label="Assessment count by industry"
       >
         {isLoading

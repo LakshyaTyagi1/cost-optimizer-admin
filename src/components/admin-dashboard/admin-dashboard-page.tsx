@@ -63,7 +63,7 @@ export function AdminDashboard() {
 
   return (
     <AdminShell activeItem="Dashboard">
-      <section className="min-w-0 lg:pr-6" aria-labelledby="business-dashboard-title">
+      <section className="min-w-0 overflow-hidden lg:pr-6" aria-labelledby="business-dashboard-title">
         <DashboardHeader />
 
         <DashboardStatsSection {...dashboardProps} />
