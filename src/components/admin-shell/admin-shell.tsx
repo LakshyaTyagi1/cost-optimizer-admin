@@ -95,7 +95,7 @@ export function AdminShell({
 
   return (
     <div className="min-h-screen bg-white text-[#171717]">
-      <div className={`grid min-h-dvh grid-cols-[48px_minmax(0,1fr)] transition-[grid-template-columns] duration-200 ease-out sm:grid-cols-[56px_minmax(0,1fr)] motion-reduce:transition-none ${sidebarGridClassName}`}>
+      <div className={`grid min-h-dvh grid-cols-[44px_minmax(0,1fr)] transition-[grid-template-columns] duration-200 ease-out min-[380px]:grid-cols-[48px_minmax(0,1fr)] sm:grid-cols-[56px_minmax(0,1fr)] motion-reduce:transition-none ${sidebarGridClassName}`}>
         <MobileSidebar activeItem={activeItem} />
         <Sidebar
           activeItem={activeItem}
@@ -160,7 +160,7 @@ const MobileSidebar = memo(function MobileSidebar({
     <aside
       aria-labelledby={mobileSidebarTitleId}
       className="sticky top-0 z-30 flex h-screen flex-col overflow-visible border-r border-[#00000014] bg-white lg:hidden"
-      style={{ height: "100svh", maxHeight: "100dvh" }}
+      style={{ height: "100dvh", minHeight: "100svh" }}
     >
       <header className="flex h-14 shrink-0 items-center justify-center border-b border-[#00000014]">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-black text-white" aria-hidden="true">
@@ -201,8 +201,9 @@ const MobileSidebar = memo(function MobileSidebar({
       </nav>
 
       <footer
-        className="relative mt-auto border-t border-black/[0.08] px-2 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+        className="relative mt-auto border-t border-black/[0.06] px-1.5 py-3 min-[380px]:px-2"
         aria-labelledby="mobile-admin-account-title"
+        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
         <p id="mobile-admin-account-title" className="sr-only">Signed-in admin account</p>
         {showProfileMenu ? (
