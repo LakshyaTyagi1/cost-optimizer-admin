@@ -171,7 +171,7 @@ const MobileSidebar = memo(function MobileSidebar({
         </p>
       </header>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-4" aria-label="Mobile primary navigation">
+      <nav className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-1 py-4" aria-label="Mobile primary navigation">
         <ul className="space-y-1">
           {navigationItems.map((item) => {
             const Icon = item.icon;
@@ -182,7 +182,7 @@ const MobileSidebar = memo(function MobileSidebar({
                 <Link
                   href={item.href}
                   prefetch={false}
-                  className={`mx-auto flex size-10 items-center justify-center rounded-xl text-[13px] font-medium leading-[19.5px] tracking-[-0.8px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 ${
+                  className={`mx-auto flex size-9 items-center justify-center rounded-xl text-[13px] font-medium leading-[19.5px] tracking-[-0.8px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 min-[380px]:size-10 ${
                     active
                       ? "bg-[#007AFF] text-white"
                       : "text-[#555555] hover:bg-black/[0.04] hover:text-[#171717]"
@@ -201,7 +201,7 @@ const MobileSidebar = memo(function MobileSidebar({
       </nav>
 
       <footer
-        className="relative mt-auto border-t border-black/[0.06] px-1.5 py-3 min-[380px]:px-2"
+        className="relative mt-auto min-w-0 border-t border-black/[0.06] px-1 py-3"
         aria-labelledby="mobile-admin-account-title"
         style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
@@ -230,7 +230,7 @@ const MobileSidebar = memo(function MobileSidebar({
         ) : null}
         <button
           type="button"
-          className="mx-auto flex size-10 items-center justify-center rounded-xl border border-transparent transition hover:border-[#007AFF1F] hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2"
+          className="mx-auto flex size-9 items-center justify-center rounded-xl border border-transparent transition hover:border-[#007AFF1F] hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 min-[380px]:size-10"
           aria-label={`${showProfileMenu ? "Close" : "Open"} admin account menu for ${adminName}`}
           aria-expanded={showProfileMenu}
           aria-controls={mobileProfileMenuId}
