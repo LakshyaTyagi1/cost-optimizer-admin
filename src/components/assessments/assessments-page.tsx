@@ -248,8 +248,8 @@ export function AssessmentsPage() {
       <div className="flex min-h-[calc(100vh-56px)] flex-col lg:h-full lg:min-h-0 lg:overflow-hidden lg:pr-6">
         <header className="shrink-0 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-[26px] leading-tight font-bold tracking-normal">Assessments</h1>
-            <p className="mt-2 text-sm font-semibold text-[#86868B]">
+            <h1 className="text-[26px] leading-tight font-semibold leading-[39px] tracking-[0.22px] text-[#171717]">Assessments</h1>
+              <p className="mt-1 text-[13px] font-normal leading-[19.5px] tracking-[-0.08px] text-[#86868B]">
               {isLoading
                 ? "Loading submissions..."
                 : `${assessmentSummaries.length} users from ${totalAssessments} total submissions`}
@@ -261,7 +261,7 @@ export function AssessmentsPage() {
               type="button"
               onClick={handleExportAssessments}
               disabled={!filteredAssessments.length}
-              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#555555] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-xs font-medium leading-[18px] text-[#555555] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               <ArrowDownToLine size={13} aria-hidden="true" />
               Export CSV

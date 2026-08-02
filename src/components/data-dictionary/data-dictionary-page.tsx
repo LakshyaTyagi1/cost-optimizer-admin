@@ -87,6 +87,7 @@ import { getErrorMessage } from "@/features/data-dictionary/utils/error";
 import {
   createEmptyProcessForm,
   createProcessFormFromProcess,
+  createToolBenchmarkPricingPayload,
   createToolFormFromTool,
   emptyToolForm,
 } from "@/features/data-dictionary/utils/form-state";
@@ -692,18 +693,19 @@ export function DataDictionaryPage() {
     const name = toDisplayName(toolForm.name);
     const vendor = toDisplayName(toolForm.vendor);
     const category = toDisplayName(toolForm.category);
-    const selectedIndustryId = toolForm.industryId || industries[0]?.id || "";
     const isUpdatingTool = Boolean(editingTool);
     if (!name || !vendor || !category) return;
 
     try {
       setDictionaryError("");
+      const benchmarkPricing = createToolBenchmarkPricingPayload(toolForm);
 
       if (editingTool) {
         setToolActionId(editingTool.id);
         await updateTechStackMutation.mutateAsync({
           tool: editingTool,
           values: {
+            benchmarkPricing,
             category,
             name,
             vendor,
@@ -711,41 +713,20 @@ export function DataDictionaryPage() {
         });
         setEditingTool(null);
         setToolActionId("");
-      } else if (toolForm.scope === "common") {
+      } else {
         await createTechStackMutation.mutateAsync({
+          benchmarkPricing,
           category,
           name,
           scope: "common",
           vendor,
         });
-      } else if (toolForm.scope === "domain") {
-        if (!selectedIndustryId || !toolForm.domainId) {
-          throw new Error("Select an industry and domain for this tech stack tool");
-        }
-
-        await createTechStackMutation.mutateAsync({
-          category,
-          domainId: toolForm.domainId,
-          industryId: selectedIndustryId,
-          name,
-          scope: "industry-domain",
-          vendor,
-        });
-      } else {
-        if (!selectedIndustryId) {
-          throw new Error("Select an industry for this tech stack tool");
-        }
-
-        await createTechStackMutation.mutateAsync({
-          category,
-          industryId: selectedIndustryId,
-          name,
-          scope: "industry-default",
-          vendor,
-        });
       }
 
-      await queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
+        queryClient.invalidateQueries({ queryKey: techStackQueryKey }),
+      ]);
       setToolForm(emptyToolForm);
       setIsToolFormOpen(false);
       showTechStackToast(

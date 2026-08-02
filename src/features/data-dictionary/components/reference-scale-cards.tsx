@@ -15,8 +15,8 @@ export function AutomationLevelsCard() {
               {level.level}
             </span>
             <div className="min-w-0">
-              <p className="text-sm leading-none font-bold">{level.label}</p>
-              <p className="mt-1 text-xs font-semibold text-[#86868B]">{level.description}</p>
+              <p className="text-[13px] leading-[19.5px] font-medium tracking-[-0.08px] text-black">{level.label}</p>
+              <p className="text-[11px] leading-[16.5px] font-normal tracking-[0.06px] text-[#86868B]">{level.description}</p>
             </div>
           </div>
         ))}

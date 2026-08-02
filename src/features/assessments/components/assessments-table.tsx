@@ -45,7 +45,7 @@ const tableHeaderTextStyle: CSSProperties = {
 };
 
 const filterShellClassName =
-  "h-10 rounded-md border border-[#DCE8F8] bg-white text-sm font-semibold text-[#171717] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/10 hover:border-[#BBD6FF]";
+  "h-10 rounded-md border border-[#DCE8F8] bg-white text-sm font-semibold text-[#171717] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#BBD6FF]";
 
 const industryIconStyles: Record<string, { icon: LucideIcon }> = {
   Automotive: { icon: Car },
@@ -131,63 +131,61 @@ export function AssessmentsTable({
 }: AssessmentsTableProps) {
   return (
     <section className="mt-6 flex min-h-0 flex-1 flex-col lg:mt-8 lg:overflow-hidden" aria-label="Assessments table">
-      <div className="mb-3 rounded-md border border-[#E7EEF8] bg-[#F8FBFF] p-3 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
-        <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1.25fr)_minmax(128px,0.8fr)_minmax(118px,0.72fr)_minmax(84px,0.48fr)_minmax(124px,0.68fr)_18px_minmax(124px,0.68fr)_max-content]">
-          <SearchInput value={searchQuery} onChange={onSearchQueryChange} />
-          <FilterSelect
-            ariaLabel="Filter by industry"
-            value={industryFilter}
-            onChange={onIndustryFilterChange}
-            className="w-full"
-          >
-            <option value="all">All industries</option>
-            {industryOptions.map((industry) => (
-              <option key={industry} value={industry}>
-                {industry}
-              </option>
-            ))}
-          </FilterSelect>
-          <FilterSelect
-            ariaLabel="Filter by status"
-            value={statusFilter}
-            onChange={onStatusFilterChange}
-            className="w-full"
-          >
-            <option value="all">All statuses</option>
-            {statusOptions.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </FilterSelect>
-          <MetricFilterInput
-            value={minimumScoreFilter}
-            onChange={onMinimumScoreFilterChange}
-          />
-          <DateInput
-            ariaLabel="Updated from date"
-            value={fromDateFilter}
-            onChange={onFromDateFilterChange}
-          />
-          <span className="hidden h-10 items-center px-1 text-xs font-bold text-[#8E9AAB] xl:flex">
-            to
-          </span>
-          <DateInput
-            ariaLabel="Updated to date"
-            value={toDateFilter}
-            onChange={onToDateFilterChange}
-          />
-          <button
-            type="button"
-            onClick={onResetFilters}
-            disabled={!hasActiveFilters}
-            className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-md border border-[#DCE8F8] bg-white px-3 text-sm font-bold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:text-[#A1A1AA] disabled:opacity-60 sm:col-span-2 xl:col-span-1 xl:w-auto"
-            aria-label="Reset assessment filters"
-          >
-            <RotateCcw size={13} aria-hidden="true" />
-            Reset
-          </button>
-        </div>
+      <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1.25fr)_minmax(128px,0.8fr)_minmax(118px,0.72fr)_minmax(84px,0.48fr)_minmax(124px,0.68fr)_18px_minmax(124px,0.68fr)_max-content] mb-[13px]">
+        <SearchInput value={searchQuery} onChange={onSearchQueryChange} />
+        <FilterSelect
+          ariaLabel="Filter by industry"
+          value={industryFilter}
+          onChange={onIndustryFilterChange}
+          className="w-full"
+        >
+          <option value="all">All industries</option>
+          {industryOptions.map((industry) => (
+            <option key={industry} value={industry}>
+              {industry}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect
+          ariaLabel="Filter by status"
+          value={statusFilter}
+          onChange={onStatusFilterChange}
+          className="w-full"
+        >
+          <option value="all">All statuses</option>
+          {statusOptions.map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </FilterSelect>
+        <MetricFilterInput
+          value={minimumScoreFilter}
+          onChange={onMinimumScoreFilterChange}
+        />
+        <DateInput
+          ariaLabel="Updated from date"
+          value={fromDateFilter}
+          onChange={onFromDateFilterChange}
+        />
+        <span className="hidden h-10 items-center px-1 text-xs font-bold text-[#8E9AAB] xl:flex">
+          to
+        </span>
+        <DateInput
+          ariaLabel="Updated to date"
+          value={toDateFilter}
+          onChange={onToDateFilterChange}
+        />
+        <button
+          type="button"
+          onClick={onResetFilters}
+          disabled={!hasActiveFilters}
+          className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-md border border-[#DCE8F8] bg-white px-3 text-sm font-bold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:text-[#A1A1AA] disabled:opacity-60 sm:col-span-2 xl:col-span-1 xl:w-auto"
+          aria-label="Reset assessment filters"
+        >
+          <RotateCcw size={13} aria-hidden="true" />
+          Reset
+        </button>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-black/[0.08] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
@@ -203,16 +201,16 @@ export function AssessmentsTable({
 
             {!isLoading
               ? pagedAssessments.map((assessment) => (
-                  <AssessmentMobileCard
-                    key={assessment.id}
-                    assessment={assessment}
-                    isHighlighted={isAssessmentHighlighted(
-                      assessment,
-                      highlightedAssessmentKey,
-                    )}
-                    onOpen={() => onOpenAssessment(assessment)}
-                  />
-                ))
+                <AssessmentMobileCard
+                  key={assessment.id}
+                  assessment={assessment}
+                  isHighlighted={isAssessmentHighlighted(
+                    assessment,
+                    highlightedAssessmentKey,
+                  )}
+                  onOpen={() => onOpenAssessment(assessment)}
+                />
+              ))
               : null}
           </div>
 
@@ -275,22 +273,22 @@ export function AssessmentsTable({
 
               {!isLoading
                 ? pagedAssessments.map((assessment) => (
-                    <AssessmentRow
-                      key={assessment.id}
-                      assessment={assessment}
-                      isHighlighted={isAssessmentHighlighted(
-                        assessment,
-                        highlightedAssessmentKey,
-                      )}
-                      onOpen={() => onOpenAssessment(assessment)}
-                    />
-                  ))
+                  <AssessmentRow
+                    key={assessment.id}
+                    assessment={assessment}
+                    isHighlighted={isAssessmentHighlighted(
+                      assessment,
+                      highlightedAssessmentKey,
+                    )}
+                    onOpen={() => onOpenAssessment(assessment)}
+                  />
+                ))
                 : null}
             </tbody>
           </table>
         </div>
 
-        <div className="flex min-h-[44px] shrink-0 flex-wrap items-center justify-between gap-3 border-t border-black/[0.08] px-5 py-2 text-[11px] font-semibold text-[#86868B]">
+        <div className="flex min-h-[44px] shrink-0 flex-wrap items-center justify-between gap-3 border-t border-black/[0.08] px-5 py-2 text-[11px] font-normal leading-[16.5px] tracking-[0.06px] text-[#86868B]">
           <span>
             {visibleAssessmentCount
               ? `Showing ${firstRowIndex}-${lastRowIndex} of ${visibleAssessmentCount} users`
@@ -331,39 +329,38 @@ function AssessmentRow({
 
   return (
     <tr
-      className={`h-[58px] cursor-pointer border-b border-black/[0.05] transition focus:outline-none last:border-b-0 ${
-        isHighlighted
+      className={`h-[58px] cursor-pointer border-b border-black/[0.05] transition focus:outline-none last:border-b-0 ${isHighlighted
           ? "assessment-highlight-flash hover:bg-[#FAFAFA] focus:bg-[#FAFAFA]"
           : "hover:bg-[#FAFAFA] focus:bg-[#FAFAFA]"
-      }`}
+        }`}
       onClick={onOpen}
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
       <td className="py-3 pr-6 pl-[60px]">
-        <p className="max-w-[280px] truncate text-[12px] leading-[1.2] font-bold text-[#171717]">
+        <p className="max-w-[280px] truncate text-[13px] font-semibold leading-[19.5px] tracking-[-0.08px] text-[#000000]">
           {assessment.company}
         </p>
-        <p className="mt-1 max-w-[280px] truncate text-[10px] leading-[1.2] font-semibold text-[#8E9AAB]">
+        <p className="max-w-[280px] truncate text-[11px] font-normal leading-[16.5px] tracking-[0.06px] text-[#86868B]">
           {assessment.contact}
         </p>
       </td>
       <td className="px-0 py-3">
-        <div className="flex max-w-[160px] items-center gap-2 text-[11px] font-semibold text-[#555555]">
+        <div className="flex max-w-[160px] items-center gap-2 text-xs font-normal leading-[18px] text-[#555555]">
           <IndustryIcon industry={assessment.industry} />
           <span className="truncate">{assessment.industry}</span>
         </div>
       </td>
-      <td className="px-0 py-3 text-[11px] font-bold text-[#007AFF]">
+      <td className="px-0 py-3 text-xs font-semibold leading-[18px] text-[#007AFF]">
         <MetricValue value={assessment.score} mutedValue="--" />
       </td>
-      <td className="px-0 py-3 text-[11px] font-bold text-[#171717]">
+      <td className="px-0 py-3 text-xs font-normal leading-[18px] text-[#171717]">
         <MetricValue value={totalCostValue} mutedValue="--" />
       </td>
-      <td className="px-0 py-3 text-[11px] font-bold text-[#10B981]">
+      <td className="px-0 py-3 text-xs font-medium leading-[18px] text-[#10B981]">
         <MetricValue value={assessment.savings} mutedValue="--" />
       </td>
-      <td className="px-0 py-3 text-[11px] font-bold text-[#555555]">
+      <td className="px-0 py-3 text-[11px] font-semibold text-[#555555]">
         <MetricValue value={formatDate(assessment.updatedAt)} mutedValue="--" />
       </td>
       <td className="px-0 py-3">
@@ -401,9 +398,8 @@ function AssessmentMobileCard({
     <button
       type="button"
       onClick={onOpen}
-      className={`w-full rounded-md border border-black/[0.08] bg-white p-4 text-left shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition hover:border-[#007AFF]/25 hover:bg-[#FAFCFF] ${
-        isHighlighted ? "assessment-highlight-flash" : ""
-      }`}
+      className={`w-full rounded-md border border-black/[0.08] bg-white p-4 text-left shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition hover:border-[#007AFF]/25 hover:bg-[#FAFCFF] ${isHighlighted ? "assessment-highlight-flash" : ""
+        }`}
       aria-label={`Open ${assessment.company}`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -503,7 +499,7 @@ function SearchInput({
         aria-label="Search company, contact, or region"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#171717] outline-none placeholder:text-[#A1A1AA] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
+        className="min-w-0 flex-1 bg-transparent text-[13px] leading-[19.5px] font-normal tracking-[-0.08px] text-[#171717] outline-none placeholder:text-[#17171780] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
         placeholder="Search company, contact, region..."
         type="search"
       />
@@ -530,7 +526,7 @@ function FilterSelect({
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-full w-full appearance-none rounded-md bg-transparent pr-9 pl-3 text-sm font-semibold text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
+        className="h-full w-full cursor-pointer appearance-none rounded-md bg-transparent pr-9 pl-3 text-sm font-semibold text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
       >
         {children}
       </select>
@@ -581,7 +577,7 @@ function DateInput({
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
+        className="min-w-0 flex-1 cursor-pointer bg-transparent text-sm font-semibold text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
         type="date"
       />
     </label>
@@ -687,11 +683,10 @@ function PaginationControls({
           key={item}
           type="button"
           onClick={() => onPageChange(item)}
-          className={`flex size-7 items-center justify-center rounded-md border text-xs font-bold ${
-            item === page
+          className={`flex size-7 items-center justify-center rounded-md border text-xs font-bold ${item === page
               ? "border-[#007AFF] bg-[#007AFF] text-white"
               : "border-black/[0.08] bg-white text-[#555555]"
-          }`}
+            }`}
         >
           {item}
         </button>

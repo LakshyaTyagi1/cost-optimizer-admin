@@ -34,7 +34,7 @@ export function AssessmentStatusPill({
 
   return (
     <span
-      className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-[5px] text-[10px] leading-none font-bold ${styles.chip}`}
+      className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-[5px] text-[11px] leading-[16.5px] font-medium tracking-[0.06px] !text-[#8E9AAB] ${styles.chip}`}
     >
       <span className={`size-1.5 rounded-full ${styles.dot}`} />
       {label}

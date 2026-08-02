@@ -97,15 +97,8 @@ export function TechnologyStackCard({
     () => getPaginationPages(totalToolPages, safeToolPage),
     [safeToolPage, totalToolPages],
   );
-  const isEditingTool = Boolean(editingTool);
   const canAddTool = Boolean(
-    toolForm.name.trim() &&
-      toolForm.vendor.trim() &&
-      toolForm.category.trim() &&
-      (isEditingTool ||
-        toolForm.scope === "common" ||
-        (toolForm.scope === "industry" && selectedToolIndustryId) ||
-        (toolForm.scope === "domain" && selectedToolIndustryId && toolForm.domainId)),
+    toolForm.name.trim() && toolForm.vendor.trim() && toolForm.category.trim(),
   );
   const hasToolFilters = Boolean(toolSearch.trim() || toolScopeFilter !== "all");
   const emptyToolMessage = hasToolFilters
@@ -137,7 +130,7 @@ export function TechnologyStackCard({
     <section className="mt-5 min-w-0 overflow-hidden rounded-md border border-black/8 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
       <div className="flex min-h-[54px] flex-wrap items-center justify-between gap-4 border-b border-black/[0.08] px-6">
         <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
-          Technology Stack Library ({toolTotalCount} of 50)
+          Technology Stack Library ({toolTotalCount})
         </p>
         <div className="flex flex-wrap items-center justify-end gap-3">
           <button
@@ -326,4 +319,3 @@ function getTechStackScopeLabel(tool: TechStackTool) {
 
   return tool.industryName || "Industry default";
 }
-

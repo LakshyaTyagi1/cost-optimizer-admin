@@ -8,18 +8,7 @@ import type {
   SortKey,
 } from "@/features/assessments/view-model";
 import { defaultDisplayToBaseCurrencyRate } from "@/features/assessments/utils/currency";
-import {
-  formatBaseCurrency,
-  parseMetricNumber,
-  sumMetric,
-} from "@/features/assessments/utils/formatters";
-
-type SavedCostCurrency = "AED" | "USD";
-
-type SavedCurrencyCost = {
-  amount: number;
-  currency: SavedCostCurrency;
-};
+import { parseMetricNumber } from "@/features/assessments/utils/formatters";
 
 export function groupAssessmentsByUser(
   rows: AdminAssessmentRow[],
@@ -63,7 +52,7 @@ export function createAssessmentSummary(id: string, rows: AdminAssessmentRow[]):
     assessments: sortedRows,
     company: latestAssessment?.company || "Cost optimization assessment",
     contact: latestAssessment?.contact || "--",
-    cost: formatBaseCurrency(sumMetric(rows.map((row) => row.cost))),
+    cost: latestAssessment?.cost || "--",
     createdAt: getEarliestDate(rows.map((row) => row.createdAt || row.updatedAt)),
     currencyConversionRate: getAssessmentCurrencyConversionRate(rows),
     customProcesses,
@@ -76,75 +65,15 @@ export function createAssessmentSummary(id: string, rows: AdminAssessmentRow[]):
     preferences: getAssessmentPreferences(rows),
     processCount,
     processes,
-    savings: formatBaseCurrency(sumMetric(rows.map((row) => row.savings))),
-    score: getBestScore(rows.map((row) => row.score)),
+    savings: latestAssessment?.savings || "--",
+    score: latestAssessment?.score || "--",
     selectedStackTools: getUniqueValues(rows.flatMap((row) => row.selectedStackTools ?? [])),
     status: latestAssessment?.status || "Draft",
     statusKey: latestAssessment?.statusKey,
-    totalCostInSavedCurrency: getAssessmentTotalCostInSavedCurrency(rows),
+    totalCostInSavedCurrency:
+      latestAssessment?.totalCostInSavedCurrency || latestAssessment?.cost || "--",
     updatedAt: latestAssessment?.updatedAt,
   };
-}
-
-function getAssessmentTotalCostInSavedCurrency(rows: AdminAssessmentRow[]) {
-  const rowCosts = rows
-    .map((row) => getSavedCurrencyCostFromMetric(row.totalCostInSavedCurrency))
-    .filter((cost): cost is SavedCurrencyCost => cost !== null);
-
-  if (rowCosts.length === rows.length && rowCosts.length > 0) {
-    const currency = rowCosts[0].currency;
-
-    if (rowCosts.every((cost) => cost.currency === currency)) {
-      return formatSavedCurrencyAmount(
-        rowCosts.reduce((sum, cost) => sum + cost.amount, 0),
-        currency,
-      );
-    }
-  }
-
-  return formatBaseCurrency(sumMetric(rows.map((row) => row.cost)));
-}
-
-function getSavedCurrencyCostFromMetric(value?: string) {
-  const currency = getSavedCurrencyFromMetric(value);
-  const amount = parseMetricNumber(value || "");
-
-  if (!currency || amount <= 0) {
-    return null;
-  }
-
-  return {
-    amount,
-    currency,
-  };
-}
-
-function getSavedCurrencyFromMetric(value?: string) {
-  const normalizedValue = String(value || "").trim().toUpperCase();
-
-  if (!normalizedValue) {
-    return null;
-  }
-
-  if (normalizedValue.startsWith("$") || normalizedValue.includes("USD")) {
-    return "USD";
-  }
-
-  if (normalizedValue.includes("AED")) {
-    return "AED";
-  }
-
-  return null;
-}
-
-function formatSavedCurrencyAmount(amount: number, currency: SavedCostCurrency) {
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return "--";
-  }
-
-  const formattedAmount = Math.round(amount).toLocaleString("en-US");
-
-  return currency === "USD" ? `$${formattedAmount}` : `AED ${formattedAmount}`;
 }
 
 function getAssessmentCurrencyConversionRate(rows: AdminAssessmentRow[]) {
@@ -255,18 +184,6 @@ export function getUniqueValues(values: Array<string | undefined>) {
   return Array.from(
     new Set(values.map((value) => String(value || "").trim()).filter(Boolean)),
   );
-}
-
-function getBestScore(values: string[]) {
-  const numericValues = values
-    .map((value) => parseMetricNumber(value))
-    .filter((value) => value >= 0);
-
-  if (!numericValues.length) {
-    return "--";
-  }
-
-  return `${Math.max(...numericValues)}%`;
 }
 
 export function getContactName(value: string) {

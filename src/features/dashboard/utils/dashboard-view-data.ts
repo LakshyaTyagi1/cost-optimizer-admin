@@ -192,8 +192,8 @@ function createDashboardStats({
   const closedWonCount = isFiniteDashboardNumber(summary?.closedWonCount)
     ? Math.round(summary.closedWonCount)
     : getPipelineStatusCount(statuses, "Closed Won");
-  const totalBaseCurrencyCost = getDashboardBaseCurrencyAmount(summary?.totalBaseCurrencyCost, summary?.totalCostAed);
-  const totalBaseCurrencySavings = getDashboardBaseCurrencyAmount(summary?.totalBaseCurrencySavings, summary?.totalSavingsAed);
+  const totalBaseCurrencyCost = getDashboardBaseCurrencyAmount(summary?.totalBaseCurrencyCost);
+  const totalBaseCurrencySavings = getDashboardBaseCurrencyAmount(summary?.totalBaseCurrencySavings);
   const averageScore = isFiniteDashboardNumber(summary?.averageDigitizationIndex)
     ? Math.round(summary.averageDigitizationIndex)
     : null;
@@ -390,7 +390,6 @@ function getWeightedPipelineBaseCurrencyValue(
 ) {
   const summaryBaseCurrencyValue = getDashboardBaseCurrencyAmount(
     dashboardData?.summary?.weightedPipelineBaseCurrencyValue,
-    dashboardData?.summary?.weightedPipelineValueAed,
   );
 
   if (summaryBaseCurrencyValue > 0) {
@@ -398,7 +397,7 @@ function getWeightedPipelineBaseCurrencyValue(
   }
 
   return weightedPipelineStages.reduce(
-    (sum, stage) => sum + getDashboardBaseCurrencyAmount(stage.baseCurrencyValue, stage.valueAed),
+    (sum, stage) => sum + getDashboardBaseCurrencyAmount(stage.baseCurrencyValue),
     0,
   );
 }
@@ -410,31 +409,22 @@ function normalizeDashboardPipelineStages(values?: DashboardPipelineStageWeight[
 
   return values
     .map((pipelineStage) => {
-      const baseCurrencyValue = getDashboardBaseCurrencyAmount(pipelineStage.baseCurrencyValue, pipelineStage.valueAed);
+      const baseCurrencyValue = getDashboardBaseCurrencyAmount(pipelineStage.baseCurrencyValue);
 
       return {
         baseCurrencyValue,
         count: Math.max(0, Math.round(Number(pipelineStage.count) || 0)),
         key: normalizeStatusKey(pipelineStage.key || pipelineStage.label),
         label: normalizeDashboardLabel(pipelineStage.label),
-        valueAed: baseCurrencyValue,
         weightPercent: Math.max(0, Math.round(Number(pipelineStage.weightPercent) || 0)),
       };
     })
     .filter((pipelineStage) => pipelineStage.label);
 }
 
-function getDashboardBaseCurrencyAmount(primaryValue: unknown, fallbackValue?: unknown) {
-  const primaryAmount = Number(primaryValue);
-
-  if (Number.isFinite(primaryAmount) && primaryAmount > 0) {
-    return Math.max(0, Math.round(primaryAmount));
-  }
-
-  const fallbackAmount = Number(fallbackValue);
-  return Number.isFinite(fallbackAmount) && fallbackAmount > 0
-    ? Math.max(0, Math.round(fallbackAmount))
-    : 0;
+function getDashboardBaseCurrencyAmount(value: unknown) {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0 ? Math.max(0, Math.round(amount)) : 0;
 }
 function isFiniteDashboardNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);

@@ -56,7 +56,20 @@ export type ProcessOption = {
   value: string;
 };
 
+export type TechnologyPricingConfidence = "published" | "indicative" | "quote-required";
+
+export type TechStackBenchmarkPricing = {
+  currency: "USD";
+  monthlyOperationalCost: number | null;
+  setupCost: number | null;
+  sourceLabel?: string;
+  sourceUrl?: string;
+  checkedAt?: string | null;
+  confidence?: TechnologyPricingConfidence;
+};
+
 export type TechStackTool = {
+  benchmarkPricing?: TechStackBenchmarkPricing;
   category: string;
   domainId?: string;
   domainName?: string;

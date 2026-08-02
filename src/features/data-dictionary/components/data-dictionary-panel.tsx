@@ -21,9 +21,9 @@ export function DataDictionaryPanel({
       className={`min-w-0 rounded-md border border-black/8 bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.05)] ${className}`}
     >
       {title || actionLabel || actionSlot ? (
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-black/[0.08]">
           {title ? (
-            <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
+            <p className="text-[11px] leading-[16.5px] font-semibold tracking-[1.16px] text-[#86868B] uppercase">
               {title}
             </p>
           ) : (

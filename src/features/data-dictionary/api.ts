@@ -12,6 +12,7 @@ import {
   DictionaryLibrary,
   DictionaryProcess,
   ProcessTier,
+  TechStackBenchmarkPricing,
   TechStackTool,
 } from "@/features/data-dictionary/model";
 
@@ -63,6 +64,15 @@ type ApiProcess = {
 
 type ApiTechStack = {
   _id?: string;
+  benchmarkPricing?: {
+    currency?: string;
+    monthlyOperationalCost?: number | null;
+    setupCost?: number | null;
+    sourceLabel?: string;
+    sourceUrl?: string;
+    checkedAt?: string | null;
+    confidence?: string;
+  };
   company?: string;
   createdAt?: string;
   description?: string;
@@ -113,6 +123,7 @@ type DataDictionaryProcessPayload = {
 };
 
 type DataDictionaryTechStackPayload = {
+  benchmarkPricing?: TechStackBenchmarkPricing | null;
   category: string;
   domainId?: string;
   industryId?: string;
@@ -380,14 +391,7 @@ export async function createDataDictionaryDomainProcess(
   return getId(process);
 }
 
-export async function createDataDictionaryTechStack(payload: {
-  category: string;
-  domainId?: string;
-  industryId?: string;
-  name: string;
-  scope?: "common" | "industry-default" | "industry-domain";
-  vendor: string;
-}): Promise<string> {
+export async function createDataDictionaryTechStack(payload: DataDictionaryTechStackPayload): Promise<string> {
   const tool = await fetchApi<ApiTechStack>(`${adminBasePath}/tech-stack`, {
     body: JSON.stringify(toApiTechStackPayload(payload)),
     method: "POST",
@@ -492,6 +496,7 @@ export async function updateDataDictionaryCurrencyConversionRate(rate: number) {
 
 function toApiTechStackPayload(payload: DataDictionaryTechStackPayload) {
   return {
+    benchmarkPricing: payload.benchmarkPricing,
     company: payload.vendor.trim(),
     description: payload.category.trim(),
     industryDomainId: payload.domainId,
@@ -758,6 +763,7 @@ function mapTechStackTool(
   }
 
   return {
+    benchmarkPricing: mapTechStackBenchmarkPricing(tool.benchmarkPricing),
     category: toDisplayName(tool.description || "") || "General",
     domainId: scope === "industry-domain" ? domainId : undefined,
     domainName: scope === "industry-domain" ? domain?.name || "Mapped Domain" : undefined,
@@ -769,6 +775,37 @@ function mapTechStackTool(
     scope,
     vendor: toDisplayName(tool.company || "") || "Unassigned",
   };
+}
+
+function mapTechStackBenchmarkPricing(value: ApiTechStack["benchmarkPricing"]): TechStackBenchmarkPricing | undefined {
+  if (!value || value.currency !== "USD") {
+    return undefined;
+  }
+
+  const monthlyOperationalCost = normalizeOptionalBenchmarkCost(value.monthlyOperationalCost);
+  const setupCost = normalizeOptionalBenchmarkCost(value.setupCost);
+  const confidence = ["published", "indicative", "quote-required"].includes(String(value.confidence))
+    ? (value.confidence as TechStackBenchmarkPricing["confidence"])
+    : undefined;
+
+  return {
+    currency: "USD",
+    monthlyOperationalCost,
+    setupCost,
+    sourceLabel: String(value.sourceLabel || "").trim() || undefined,
+    sourceUrl: String(value.sourceUrl || "").trim() || undefined,
+    checkedAt: String(value.checkedAt || "").trim() || null,
+    confidence,
+  };
+}
+
+function normalizeOptionalBenchmarkCost(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue >= 0 ? numberValue : null;
 }
 
 function mapProcessOptions(

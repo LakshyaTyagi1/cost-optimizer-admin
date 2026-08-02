@@ -80,6 +80,7 @@ export function useMappedTechStackPage({
     enabled,
     gcTime: dataDictionaryGcTime,
     placeholderData: keepPreviousData,
+    refetchOnWindowFocus: "always",
     staleTime: dataDictionaryCacheTime,
   });
 }

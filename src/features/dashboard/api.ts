@@ -28,7 +28,7 @@ export async function fetchDashboardData() {
   const dashboardResponse = await fetchAdminApiResponse<DashboardPayload>(dashboardPath, {
     authErrorMessage: "Admin access token is required to load real pipeline counts",
     errorMessage: "Unable to load dashboard data",
-    params: { limit: "250" },
+    params: { limit: "250", recentGroupBy: "user" },
   });
 
   return dashboardResponse?.data ?? {};

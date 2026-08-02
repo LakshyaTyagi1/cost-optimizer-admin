@@ -7,6 +7,12 @@ import type { DictionaryDomain, DictionaryIndustry, TechStackTool } from "@/feat
 import { getDomainDisplayTitle } from "@/features/data-dictionary/utils/domain-mapping";
 
 export type ToolFormState = {
+  benchmarkCheckedAt: string;
+  benchmarkConfidence: "" | "published" | "indicative" | "quote-required";
+  benchmarkMonthlyOperationalCost: string;
+  benchmarkSetupCost: string;
+  benchmarkSourceLabel: string;
+  benchmarkSourceUrl: string;
   category: string;
   domainId: string;
   industryId: string;
@@ -117,24 +123,6 @@ export function TechStackToolModal({
               placeholder="e.g. CRM / Support"
             />
           </Field>
-          <Field label="Scope" required>
-            <select
-              value={toolForm.scope}
-              disabled={isEditingTool}
-              onChange={(event) =>
-                setToolForm((current) => ({
-                  ...current,
-                  domainId: "",
-                  scope: event.target.value as ToolFormState["scope"],
-                }))
-              }
-              className={fieldInputClass}
-            >
-              <option value="common">Global tool</option>
-              <option value="industry">Industry default</option>
-              <option value="domain">Industry + domain</option>
-            </select>
-          </Field>
           {toolForm.scope !== "common" ? (
             <Field label="Industry" required>
               <select
@@ -177,6 +165,91 @@ export function TechStackToolModal({
               </select>
             </Field>
           ) : null}
+        </div>
+        <div className="mt-4 rounded-md border border-black/[0.08] bg-white/70 p-3">
+          <p className="text-xs font-bold text-[#171717]">Researched benchmark (optional)</p>
+          <p className="mt-1 text-[11px] leading-4 text-[#86868B]">
+            Verified prices appear as grey placeholders in the user Technology Stack. Leave these fields blank until a benchmark is available.
+          </p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <Field label="Monthly Operational Cost (USD)">
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs text-[#86868B]">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={toolForm.benchmarkMonthlyOperationalCost}
+                  onChange={(event) =>
+                    setToolForm((current) => ({ ...current, benchmarkMonthlyOperationalCost: event.target.value }))
+                  }
+                  className={`${fieldInputClass} pl-7`}
+                  placeholder="Leave blank"
+                />
+              </div>
+            </Field>
+            <Field label="Setup Cost (USD)">
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-xs text-[#86868B]">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={toolForm.benchmarkSetupCost}
+                  onChange={(event) => setToolForm((current) => ({ ...current, benchmarkSetupCost: event.target.value }))}
+                  className={`${fieldInputClass} pl-7`}
+                  placeholder="Leave blank"
+                />
+              </div>
+            </Field>
+            <Field label="Source Label">
+              <input
+                value={toolForm.benchmarkSourceLabel}
+                maxLength={200}
+                onChange={(event) => setToolForm((current) => ({ ...current, benchmarkSourceLabel: event.target.value }))}
+                className={fieldInputClass}
+                placeholder="e.g. Vendor public pricing"
+              />
+            </Field>
+            <Field label="HTTPS Source URL">
+              <input
+                type="url"
+                pattern="https://.*"
+                value={toolForm.benchmarkSourceUrl}
+                maxLength={2048}
+                onChange={(event) => setToolForm((current) => ({ ...current, benchmarkSourceUrl: event.target.value }))}
+                className={fieldInputClass}
+                placeholder="https://vendor.example/pricing"
+              />
+            </Field>
+            <Field label="Checked Date">
+              <input
+                type="date"
+                value={toolForm.benchmarkCheckedAt}
+                onChange={(event) => setToolForm((current) => ({ ...current, benchmarkCheckedAt: event.target.value }))}
+                className={fieldInputClass}
+              />
+            </Field>
+            <Field label="Confidence">
+              <select
+                value={toolForm.benchmarkConfidence}
+                onChange={(event) =>
+                  setToolForm((current) => ({
+                    ...current,
+                    benchmarkConfidence: event.target.value as ToolFormState["benchmarkConfidence"],
+                  }))
+                }
+                className={fieldInputClass}
+              >
+                <option value="">Not specified</option>
+                <option value="published">Published</option>
+                <option value="indicative">Indicative</option>
+                <option value="quote-required">Quote required</option>
+              </select>
+            </Field>
+          </div>
         </div>
         <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button

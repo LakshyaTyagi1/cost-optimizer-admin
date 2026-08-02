@@ -10,7 +10,6 @@ export type DashboardPipelineStageWeight = {
   key: string;
   label: string;
   baseCurrencyValue?: number;
-  valueAed?: number;
   weightPercent: number;
 };
 
@@ -74,10 +73,7 @@ export type DashboardSummary = {
   closedWonCount?: number;
   totalBaseCurrencyCost?: number;
   totalBaseCurrencySavings?: number;
-  totalCostAed?: number;
-  totalSavingsAed?: number;
   weightedPipelineBaseCurrencyValue?: number;
-  weightedPipelineValueAed?: number;
 };
 
 export type DashboardTrendPoint = {
