@@ -1,17 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, type FormEvent } from "react";
+import { useMemo, type FormEvent } from "react";
 import dynamic from "next/dynamic";
-import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/empty-state/empty-state";
 import { PaginationSummary } from "@/features/data-dictionary/components/pagination-summary";
 import { SearchInput } from "@/features/data-dictionary/components/search-input";
-import type {
-  DictionaryDomain,
-  DictionaryIndustry,
-  TechStackTool,
-} from "@/features/data-dictionary/model";
+import type { TechStackTool } from "@/features/data-dictionary/model";
 import { getPaginationPages } from "@/features/data-dictionary/utils/pagination";
 import type {
   TechStackToolModalProps,
@@ -29,70 +25,66 @@ const TechStackToolModal = dynamic<TechStackToolModalProps>(
 );
 
 export function TechnologyStackCard({
-  domains,
   filteredTools,
-  industries,
+  isActivatingAllTools,
+  isArchivingAllTools,
   isCatalogLoading,
   isDeletingAllTools,
   isToolDeleting,
   isToolFormOpen,
   isToolSaving,
+  isToolStatusSaving,
   setToolForm,
   setToolPage,
-  setToolScopeFilter,
   setToolSearch,
   toolForm,
   toolActionId,
   toolPage,
-  toolScopeFilter,
   toolSearch,
   toolTotalCount,
   editingTool,
   onAddTool,
+  onActivateAllTools,
+  onArchiveAllTools,
   onCloseToolForm,
   onDeleteAllTools,
   onDeleteTool,
   onEditTool,
   onOpenNewToolForm,
+  onToggleToolStatus,
 }: {
-  domains: DictionaryDomain[];
   filteredTools: TechStackTool[];
-  industries: DictionaryIndustry[];
+  isActivatingAllTools: boolean;
+  isArchivingAllTools: boolean;
   isCatalogLoading: boolean;
   isDeletingAllTools: boolean;
   isToolDeleting: boolean;
   isToolFormOpen: boolean;
   isToolSaving: boolean;
+  isToolStatusSaving: boolean;
   setToolForm: (value: ToolFormState | ((current: ToolFormState) => ToolFormState)) => void;
   setToolPage: (value: number) => void;
-  setToolScopeFilter: (value: string) => void;
   setToolSearch: (value: string) => void;
   toolForm: ToolFormState;
   toolActionId: string;
   toolPage: number;
-  toolScopeFilter: string;
   toolSearch: string;
   toolTotalCount: number;
   editingTool: TechStackTool | null;
   onAddTool: (event: FormEvent<HTMLFormElement>) => void;
+  onActivateAllTools: () => void;
+  onArchiveAllTools: () => void;
   onCloseToolForm: () => void;
   onDeleteAllTools: () => void;
   onDeleteTool: (tool: TechStackTool) => void;
   onEditTool: (tool: TechStackTool) => void;
   onOpenNewToolForm: () => void;
+  onToggleToolStatus: (tool: TechStackTool) => void;
 }) {
   const totalToolPages = Math.ceil(toolTotalCount / technologyStackLibraryPageSize);
   const safeToolPage = Math.min(Math.max(toolPage, 1), Math.max(totalToolPages, 1));
   const toolStartIndex = (safeToolPage - 1) * technologyStackLibraryPageSize;
   const visibleTools = filteredTools;
-  const selectedToolIndustryId = toolForm.industryId || industries[0]?.id || "";
-  const toolDomains = useMemo(
-    () =>
-      domains.filter((domain) =>
-        selectedToolIndustryId ? domain.industryIds.includes(selectedToolIndustryId) : true,
-      ),
-    [domains, selectedToolIndustryId],
-  );
   const toolPaginationPages = useMemo(
     () => getPaginationPages(totalToolPages, safeToolPage),
     [safeToolPage, totalToolPages],
@@ -100,53 +92,95 @@ export function TechnologyStackCard({
   const canAddTool = Boolean(
     toolForm.name.trim() && toolForm.vendor.trim() && toolForm.category.trim(),
   );
-  const hasToolFilters = Boolean(toolSearch.trim() || toolScopeFilter !== "all");
-  const emptyToolMessage = hasToolFilters
-    ? "No tools match the selected filters. Reset filters to view all tools."
+  const hasToolSearch = Boolean(toolSearch.trim());
+  const emptyToolMessage = hasToolSearch
+    ? "No tools match your search. Clear the search to view all tools."
     : "No tools added yet. Add a tool to build the technology stack library.";
-  const canDeleteAllTools = toolTotalCount > 0 && !isToolDeleting && !isToolSaving;
-  const isAddToolDisabled = isToolDeleting || isToolSaving;
+  const isAnyToolMutation =
+    isActivatingAllTools ||
+    isArchivingAllTools ||
+    isToolDeleting ||
+    isToolSaving ||
+    isToolStatusSaving;
+  const canActivateAllTools = toolTotalCount > 0 && !isAnyToolMutation;
+  const canArchiveAllTools = toolTotalCount > 0 && !isAnyToolMutation;
+  const canDeleteAllTools = toolTotalCount > 0 && !isAnyToolMutation;
+  const isAddToolDisabled = isAnyToolMutation;
   const deleteAllToolsLabel = isDeletingAllTools
     ? "Deleting all technology stack tools"
     : toolTotalCount === 0
       ? "No technology stack tools to delete"
-      : isToolDeleting || isToolSaving
+      : isAnyToolMutation
         ? "Technology stack update in progress"
         : "Delete all technology stack tools";
+  const archiveAllToolsLabel = isArchivingAllTools
+    ? "Archiving all technology stack tools"
+    : toolTotalCount === 0
+      ? "No technology stack tools to archive"
+      : isAnyToolMutation
+        ? "Technology stack update in progress"
+        : "Archive all technology stack tools";
+  const activateAllToolsLabel = isActivatingAllTools
+    ? "Activating all archived technology stack tools"
+    : toolTotalCount === 0
+      ? "No archived technology stack tools to activate"
+      : isAnyToolMutation
+        ? "Technology stack update in progress"
+        : "Activate all archived technology stack tools";
   const addToolLabel = isAddToolDisabled
     ? "Technology stack update in progress"
     : "Add technology stack tool";
-  const handleToolScopeFilterChange = useCallback(
-    (value: string) => setToolScopeFilter(value),
-    [setToolScopeFilter],
-  );
-  const handleResetToolFilters = useCallback(() => {
-    setToolSearch("");
-    setToolScopeFilter("all");
-    setToolPage(1);
-  }, [setToolPage, setToolScopeFilter, setToolSearch]);
-
   return (
     <section className="mt-5 min-w-0 overflow-hidden rounded-md border border-black/8 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
       <div className="flex min-h-[54px] flex-wrap items-center justify-between gap-4 border-b border-black/[0.08] px-6">
         <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
           Technology Stack Library ({toolTotalCount})
         </p>
-        <div className="flex flex-wrap items-center justify-end gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-2 py-2">
+          <button
+            type="button"
+            onClick={onActivateAllTools}
+            disabled={!canActivateAllTools}
+            aria-label={activateAllToolsLabel}
+            title={activateAllToolsLabel}
+            className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] px-2.5 text-xs font-bold text-[#15803D] transition hover:border-[#86EFAC] hover:bg-[#DCFCE7] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isActivatingAllTools ? (
+              <span className="size-3 animate-spin rounded-full border border-[#15803D]/30 border-t-[#15803D]" aria-hidden="true" />
+            ) : (
+              <ArchiveRestore size={13} aria-hidden="true" />
+            )}
+            {isActivatingAllTools ? "Activating..." : "Activate All"}
+          </button>
+          <button
+            type="button"
+            onClick={onArchiveAllTools}
+            disabled={!canArchiveAllTools}
+            aria-label={archiveAllToolsLabel}
+            title={archiveAllToolsLabel}
+            className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[#FDE68A] bg-[#FFFBEB] px-2.5 text-xs font-bold text-[#A16207] transition hover:border-[#FCD34D] hover:bg-[#FEF3C7] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isArchivingAllTools ? (
+              <span className="size-3 animate-spin rounded-full border border-[#A16207]/30 border-t-[#A16207]" aria-hidden="true" />
+            ) : (
+              <Archive size={13} aria-hidden="true" />
+            )}
+            {isArchivingAllTools ? "Archiving..." : "Archive All"}
+          </button>
           <button
             type="button"
             onClick={onDeleteAllTools}
             disabled={!canDeleteAllTools}
             aria-label={deleteAllToolsLabel}
             title={deleteAllToolsLabel}
-            className="inline-flex cursor-pointer items-center gap-1 text-xs font-bold text-[#EF4444] transition hover:text-[#DC2626] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[#FECACA] bg-[#FEF2F2] px-2.5 text-xs font-bold text-[#DC2626] transition hover:border-[#FCA5A5] hover:bg-[#FEE2E2] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isDeletingAllTools ? (
               <span className="size-3 animate-spin rounded-full border border-[#EF4444]/30 border-t-[#EF4444]" aria-hidden="true" />
             ) : (
-              <Trash2 size={12} aria-hidden="true" />
+              <Trash2 size={13} aria-hidden="true" />
             )}
-            {isDeletingAllTools ? "Deleting..." : "Delete all"}
+            {isDeletingAllTools ? "Deleting..." : "Delete All"}
           </button>
           <button
             type="button"
@@ -154,9 +188,9 @@ export function TechnologyStackCard({
             disabled={isAddToolDisabled}
             aria-label={addToolLabel}
             title={addToolLabel}
-            className="inline-flex cursor-pointer items-center gap-1 text-xs font-bold text-[#007AFF] transition hover:text-[#0051D5] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[#007AFF] bg-[#007AFF] px-2.5 text-xs font-bold text-white transition hover:border-[#006EE6] hover:bg-[#006EE6] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Plus size={12} aria-hidden="true" />
+            <Plus size={13} aria-hidden="true" />
             Add Tool
           </button>
         </div>
@@ -171,43 +205,15 @@ export function TechnologyStackCard({
                 value={toolSearch}
                 onChange={setToolSearch}
                 placeholder="Search tools or vendors..."
+                showClearOnHover
                 className="w-full sm:w-[280px]"
               />
-              <label
-                className="relative flex h-9 w-full min-w-0 items-center rounded-md border border-black/[0.08] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus-within:border-[#007AFF] sm:w-[180px]"
-                title="Filter technology stack tools by scope"
-              >
-                <select
-                  value={toolScopeFilter}
-                  onChange={(event) => handleToolScopeFilterChange(event.target.value)}
-                  className="h-full w-full rounded-md bg-transparent px-3 text-xs font-semibold text-[#555555] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
-                >
-                  <option value="all">All tools</option>
-                  <option value="common">Global tools</option>
-                  <option value="industry">Industry default</option>
-                  <option value="domain">Industry + domain</option>
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={handleResetToolFilters}
-                disabled={!hasToolFilters}
-                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-[#D9E3F0] bg-white px-3 text-xs font-bold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#B8D8FF] hover:text-[#007AFF] disabled:cursor-not-allowed disabled:border-black/[0.06] disabled:bg-[#F5F5F7] disabled:text-[#A1A1AA] sm:w-auto"
-                aria-label="Reset technology stack filters"
-                title="Reset technology stack filters"
-              >
-                <RotateCcw size={13} aria-hidden="true" />
-                Reset filters
-              </button>
             </div>
             {isToolFormOpen ? (
               <TechStackToolModal
                 canAddTool={canAddTool}
-                domains={toolDomains}
-                industries={industries}
                 isToolSaving={isToolSaving}
                 editingTool={editingTool}
-                selectedIndustryId={selectedToolIndustryId}
                 onClose={onCloseToolForm}
                 setToolForm={setToolForm}
                 toolForm={toolForm}
@@ -216,47 +222,76 @@ export function TechnologyStackCard({
             ) : null}
             {visibleTools.length ? (
               <div className="mt-5 grid min-h-[48px] gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {visibleTools.map((tool) => (
-                  <article
-                    key={tool.id}
-                    className="relative min-h-[48px] min-w-0 rounded-md border border-black/[0.08] bg-white px-3 py-2 pr-16"
-                  >
-                    <p className="truncate text-[12px] leading-4 font-bold" title={tool.name}>
-                      {tool.name}
-                    </p>
-                    <p className="mt-0.5 truncate text-[11px] leading-4 font-semibold text-[#86868B]">
-                      {tool.vendor} - {tool.category} - {getTechStackScopeLabel(tool)}
-                    </p>
-                    <button
-                      type="button"
-                      aria-label={`Edit ${tool.name}`}
-                      title={`Edit ${tool.name}`}
-                      disabled={isToolDeleting || isToolSaving}
-                      onClick={() => onEditTool(tool)}
-                      className="absolute top-2 right-9 inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[#86868B] transition hover:bg-[#F5F5F7] hover:text-[#007AFF] focus-visible:bg-[#F5F5F7] focus-visible:text-[#007AFF] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                {visibleTools.map((tool) => {
+                  const isActive = tool.isActive !== false;
+                  const isStatusSaving = isToolStatusSaving && toolActionId === tool.id;
+
+                  return (
+                    <article
+                      key={tool.id}
+                      className={`flex min-h-[58px] min-w-0 items-center gap-3 rounded-md border border-black/[0.08] bg-white px-3 py-2 ${
+                        isActive ? "" : "opacity-75"
+                      }`}
                     >
-                      {toolActionId === tool.id && isToolSaving ? (
-                        <span className="size-3 animate-spin rounded-full border border-[#86868B]/30 border-t-[#007AFF]" />
-                      ) : (
-                        <Pencil size={14} aria-hidden="true" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Delete ${tool.name}`}
-                      title={`Delete ${tool.name}`}
-                      disabled={isToolDeleting || isToolSaving}
-                      onClick={() => onDeleteTool(tool)}
-                      className="absolute top-2 right-2 inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[#86868B] transition hover:bg-[#F5F5F7] hover:text-[#EF4444] focus-visible:bg-[#F5F5F7] focus-visible:text-[#EF4444] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {toolActionId === tool.id ? (
-                        <span className="size-3 animate-spin rounded-full border border-[#86868B]/30 border-t-[#EF4444]" />
-                      ) : (
-                        <Trash2 size={14} aria-hidden="true" />
-                      )}
-                    </button>
-                  </article>
-                ))}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12px] leading-4 font-bold" title={tool.name}>
+                          {tool.name}
+                        </p>
+                        <p
+                          className="mt-0.5 truncate text-[11px] leading-4 font-semibold text-[#86868B]"
+                          title={`${tool.vendor} - ${tool.category}`}
+                        >
+                          {tool.vendor} - {tool.category}
+                        </p>
+                      </div>
+                      <div className="flex flex-none items-center gap-1">
+                        <button
+                          type="button"
+                          aria-label={isActive ? `Deactivate ${tool.name}` : `Activate ${tool.name}`}
+                          aria-pressed={isActive}
+                          title={isActive ? `Deactivate ${tool.name}` : `Activate ${tool.name}`}
+                          disabled={isAnyToolMutation}
+                          onClick={() => onToggleToolStatus(tool)}
+                          className={`inline-flex h-7 min-w-16 cursor-pointer items-center justify-center rounded-full border px-2 !text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                            isActive
+                              ? "border-[#B7E4CE] bg-[#F0FDF4] text-[#10B981] hover:bg-[#DCFCE7]"
+                              : "border-black/[0.08] bg-[#F5F5F7] text-[#86868B] hover:text-[#555555]"
+                          }`}
+                        >
+                          {isStatusSaving ? "Saving" : isActive ? "Active" : "Inactive"}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Edit ${tool.name}`}
+                          title={`Edit ${tool.name}`}
+                          disabled={isAnyToolMutation || !isActive}
+                          onClick={() => onEditTool(tool)}
+                          className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[#86868B] transition hover:bg-[#F5F5F7] hover:text-[#007AFF] focus-visible:bg-[#F5F5F7] focus-visible:text-[#007AFF] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {toolActionId === tool.id && isToolSaving ? (
+                            <span className="size-3 animate-spin rounded-full border border-[#86868B]/30 border-t-[#007AFF]" />
+                          ) : (
+                            <Pencil size={14} aria-hidden="true" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete ${tool.name}`}
+                          title={`Delete ${tool.name}`}
+                          disabled={isAnyToolMutation || !isActive}
+                          onClick={() => onDeleteTool(tool)}
+                          className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[#86868B] transition hover:bg-[#F5F5F7] hover:text-[#EF4444] focus-visible:bg-[#F5F5F7] focus-visible:text-[#EF4444] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {toolActionId === tool.id && isToolDeleting ? (
+                            <span className="size-3 animate-spin rounded-full border border-[#86868B]/30 border-t-[#EF4444]" />
+                          ) : (
+                            <Trash2 size={14} aria-hidden="true" />
+                          )}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             ) : (
               <EmptyState className="mt-5 min-h-[78px]" label={emptyToolMessage} />
@@ -290,7 +325,6 @@ function TechnologyStackSkeleton() {
     >
       <div className="flex flex-wrap gap-2">
         <div className="h-9 w-full rounded-md border border-black/[0.06] bg-[#F8F8FA] sm:w-[280px]" />
-        <div className="h-9 w-full rounded-md border border-black/[0.06] bg-[#F8F8FA] sm:w-[180px]" />
       </div>
       <div className="mt-5 grid min-h-[384px] gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: technologyStackLibraryPageSize }).map((_, toolSkeletonIndex) => (
@@ -306,16 +340,4 @@ function TechnologyStackSkeleton() {
       <div className="mt-5 h-4 w-28 rounded bg-[#EEF0F3]" />
     </div>
   );
-}
-
-function getTechStackScopeLabel(tool: TechStackTool) {
-  if (tool.scope === "common") {
-    return "Global tool";
-  }
-
-  if (tool.scope === "industry-domain") {
-    return `${tool.industryName || "Industry"} / ${tool.domainName || "Domain"}`;
-  }
-
-  return tool.industryName || "Industry default";
 }

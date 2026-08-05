@@ -18,21 +18,19 @@ export const emptyToolForm: ToolFormState = {
   benchmarkSourceLabel: "",
   benchmarkSourceUrl: "",
   category: "CRM / Support",
-  domainId: "",
-  industryId: "",
+  description: "",
   name: "",
-  scope: "common",
   vendor: "",
 };
 
 export function createEmptyProcessForm(industries: DictionaryIndustry[]): ProcessFormState {
   return {
     category: "",
-    cost: "18000",
+    cost: "0",
     costCurrency: "AED",
     description: "",
     domainId: "",
-    hours: "1200",
+    hours: "0",
     industryId: industries[0]?.id ?? "",
     name: "",
     tier: "",
@@ -56,10 +54,7 @@ export function createProcessFormFromProcess(
   };
 }
 
-export function createToolFormFromTool(tool: TechStackTool, industries: DictionaryIndustry[]): ToolFormState {
-  const scope =
-    tool.scope === "industry-domain" ? "domain" : tool.scope === "industry-default" ? "industry" : "common";
-
+export function createToolFormFromTool(tool: TechStackTool): ToolFormState {
   return {
     benchmarkCheckedAt: tool.benchmarkPricing?.checkedAt || "",
     benchmarkConfidence: tool.benchmarkPricing?.confidence || "",
@@ -68,10 +63,8 @@ export function createToolFormFromTool(tool: TechStackTool, industries: Dictiona
     benchmarkSourceLabel: tool.benchmarkPricing?.sourceLabel || "",
     benchmarkSourceUrl: tool.benchmarkPricing?.sourceUrl || "",
     category: tool.category,
-    domainId: scope === "domain" ? tool.domainId || "" : "",
-    industryId: scope === "common" ? "" : tool.industryId || industries[0]?.id || "",
+    description: tool.description || "",
     name: tool.name,
-    scope,
     vendor: tool.vendor,
   };
 }

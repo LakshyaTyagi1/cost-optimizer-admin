@@ -17,6 +17,8 @@ import {
   type TechStackTool,
 } from "@/features/data-dictionary/model";
 import type {
+  ActivateAllToolsConfirmationModalProps,
+  ArchiveAllToolsConfirmationModalProps,
   DeleteAllToolsConfirmationModalProps,
   DeleteProcessConfirmationModalProps,
   DeleteToolConfirmationModalProps,
@@ -24,6 +26,9 @@ import type {
 import type { ProcessFormState } from "./new-process-modal";
 import type { ToolFormState } from "./tech-stack-tool-modal";
 import {
+  activateAllDataDictionaryTechStack,
+  addDataDictionaryDefaultIndustryProcesses,
+  archiveAllDataDictionaryTechStack,
   createDataDictionaryDomain,
   createDataDictionaryDomainProcess,
   createDataDictionaryIndustry,
@@ -33,12 +38,14 @@ import {
   deleteDataDictionaryProcess,
   deleteDataDictionaryIndustry,
   deleteDataDictionaryProcessLibrary,
+  permanentlyDeleteDataDictionaryDomain,
   deleteAllDataDictionaryTechStack,
   deleteDataDictionaryTechStack,
   reorderDataDictionaryDomains,
   reorderDataDictionaryIndustries,
   updateDataDictionaryCurrencyConversionRate,
   updateDataDictionaryTechStack,
+  updateDataDictionaryTechStackStatus,
   updateDataDictionaryProcess,
   updateDataDictionaryProcessStatus,
 } from "@/features/data-dictionary/api";
@@ -121,6 +128,20 @@ const DeleteAllToolsConfirmationModal = dynamic<DeleteAllToolsConfirmationModalP
     ),
   { ssr: false },
 );
+const ArchiveAllToolsConfirmationModal = dynamic<ArchiveAllToolsConfirmationModalProps>(
+  () =>
+    import("./confirmation-modals").then(
+      (module) => module.ArchiveAllToolsConfirmationModal,
+    ),
+  { ssr: false },
+);
+const ActivateAllToolsConfirmationModal = dynamic<ActivateAllToolsConfirmationModalProps>(
+  () =>
+    import("./confirmation-modals").then(
+      (module) => module.ActivateAllToolsConfirmationModal,
+    ),
+  { ssr: false },
+);
 
 
 
@@ -137,7 +158,6 @@ export function DataDictionaryPage() {
   const [processIndustryFilter, setProcessIndustryFilter] = useState("all");
   const [processPage, setProcessPage] = useState(1);
   const [toolSearch, setToolSearch] = useState("");
-  const [toolScopeFilter, setToolScopeFilter] = useState("all");
   const [toolPage, setToolPage] = useState(1);
   const [processForm, setProcessForm] = useState<ProcessFormState>(() =>
     createEmptyProcessForm([]),
@@ -151,6 +171,8 @@ export function DataDictionaryPage() {
   const [toolActionId, setToolActionId] = useState("");
   const [editingTool, setEditingTool] = useState<TechStackTool | null>(null);
   const [toolDeleteTarget, setToolDeleteTarget] = useState<TechStackTool | null>(null);
+  const [isActivateAllToolsOpen, setIsActivateAllToolsOpen] = useState(false);
+  const [isArchiveAllToolsOpen, setIsArchiveAllToolsOpen] = useState(false);
   const [isDeleteAllToolsOpen, setIsDeleteAllToolsOpen] = useState(false);
   const [isTechnologyStackReady, setIsTechnologyStackReady] = useState(false);
   const [techStackToasts, setTechStackToasts] = useState<ReorderToastState[]>([]);
@@ -168,12 +190,10 @@ export function DataDictionaryPage() {
     error: techStackQueryError,
     isLoading: isTechStackLoading,
   } = useMappedTechStackPage({
-    catalog: dictionaryData,
-    enabled: Boolean(dictionaryData && isTechnologyStackReady),
+    enabled: isTechnologyStackReady,
     limit: technologyStackLibraryPageSize,
     page: toolPage,
     search: toolSearch,
-    scopeFilter: toolScopeFilter,
   });
   const createIndustryMutation = useMutation({
     mutationFn: createDataDictionaryIndustry,
@@ -193,6 +213,9 @@ export function DataDictionaryPage() {
   const deleteProcessLibraryMutation = useMutation({
     mutationFn: deleteDataDictionaryProcessLibrary,
   });
+  const permanentlyDeleteDomainMutation = useMutation({
+    mutationFn: permanentlyDeleteDataDictionaryDomain,
+  });
   const reorderIndustriesMutation = useMutation({
     mutationFn: reorderDataDictionaryIndustries,
   });
@@ -204,6 +227,9 @@ export function DataDictionaryPage() {
   });
   const createIndustryProcessMutation = useMutation({
     mutationFn: createDataDictionaryIndustryProcess,
+  });
+  const addDefaultIndustryProcessesMutation = useMutation({
+    mutationFn: addDataDictionaryDefaultIndustryProcesses,
   });
   const createDomainProcessMutation = useMutation({
     mutationFn: createDataDictionaryDomainProcess,
@@ -223,14 +249,24 @@ export function DataDictionaryPage() {
   const updateTechStackMutation = useMutation({
     mutationFn: updateDataDictionaryTechStack,
   });
+  const updateTechStackStatusMutation = useMutation({
+    mutationFn: updateDataDictionaryTechStackStatus,
+  });
   const deleteTechStackMutation = useMutation({
     mutationFn: deleteDataDictionaryTechStack,
+  });
+  const activateAllTechStackMutation = useMutation({
+    mutationFn: activateAllDataDictionaryTechStack,
+  });
+  const archiveAllTechStackMutation = useMutation({
+    mutationFn: archiveAllDataDictionaryTechStack,
   });
   const deleteAllTechStackMutation = useMutation({
     mutationFn: deleteAllDataDictionaryTechStack,
   });
   const industries = dictionaryData?.industries ?? emptyIndustries;
   const domains = dictionaryData?.domains ?? emptyDomains;
+  const inactiveDomains = dictionaryData?.inactiveDomains ?? emptyDomains;
   const libraries = dictionaryData?.libraries ?? emptyLibraries;
   const inactiveIndustries = dictionaryData?.inactiveIndustries ?? emptyIndustries;
   const processes = dictionaryData?.processes ?? emptyProcesses;
@@ -253,6 +289,7 @@ export function DataDictionaryPage() {
   const activeExpandedProcessId =
     expandedProcessId === initialExpandedProcessId ? processes[0]?.id ?? "" : expandedProcessId;
   const isProcessSaving =
+    addDefaultIndustryProcessesMutation.isPending ||
     createIndustryProcessMutation.isPending ||
     createDomainProcessMutation.isPending ||
     updateProcessMutation.isPending;
@@ -343,6 +380,13 @@ export function DataDictionaryPage() {
       [{ description, id: toastId, message, tone }, ...currentToasts].slice(0, 3),
     );
     scheduleTechStackToastDismiss(toastId, tone);
+  }
+
+  function dismissTechStackToast(toastId: string) {
+    clearTechStackToastTimeout(toastId);
+    setTechStackToasts((currentToasts) =>
+      currentToasts.filter((toast) => toast.id !== toastId),
+    );
   }
 
   async function handleAddIndustry() {
@@ -608,6 +652,116 @@ export function DataDictionaryPage() {
     }
   }
 
+  async function handlePermanentlyDeleteDomain(domain: DictionaryDomain) {
+    try {
+      if (!domain.id || domain.isActive !== false) {
+        throw new Error("Only inactive domains can be permanently deleted");
+      }
+
+      setDictionaryError("");
+      await permanentlyDeleteDomainMutation.mutateAsync(domain);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
+        queryClient.invalidateQueries({ queryKey: techStackQueryKey }),
+      ]);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      throw new Error(message);
+    }
+  }
+
+  async function handleActivateDomain(domain: DictionaryDomain) {
+    const selectedIndustryId =
+      domain.industryIds.find((industryId) =>
+        industries.some((industry) => industry.id === industryId),
+      ) ||
+      mappingIndustryId ||
+      domainIndustryId ||
+      industries[0]?.id ||
+      "";
+
+    try {
+      if (!selectedIndustryId) {
+        throw new Error("Select an industry before activating a domain");
+      }
+
+      setDictionaryError("");
+      await createDomainMutation.mutateAsync({
+        industryId: selectedIndustryId,
+        name: domain.name,
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
+        queryClient.invalidateQueries({ queryKey: techStackQueryKey }),
+      ]);
+      setDomainIndustryId(selectedIndustryId);
+      setMappingIndustryId(selectedIndustryId);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      throw new Error(message);
+    }
+  }
+
+  async function handleAddDefaultIndustryProcesses(industryId: string) {
+    if (addDefaultIndustryProcessesMutation.isPending) {
+      return false;
+    }
+
+    const selectedIndustry = industries.find((industry) => industry.id === industryId);
+
+    try {
+      if (!selectedIndustry) {
+        throw new Error("Select an industry before adding default processes");
+      }
+
+      setDictionaryError("");
+      const result = await addDefaultIndustryProcessesMutation.mutateAsync({ industryId });
+      await queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey });
+      setProcessPage(1);
+
+      const details = [];
+      if (result.skippedCount > 0) {
+        details.push(
+          `${result.skippedCount} existing ${result.skippedCount === 1 ? "process was" : "processes were"} skipped`,
+        );
+      }
+      const description = details.join(" · ") || "Process Library";
+
+      if (result.createdCount > 0) {
+        showTechStackToast(
+          `${result.createdCount} ${selectedIndustry.name} default ${
+            result.createdCount === 1 ? "process" : "processes"
+          } added`,
+          "success",
+          description,
+        );
+      } else if (result.skippedCount > 0) {
+        showTechStackToast(
+          `${selectedIndustry.name} default processes are already up to date`,
+          "success",
+          description,
+        );
+      } else if (result.totalCount > 0) {
+        const message = `${selectedIndustry.name} defaults could not be added because the industry changed. Refresh and retry.`;
+        setDictionaryError(message);
+        showTechStackToast(message, "error", description);
+        return false;
+      } else {
+        const message = `No built-in default processes are available for ${selectedIndustry.name}`;
+        setDictionaryError(message);
+        showTechStackToast(message, "error", description);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setDictionaryError(message);
+      showTechStackToast(message, "error");
+      return false;
+    }
+  }
+
   const handleOpenNewProcessForm = useCallback(() => {
     setEditingProcess(null);
     setProcessForm(createEmptyProcessForm(industries));
@@ -693,6 +847,7 @@ export function DataDictionaryPage() {
     const name = toDisplayName(toolForm.name);
     const vendor = toDisplayName(toolForm.vendor);
     const category = toDisplayName(toolForm.category);
+    const description = toolForm.description.trim();
     const isUpdatingTool = Boolean(editingTool);
     if (!name || !vendor || !category) return;
 
@@ -707,6 +862,7 @@ export function DataDictionaryPage() {
           values: {
             benchmarkPricing,
             category,
+            description,
             name,
             vendor,
           },
@@ -717,8 +873,8 @@ export function DataDictionaryPage() {
         await createTechStackMutation.mutateAsync({
           benchmarkPricing,
           category,
+          description,
           name,
-          scope: "common",
           vendor,
         });
       }
@@ -757,8 +913,39 @@ export function DataDictionaryPage() {
 
   function handleEditTool(tool: TechStackTool) {
     setEditingTool(tool);
-    setToolForm(createToolFormFromTool(tool, industries));
+    setToolForm(createToolFormFromTool(tool));
     setIsToolFormOpen(true);
+  }
+
+  async function handleToggleToolStatus(tool: TechStackTool) {
+    if (updateTechStackStatusMutation.isPending) {
+      return;
+    }
+
+    const nextIsActive = tool.isActive === false;
+
+    try {
+      setDictionaryError("");
+      setToolActionId(tool.id);
+      await updateTechStackStatusMutation.mutateAsync({
+        isActive: nextIsActive,
+        tool,
+      });
+      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
+      if (!nextIsActive && editingTool?.id === tool.id) {
+        handleCloseToolForm();
+      }
+      showTechStackToast(
+        `${tool.name} ${nextIsActive ? "activated" : "deactivated"} in Technology Stack Library`,
+        "success",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setDictionaryError(message);
+      showTechStackToast(message, "error");
+    } finally {
+      setToolActionId("");
+    }
   }
 
   function handleDeleteTool(tool: TechStackTool) {
@@ -795,23 +982,124 @@ export function DataDictionaryPage() {
   }
 
   function handleDeleteAllTools() {
-    if (toolTotalCount === 0 || deleteAllTechStackMutation.isPending) {
+    if (
+      toolTotalCount === 0 ||
+      activateAllTechStackMutation.isPending ||
+      archiveAllTechStackMutation.isPending ||
+      deleteAllTechStackMutation.isPending
+    ) {
       return;
     }
 
     setIsDeleteAllToolsOpen(true);
   }
 
-  async function confirmDeleteAllTools() {
-    if (toolTotalCount === 0 || deleteAllTechStackMutation.isPending) {
+  function handleActivateAllTools() {
+    if (
+      toolTotalCount === 0 ||
+      activateAllTechStackMutation.isPending ||
+      archiveAllTechStackMutation.isPending ||
+      deleteAllTechStackMutation.isPending
+    ) {
       return;
     }
 
-    const deletedToolCount = toolTotalCount;
+    setIsActivateAllToolsOpen(true);
+  }
+
+  async function confirmActivateAllTools() {
+    if (
+      toolTotalCount === 0 ||
+      activateAllTechStackMutation.isPending ||
+      archiveAllTechStackMutation.isPending ||
+      deleteAllTechStackMutation.isPending
+    ) {
+      return;
+    }
 
     try {
       setDictionaryError("");
-      await deleteAllTechStackMutation.mutateAsync();
+      const { activatedCount, skippedCount } =
+        await activateAllTechStackMutation.mutateAsync();
+      setIsActivateAllToolsOpen(false);
+      setToolPage(1);
+      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
+      setToolDeleteTarget(null);
+      handleCloseToolForm();
+
+      const message = activatedCount > 0
+        ? `${activatedCount} ${activatedCount === 1 ? "tool" : "tools"} activated in Technology Stack Library`
+        : skippedCount > 0
+          ? "Duplicate archived tools remain inactive"
+          : "All technology tools are already active";
+      const description = skippedCount > 0
+        ? `${skippedCount} duplicate ${skippedCount === 1 ? "tool was" : "tools were"} left archived`
+        : undefined;
+      showTechStackToast(message, "success", description);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setDictionaryError(message);
+      showTechStackToast(message, "error");
+    }
+  }
+
+  function handleArchiveAllTools() {
+    if (
+      toolTotalCount === 0 ||
+      activateAllTechStackMutation.isPending ||
+      archiveAllTechStackMutation.isPending ||
+      deleteAllTechStackMutation.isPending
+    ) {
+      return;
+    }
+
+    setIsArchiveAllToolsOpen(true);
+  }
+
+  async function confirmArchiveAllTools() {
+    if (
+      toolTotalCount === 0 ||
+      activateAllTechStackMutation.isPending ||
+      archiveAllTechStackMutation.isPending ||
+      deleteAllTechStackMutation.isPending
+    ) {
+      return;
+    }
+
+    try {
+      setDictionaryError("");
+      const archivedToolCount = await archiveAllTechStackMutation.mutateAsync();
+      setIsArchiveAllToolsOpen(false);
+      setToolPage(1);
+      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
+      setToolDeleteTarget(null);
+      handleCloseToolForm();
+      showTechStackToast(
+        archivedToolCount > 0
+          ? `${archivedToolCount} ${archivedToolCount === 1 ? "tool" : "tools"} archived in Technology Stack Library`
+          : "All technology tools are already archived",
+        "success",
+      );
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setDictionaryError(message);
+      showTechStackToast(message, "error");
+    }
+  }
+
+  async function confirmDeleteAllTools() {
+    if (
+      toolTotalCount === 0 ||
+      activateAllTechStackMutation.isPending ||
+      archiveAllTechStackMutation.isPending ||
+      deleteAllTechStackMutation.isPending
+    ) {
+      return;
+    }
+
+    try {
+      setDictionaryError("");
+      const deletedToolCount = await deleteAllTechStackMutation.mutateAsync();
       setIsDeleteAllToolsOpen(false);
       setToolPage(1);
       await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
@@ -860,10 +1148,6 @@ export function DataDictionaryPage() {
     setProcessPage(1);
     setProcessSearch(value);
   }, []);
-  const handleToolScopeFilterChange = useCallback((value: string) => {
-    setToolPage(1);
-    setToolScopeFilter(value);
-  }, []);
   const handleToolSearchChange = useCallback((value: string) => {
     setToolPage(1);
     setToolSearch(value);
@@ -885,11 +1169,13 @@ export function DataDictionaryPage() {
           <IndustryDomainManager
             domainName={domainName}
             domains={domains}
+            inactiveDomains={inactiveDomains}
             industryName={industryName}
             industries={industries}
             isCatalogLoading={isCatalogLoading}
             isDomainSaving={createDomainMutation.isPending}
             isDeletingDomain={deleteProcessLibraryMutation.isPending}
+            isPermanentlyDeletingDomain={permanentlyDeleteDomainMutation.isPending}
             isDeletingIndustry={deleteIndustryMutation.isPending}
             isIndustrySaving={createIndustryMutation.isPending || activateIndustryMutation.isPending}
             isMappingDomain={createProcessLibraryMutation.isPending}
@@ -903,8 +1189,10 @@ export function DataDictionaryPage() {
             setMappingIndustryId={setMappingIndustryId}
             onAddDomain={handleAddDomain}
             onAddIndustry={handleAddIndustry}
+            onActivateDomain={handleActivateDomain}
             onActivateIndustry={handleActivateIndustry}
             onDeleteDomain={handleDeleteDomain}
+            onPermanentlyDeleteDomain={handlePermanentlyDeleteDomain}
             onDeleteIndustry={handleDeleteIndustry}
             onMapDomain={handleMapDomain}
             onMapDomainToIndustry={handleMapDomainToIndustry}
@@ -920,6 +1208,7 @@ export function DataDictionaryPage() {
             filteredProcesses={filteredProcesses}
             industries={industries}
             isCatalogLoading={isCatalogLoading}
+            isDefaultProcessesSaving={addDefaultIndustryProcessesMutation.isPending}
             isProcessSaving={isProcessSaving}
             isProcessFormOpen={isProcessFormOpen}
             categoryOptions={categoryOptions}
@@ -940,6 +1229,7 @@ export function DataDictionaryPage() {
             setProcessPage={setProcessPage}
             setProcessSearch={handleProcessSearchChange}
             onAddProcess={handleAddProcess}
+            onAddDefaultProcesses={handleAddDefaultIndustryProcesses}
             currencyRateInput={currencyRateValue}
             isCurrencyRateSaving={updateCurrencyConversionRateMutation.isPending}
             savedDisplayToBaseCurrencyRate={savedDisplayToBaseCurrencyRate}
@@ -956,31 +1246,38 @@ export function DataDictionaryPage() {
           onVisible={handleTechnologyStackVisible}
         >
           <TechnologyStackCard
-            domains={domains}
             filteredTools={filteredTools}
-            industries={industries}
-            isCatalogLoading={isCatalogLoading || isTechStackLoading}
-            isToolDeleting={deleteTechStackMutation.isPending || deleteAllTechStackMutation.isPending}
+            isActivatingAllTools={activateAllTechStackMutation.isPending}
+            isArchivingAllTools={archiveAllTechStackMutation.isPending}
+            isCatalogLoading={isTechStackLoading}
+            isToolDeleting={
+              deleteTechStackMutation.isPending ||
+              activateAllTechStackMutation.isPending ||
+              archiveAllTechStackMutation.isPending ||
+              deleteAllTechStackMutation.isPending
+            }
             isDeletingAllTools={deleteAllTechStackMutation.isPending}
             isToolFormOpen={isToolFormOpen}
             isToolSaving={isToolSaving}
+            isToolStatusSaving={updateTechStackStatusMutation.isPending}
             setToolForm={setToolForm}
             setToolPage={setToolPage}
-            setToolScopeFilter={handleToolScopeFilterChange}
             setToolSearch={handleToolSearchChange}
             toolForm={toolForm}
             toolActionId={toolActionId}
             toolPage={toolPage}
-            toolScopeFilter={toolScopeFilter}
             toolSearch={toolSearch}
             toolTotalCount={toolTotalCount}
             editingTool={editingTool}
             onAddTool={handleAddTool}
+            onActivateAllTools={handleActivateAllTools}
+            onArchiveAllTools={handleArchiveAllTools}
             onCloseToolForm={handleCloseToolForm}
             onDeleteAllTools={handleDeleteAllTools}
             onDeleteTool={handleDeleteTool}
             onEditTool={handleEditTool}
             onOpenNewToolForm={handleOpenNewToolForm}
+            onToggleToolStatus={handleToggleToolStatus}
           />
         </LazyViewportSection>
         {processDeleteTarget ? (
@@ -1025,8 +1322,36 @@ export function DataDictionaryPage() {
             }}
           />
         ) : null}
+        {isActivateAllToolsOpen ? (
+          <ActivateAllToolsConfirmationModal
+            isActivating={activateAllTechStackMutation.isPending}
+            onCancel={() => {
+              if (!activateAllTechStackMutation.isPending) {
+                setIsActivateAllToolsOpen(false);
+              }
+            }}
+            onConfirm={() => {
+              void confirmActivateAllTools();
+            }}
+          />
+        ) : null}
+        {isArchiveAllToolsOpen ? (
+          <ArchiveAllToolsConfirmationModal
+            isArchiving={archiveAllTechStackMutation.isPending}
+            toolCount={toolTotalCount}
+            onCancel={() => {
+              if (!archiveAllTechStackMutation.isPending) {
+                setIsArchiveAllToolsOpen(false);
+              }
+            }}
+            onConfirm={() => {
+              void confirmArchiveAllTools();
+            }}
+          />
+        ) : null}
         <ReorderToastStack
           ariaLabel="Data dictionary notifications"
+          onDismiss={dismissTechStackToast}
           successDescription="Technology Stack Library"
           toasts={techStackToasts}
         />

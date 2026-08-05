@@ -3,8 +3,7 @@
 import { useEffect, type FormEvent, type ReactNode } from "react";
 import { Check, Plus, X } from "lucide-react";
 
-import type { DictionaryDomain, DictionaryIndustry, TechStackTool } from "@/features/data-dictionary/model";
-import { getDomainDisplayTitle } from "@/features/data-dictionary/utils/domain-mapping";
+import type { TechStackTool } from "@/features/data-dictionary/model";
 
 export type ToolFormState = {
   benchmarkCheckedAt: string;
@@ -14,22 +13,17 @@ export type ToolFormState = {
   benchmarkSourceLabel: string;
   benchmarkSourceUrl: string;
   category: string;
-  domainId: string;
-  industryId: string;
+  description: string;
   name: string;
-  scope: "common" | "industry" | "domain";
   vendor: string;
 };
 
 export type TechStackToolModalProps = {
   canAddTool: boolean;
-  domains: DictionaryDomain[];
   editingTool: TechStackTool | null;
-  industries: DictionaryIndustry[];
   isToolSaving: boolean;
   onAddTool: (event: FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
-  selectedIndustryId: string;
   setToolForm: (value: ToolFormState | ((current: ToolFormState) => ToolFormState)) => void;
   toolForm: ToolFormState;
 };
@@ -39,11 +33,8 @@ const fieldInputClass =
 
 export function TechStackToolModal({
   canAddTool,
-  domains,
-  industries,
   isToolSaving,
   editingTool,
-  selectedIndustryId,
   onClose,
   setToolForm,
   toolForm,
@@ -103,7 +94,7 @@ export function TechStackToolModal({
               placeholder="e.g. Salesforce Service Cloud"
             />
           </Field>
-          <Field label="Vendor" required>
+          <Field label="Company" required>
             <input
               value={toolForm.vendor}
               onChange={(event) =>
@@ -123,48 +114,16 @@ export function TechStackToolModal({
               placeholder="e.g. CRM / Support"
             />
           </Field>
-          {toolForm.scope !== "common" ? (
-            <Field label="Industry" required>
-              <select
-                value={selectedIndustryId}
-                disabled={isEditingTool}
-                onChange={(event) =>
-                  setToolForm((current) => ({
-                    ...current,
-                    domainId: "",
-                    industryId: event.target.value,
-                  }))
-                }
-                className={fieldInputClass}
-              >
-                <option value="">Select industry</option>
-                {industries.map((industry) => (
-                  <option key={industry.id} value={industry.id}>
-                    {industry.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          ) : null}
-          {toolForm.scope === "domain" ? (
-            <Field label="Domain" required>
-              <select
-                value={toolForm.domainId}
-                disabled={isEditingTool}
-                onChange={(event) =>
-                  setToolForm((current) => ({ ...current, domainId: event.target.value }))
-                }
-                className={fieldInputClass}
-              >
-                <option value="">Select domain</option>
-                {domains.map((domain) => (
-                  <option key={domain.id} value={domain.id}>
-                    {getDomainDisplayTitle(domain.name)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          ) : null}
+          <Field label="Description">
+            <input
+              value={toolForm.description}
+              onChange={(event) =>
+                setToolForm((current) => ({ ...current, description: event.target.value }))
+              }
+              className={fieldInputClass}
+              placeholder="e.g. Customer service platform"
+            />
+          </Field>
         </div>
         <div className="mt-4 rounded-md border border-black/[0.08] bg-white/70 p-3">
           <p className="text-xs font-bold text-[#171717]">Researched benchmark (optional)</p>
@@ -223,31 +182,6 @@ export function TechStackToolModal({
                 className={fieldInputClass}
                 placeholder="https://vendor.example/pricing"
               />
-            </Field>
-            <Field label="Checked Date">
-              <input
-                type="date"
-                value={toolForm.benchmarkCheckedAt}
-                onChange={(event) => setToolForm((current) => ({ ...current, benchmarkCheckedAt: event.target.value }))}
-                className={fieldInputClass}
-              />
-            </Field>
-            <Field label="Confidence">
-              <select
-                value={toolForm.benchmarkConfidence}
-                onChange={(event) =>
-                  setToolForm((current) => ({
-                    ...current,
-                    benchmarkConfidence: event.target.value as ToolFormState["benchmarkConfidence"],
-                  }))
-                }
-                className={fieldInputClass}
-              >
-                <option value="">Not specified</option>
-                <option value="published">Published</option>
-                <option value="indicative">Indicative</option>
-                <option value="quote-required">Quote required</option>
-              </select>
             </Field>
           </div>
         </div>

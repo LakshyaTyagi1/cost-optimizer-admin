@@ -48,39 +48,23 @@ export function useArchivedDataDictionaryProcesses(): ArchivedDataDictionaryProc
 }
 
 export function useMappedTechStackPage({
-  catalog,
   enabled,
   limit,
   page,
   search,
-  scopeFilter,
 }: {
-  catalog: DataDictionaryCatalog | null | undefined;
   enabled: boolean;
   limit: number;
   page: number;
   search: string;
-  scopeFilter: string;
 }): DataDictionaryTechStackPageQuery {
   return useQuery<DataDictionaryTechStackPage, Error>({
-    queryKey: [...techStackQueryKey, page, search.trim(), scopeFilter],
-    queryFn: () => {
-      if (!catalog) {
-        throw new Error("Data dictionary catalog is required to load technology stack");
-      }
-
-      return fetchMappedTechStackPage({
-        catalog,
-        limit,
-        page,
-        search,
-        scopeFilter,
-      });
-    },
+    queryKey: [...techStackQueryKey, "common", page, search.trim()],
+    queryFn: () => fetchMappedTechStackPage({ limit, page, search }),
     enabled,
     gcTime: dataDictionaryGcTime,
     placeholderData: keepPreviousData,
-    refetchOnWindowFocus: "always",
+    refetchOnWindowFocus: false,
     staleTime: dataDictionaryCacheTime,
   });
 }

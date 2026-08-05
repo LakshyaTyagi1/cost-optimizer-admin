@@ -248,7 +248,7 @@ export function NewProcessModal({
                     }
                     className="min-w-0 flex-1 bg-transparent px-2 text-sm font-semibold text-[#333333] outline-none placeholder:text-[#A1A1AA]"
                     inputMode="decimal"
-                    placeholder="18000"
+                    placeholder="0"
                   />
                   <div className="grid h-8 w-[124px] shrink-0 grid-cols-2 rounded-md bg-[#F5F5F7] p-0.5">
                     {(["AED", "USD"] as const).map((currency) => (
@@ -309,7 +309,7 @@ export function NewProcessModal({
                     }
                     className={fieldInputClass}
                     inputMode="numeric"
-                    placeholder="1200"
+                    placeholder="0"
                   />
                 </Field>
               </div>

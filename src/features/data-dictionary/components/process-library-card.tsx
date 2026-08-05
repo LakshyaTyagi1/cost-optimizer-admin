@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   Building2,
@@ -10,6 +10,7 @@ import {
   Database,
   Plus,
   RotateCcw,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 
@@ -55,6 +56,7 @@ export function ProcessLibraryCard({
   filteredProcesses,
   industries,
   isCatalogLoading,
+  isDefaultProcessesSaving,
   isCurrencyRateSaving,
   isProcessSaving,
   isProcessFormOpen,
@@ -75,6 +77,7 @@ export function ProcessLibraryCard({
   setProcessPage,
   setProcessSearch,
   onAddProcess,
+  onAddDefaultProcesses,
   onDeleteProcess,
   onEditProcess,
   onOpenNewProcessForm,
@@ -91,6 +94,7 @@ export function ProcessLibraryCard({
   filteredProcesses: DictionaryProcess[];
   industries: DictionaryIndustry[];
   isCatalogLoading: boolean;
+  isDefaultProcessesSaving: boolean;
   isCurrencyRateSaving: boolean;
   isProcessSaving: boolean;
   isProcessFormOpen: boolean;
@@ -113,12 +117,16 @@ export function ProcessLibraryCard({
   setProcessPage: (value: number) => void;
   setProcessSearch: (value: string) => void;
   onAddProcess: (event: FormEvent<HTMLFormElement>) => void;
+  onAddDefaultProcesses: (industryId: string) => Promise<boolean>;
   onDeleteProcess: (process: DictionaryProcess) => void;
   onEditProcess: (process: DictionaryProcess) => void;
   onOpenNewProcessForm: () => void;
   onSaveCurrencyRate: () => void;
   onToggleProcessStatus: (process: DictionaryProcess) => void;
 }) {
+  const [isDefaultIndustryDialogOpen, setIsDefaultIndustryDialogOpen] = useState(false);
+  const [defaultIndustryId, setDefaultIndustryId] = useState("");
+  const defaultIndustrySelectRef = useRef<HTMLSelectElement | null>(null);
   const totalProcessPages = Math.ceil(filteredProcesses.length / processLibraryPageSize);
   const safeProcessPage = Math.min(Math.max(processPage, 1), Math.max(totalProcessPages, 1));
   const processStartIndex = (safeProcessPage - 1) * processLibraryPageSize;
@@ -155,21 +163,180 @@ export function ProcessLibraryCard({
     setProcessPage(1);
   }, [setProcessDomainFilter, setProcessIndustryFilter, setProcessPage, setProcessSearch]);
 
+  useEffect(() => {
+    if (!isDefaultIndustryDialogOpen) {
+      return;
+    }
+
+    defaultIndustrySelectRef.current?.focus();
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isDefaultProcessesSaving) {
+        setIsDefaultIndustryDialogOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [isDefaultIndustryDialogOpen, isDefaultProcessesSaving]);
+
+  function openDefaultIndustryDialog() {
+    const preferredIndustryId =
+      processIndustryFilter !== "all" &&
+      industries.some((industry) => industry.id === processIndustryFilter)
+        ? processIndustryFilter
+        : industries[0]?.id || "";
+
+    setDefaultIndustryId(preferredIndustryId);
+    setIsDefaultIndustryDialogOpen(true);
+  }
+
+  async function addSelectedIndustryDefaults() {
+    if (!defaultIndustryId || isDefaultProcessesSaving) {
+      return;
+    }
+
+    const wasAdded = await onAddDefaultProcesses(defaultIndustryId);
+    if (wasAdded) {
+      setIsDefaultIndustryDialogOpen(false);
+    }
+  }
+
   return (
     <section className="mt-5 min-w-0 overflow-hidden rounded-md border border-black/8 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
       <div className="flex min-h-[54px] flex-wrap items-center justify-between gap-4 border-b border-black/[0.08] px-5">
         <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
           Process Library ({processes.length})
         </p>
-        <button
-          type="button"
-          onClick={onOpenNewProcessForm}
-          className="inline-flex items-center gap-1 text-xs font-bold text-[#007AFF]"
-        >
-          <Plus size={12} aria-hidden="true" />
-          Add Process
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={openDefaultIndustryDialog}
+            disabled={isCatalogLoading || isProcessSaving || industries.length === 0}
+            className="inline-flex cursor-pointer items-center gap-1 text-xs font-bold text-[#007AFF] transition hover:text-[#0051D5] disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Choose an industry and add its missing default processes"
+            title="Choose an industry and add only its missing built-in processes"
+          >
+            {isDefaultProcessesSaving ? (
+              <span
+                className="size-3 animate-spin rounded-full border border-[#007AFF]/30 border-t-[#007AFF]"
+                aria-hidden="true"
+              />
+            ) : (
+              <Sparkles size={12} aria-hidden="true" />
+            )}
+            {isDefaultProcessesSaving ? "Adding defaults..." : "Add Industry Defaults"}
+          </button>
+          <button
+            type="button"
+            onClick={onOpenNewProcessForm}
+            disabled={isCatalogLoading || isProcessSaving}
+            className="inline-flex cursor-pointer items-center gap-1 text-xs font-bold text-[#007AFF] transition hover:text-[#0051D5] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus size={12} aria-hidden="true" />
+            Add Process
+          </button>
+        </div>
       </div>
+      {isDefaultIndustryDialogOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 backdrop-blur-[1px]"
+          role="presentation"
+          onClick={() => {
+            if (!isDefaultProcessesSaving) {
+              setIsDefaultIndustryDialogOpen(false);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-industry-defaults-title"
+            aria-describedby="add-industry-defaults-description"
+            className="w-full max-w-[440px] rounded-md border border-[#B3D7FF] bg-[#F0F9FF] p-5 shadow-[0_24px_70px_rgba(15,23,42,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p id="add-industry-defaults-title" className="text-sm font-bold text-[#171717]">
+                  Add Industry Defaults
+                </p>
+                <p
+                  id="add-industry-defaults-description"
+                  className="mt-1 text-xs leading-5 font-semibold text-[#86868B]"
+                >
+                  Choose which industry should receive its missing built-in processes. Existing
+                  processes will not be changed or duplicated.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDefaultIndustryDialogOpen(false)}
+                disabled={isDefaultProcessesSaving}
+                className="flex size-8 shrink-0 items-center justify-center rounded-md border border-black/[0.08] bg-white text-[#86868B] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed"
+                aria-label="Close industry default selection"
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-[10px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
+                Industry
+              </span>
+              <div className="relative">
+                <Building2
+                  size={14}
+                  className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A1A1AA]"
+                  aria-hidden="true"
+                />
+                <select
+                  ref={defaultIndustrySelectRef}
+                  value={defaultIndustryId}
+                  onChange={(event) => setDefaultIndustryId(event.target.value)}
+                  disabled={isDefaultProcessesSaving}
+                  className="h-10 w-full appearance-none rounded-md border border-[#D9E3F0] bg-white pr-9 pl-9 text-sm font-semibold text-[#333333] outline-none transition focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10 disabled:cursor-wait"
+                >
+                  {industries.map((industry) => (
+                    <option key={industry.id} value={industry.id}>
+                      {industry.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[#86868B]"
+                  aria-hidden="true"
+                />
+              </div>
+            </label>
+            <div className="mt-5 flex justify-end gap-2 border-t border-black/[0.06] pt-4">
+              <button
+                type="button"
+                onClick={() => setIsDefaultIndustryDialogOpen(false)}
+                disabled={isDefaultProcessesSaving}
+                className="h-9 rounded-md border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#86868B] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void addSelectedIndustryDefaults()}
+                disabled={!defaultIndustryId || isDefaultProcessesSaving}
+                className="inline-flex h-9 items-center gap-2 rounded-md bg-[#007AFF] px-3 text-xs font-bold text-white transition hover:bg-[#0063CC] disabled:cursor-wait disabled:bg-[#A8CCF8]"
+              >
+                {isDefaultProcessesSaving ? (
+                  <span
+                    className="size-3 animate-spin rounded-full border border-white/40 border-t-white"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Sparkles size={12} aria-hidden="true" />
+                )}
+                {isDefaultProcessesSaving ? "Adding defaults..." : "Add defaults"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="px-5 pt-4">
         <div className="flex flex-wrap gap-2">
           <SearchInput

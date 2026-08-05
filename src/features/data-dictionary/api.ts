@@ -73,6 +73,7 @@ type ApiTechStack = {
     checkedAt?: string | null;
     confidence?: string;
   };
+  category?: string;
   company?: string;
   createdAt?: string;
   description?: string;
@@ -125,15 +126,14 @@ type DataDictionaryProcessPayload = {
 type DataDictionaryTechStackPayload = {
   benchmarkPricing?: TechStackBenchmarkPricing | null;
   category: string;
-  domainId?: string;
-  industryId?: string;
+  description?: string;
   name: string;
-  scope?: "common" | "industry-default" | "industry-domain";
   vendor: string;
 };
 
 export type DataDictionaryCatalog = {
   domains: DictionaryDomain[];
+  inactiveDomains: DictionaryDomain[];
   industries: DictionaryIndustry[];
   inactiveIndustries: DictionaryIndustry[];
   libraries: DictionaryLibrary[];
@@ -159,6 +159,13 @@ export type DataDictionaryPagination = {
 export type DataDictionaryTechStackPage = {
   pagination: DataDictionaryPagination;
   tools: TechStackTool[];
+};
+
+export type DefaultIndustryProcessImportResult = {
+  createdCount: number;
+  skippedCount: number;
+  totalCount: number;
+  unavailableIndustryCount: number;
 };
 
 const adminBasePath = "/adm/cos-process-management";
@@ -231,6 +238,7 @@ export async function fetchArchivedDataDictionaryProcesses() {
 function getArchiveProcessCatalog(): DataDictionaryCatalog {
   return {
     domains: [],
+    inactiveDomains: [],
     industries: [],
     inactiveIndustries: [],
     libraries: [],
@@ -242,41 +250,26 @@ function getArchiveProcessCatalog(): DataDictionaryCatalog {
   };
 }
 
-export async function fetchMappedTechStack(catalog: DataDictionaryCatalog) {
-  const tools = await fetchAllListApi<ApiTechStack>(`${adminBasePath}/tech-stack`, {
-    params: { includeDomains: "true", limit: "100" },
-  });
-
-  return tools
-    .map((tool) => mapTechStackTool(tool, catalog))
-    .filter((tool): tool is TechStackTool => Boolean(tool));
-}
-
 export async function fetchMappedTechStackPage({
-  catalog,
   limit,
   page,
   search,
-  scopeFilter,
 }: {
-  catalog: DataDictionaryCatalog;
   limit: number;
   page: number;
   search: string;
-  scopeFilter: string;
 }): Promise<DataDictionaryTechStackPage> {
   const trimmedSearch = search.trim();
   const params: Record<string, string> = {
-    includeDomains: "true",
+    includeInactive: "true",
     limit: String(limit),
     page: String(page),
+    scope: "common",
   };
 
   if (trimmedSearch) {
     params.search = trimmedSearch;
   }
-
-  Object.assign(params, getTechStackScopeParams(scopeFilter));
 
   const techStackResponse = await fetchListApi<ApiTechStack>(`${adminBasePath}/tech-stack`, {
     params,
@@ -291,7 +284,7 @@ export async function fetchMappedTechStackPage({
       totalPages: Number(techStackPagination.totalPages) || 0,
     },
     tools: (techStackResponse.data ?? [])
-      .map((tool) => mapTechStackTool(tool, catalog))
+      .map(mapTechStackTool)
       .filter((tool): tool is TechStackTool => Boolean(tool)),
   };
 }
@@ -324,6 +317,19 @@ export async function createDataDictionaryDomain(payload: { industryId: string; 
   });
 
   return mapDomain(domain, [payload.industryId]);
+}
+
+export async function permanentlyDeleteDataDictionaryDomain(domain: DictionaryDomain) {
+  if (domain.isActive !== false) {
+    throw new Error("Deactivate the domain before deleting it permanently");
+  }
+
+  const deletedDomain = await fetchApi<ApiEntity>(
+    `${adminBasePath}/domains/${domain.id}/permanent`,
+    { method: "DELETE" },
+  );
+
+  return mapDomain(deletedDomain, domain.industryIds);
 }
 
 export async function deleteDataDictionaryProcessLibrary(libraryId: string) {
@@ -380,6 +386,15 @@ export async function createDataDictionaryIndustryProcess(
   return getId(process);
 }
 
+export async function addDataDictionaryDefaultIndustryProcesses(payload: {
+  industryId: string;
+}) {
+  return fetchApi<DefaultIndustryProcessImportResult>(
+    `${adminBasePath}/industry-processes/defaults`,
+    { body: JSON.stringify(payload), method: "POST" },
+  );
+}
+
 export async function createDataDictionaryDomainProcess(
   payload: DataDictionaryProcessPayload & { industryDomainId: string },
 ) {
@@ -407,7 +422,24 @@ export async function updateDataDictionaryTechStack(payload: {
   const tool = await fetchApi<ApiTechStack>(`${adminBasePath}/tech-stack/${payload.tool.id}`, {
     body: JSON.stringify(toApiTechStackPayload(payload.values)),
     method: "PUT",
+    params: { scope: "common" },
   });
+
+  return getId(tool);
+}
+
+export async function updateDataDictionaryTechStackStatus(payload: {
+  isActive: boolean;
+  tool: TechStackTool;
+}) {
+  const tool = await fetchApi<ApiTechStack>(
+    `${adminBasePath}/tech-stack/${payload.tool.id}/status`,
+    {
+      body: JSON.stringify({ isActive: payload.isActive }),
+      method: "PATCH",
+      params: { scope: "common" },
+    },
+  );
 
   return getId(tool);
 }
@@ -415,14 +447,43 @@ export async function updateDataDictionaryTechStack(payload: {
 export async function deleteDataDictionaryTechStack(toolId: string) {
   const tool = await fetchApi<ApiTechStack>(`${adminBasePath}/tech-stack/${toolId}`, {
     method: "DELETE",
+    params: { scope: "common" },
   });
 
   return getId(tool);
 }
 
+export async function activateAllDataDictionaryTechStack() {
+  const response = await fetchApi<{
+    activatedCount?: number;
+    skippedCount?: number;
+  }>(`${adminBasePath}/tech-stack/activate-all`, {
+    method: "PATCH",
+    params: { scope: "common" },
+  });
+
+  return {
+    activatedCount: Number(response.activatedCount || 0),
+    skippedCount: Number(response.skippedCount || 0),
+  };
+}
+
+export async function archiveAllDataDictionaryTechStack() {
+  const response = await fetchApi<{ archivedCount?: number }>(
+    `${adminBasePath}/tech-stack/archive-all`,
+    {
+      method: "PATCH",
+      params: { scope: "common" },
+    },
+  );
+
+  return Number(response.archivedCount || 0);
+}
+
 export async function deleteAllDataDictionaryTechStack() {
   const deleteAllToolsResponse = await fetchApi<{ deletedCount?: number }>(`${adminBasePath}/tech-stack`, {
     method: "DELETE",
+    params: { scope: "common" },
   });
 
   return Number(deleteAllToolsResponse.deletedCount || 0);
@@ -497,37 +558,12 @@ export async function updateDataDictionaryCurrencyConversionRate(rate: number) {
 function toApiTechStackPayload(payload: DataDictionaryTechStackPayload) {
   return {
     benchmarkPricing: payload.benchmarkPricing,
+    category: payload.category.trim(),
     company: payload.vendor.trim(),
-    description: payload.category.trim(),
-    industryDomainId: payload.domainId,
-    industryId: payload.industryId,
-    scope: payload.scope,
+    description: payload.description?.trim() || undefined,
+    scope: "common",
     title: payload.name.trim(),
   };
-}
-
-function getTechStackScopeParams(scopeFilter: string): Record<string, string> {
-  if (scopeFilter === "common") {
-    return { scope: "common" };
-  }
-
-  if (scopeFilter === "industry") {
-    return {
-      includeCommon: "false",
-      includeDomains: "false",
-      scope: "industry-default",
-    };
-  }
-
-  if (scopeFilter === "domain") {
-    return {
-      includeCommon: "false",
-      includeDomains: "true",
-      scope: "industry-domain",
-    };
-  }
-
-  return { includeDomains: "true" };
 }
 
 function mapCatalog(catalogPayload: ApiCatalogPayload = {}): DataDictionaryCatalog {
@@ -567,7 +603,9 @@ function mapCatalog(catalogPayload: ApiCatalogPayload = {}): DataDictionaryCatal
       return;
     }
 
-    libraries.push(library);
+    if (library.isActive !== false) {
+      libraries.push(library);
+    }
 
     const domain =
       mapDomain(rawDomain, industryId ? [industryId] : []) ||
@@ -600,7 +638,14 @@ function mapCatalog(catalogPayload: ApiCatalogPayload = {}): DataDictionaryCatal
 
   return {
     domains: sortByDisplayOrder(
-      Array.from(domainById.values()).filter((domain) => domain.industryIds.length > 0),
+      Array.from(domainById.values()).filter(
+        (domain) => domain.isActive !== false && domain.industryIds.length > 0,
+      ),
+    ),
+    inactiveDomains: sortByDisplayOrder(
+      Array.from(domainById.values()).filter(
+        (domain) => domain.isActive === false && domain.industryIds.length > 0,
+      ),
     ),
     industries: sortByDisplayOrder(industries),
     inactiveIndustries: sortByDisplayOrder(inactiveIndustries),
@@ -640,7 +685,7 @@ function mapDomain(domain: ApiEntity | undefined, industryIds: string[]): Dictio
   const id = getId(domain);
   const name = toDomainLabel(domain);
 
-  if (!id || !name || domain?.isActive === false) {
+  if (!id || !name) {
     return null;
   }
 
@@ -648,7 +693,7 @@ function mapDomain(domain: ApiEntity | undefined, industryIds: string[]): Dictio
     displayOrder: Number(domain?.displayOrder) || 0,
     id,
     industryIds,
-    isActive: true,
+    isActive: domain?.isActive !== false,
     name,
     slug: domain?.slug || toSlug(name),
   };
@@ -663,7 +708,7 @@ function mapLibrary(
   const domain = typeof mapping?.domainId === "object" ? mapping.domainId : undefined;
   const industry = typeof mapping?.industryId === "object" ? mapping.industryId : undefined;
 
-  if (!domainId || !industryId || mapping?.isActive === false) {
+  if (!domainId || !industryId) {
     return null;
   }
 
@@ -682,7 +727,7 @@ function mapLibrary(
       toDisplayName(industry?.name || industry?.slug || "") ||
       fallbackNames.industryName ||
       "Mapped Industry",
-    isActive: true,
+    isActive: mapping?.isActive !== false,
     processCount: Math.max(0, Number(mapping?.processCount) || 0),
   };
 }
@@ -744,35 +789,23 @@ function mapProcess(
   };
 }
 
-function mapTechStackTool(
-  tool: ApiTechStack,
-  catalog: DataDictionaryCatalog,
-): TechStackTool | null {
+function mapTechStackTool(tool: ApiTechStack): TechStackTool | null {
   const id = getId(tool);
   const name = toDisplayName(tool.title || "");
-  const scope = tool.scope || "industry-default";
-  const industryId = tool.industryId || "";
-  const domainId = tool.industryDomainId || "";
-  const industry = [...catalog.industries, ...catalog.inactiveIndustries].find(
-    (item) => item.id === industryId,
-  );
-  const domain = catalog.domains.find((item) => item.id === domainId);
+  const hasExplicitCategory = Boolean(tool.category?.trim());
 
-  if (!id || !name || tool.isActive === false) {
+  if (!id || !name) {
     return null;
   }
 
   return {
     benchmarkPricing: mapTechStackBenchmarkPricing(tool.benchmarkPricing),
-    category: toDisplayName(tool.description || "") || "General",
-    domainId: scope === "industry-domain" ? domainId : undefined,
-    domainName: scope === "industry-domain" ? domain?.name || "Mapped Domain" : undefined,
+    category: toDisplayName(tool.category || tool.description || "") || "General",
+    description: hasExplicitCategory ? String(tool.description || "").trim() : undefined,
     id,
-    industryId: scope === "common" ? undefined : industryId,
-    industryName: scope === "common" ? "Global" : industry?.name || "Mapped Industry",
-    isActive: true,
+    isActive: tool.isActive !== false,
     name,
-    scope,
+    scope: "common",
     vendor: toDisplayName(tool.company || "") || "Unassigned",
   };
 }

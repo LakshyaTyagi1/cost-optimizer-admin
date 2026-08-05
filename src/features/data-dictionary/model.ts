@@ -71,6 +71,7 @@ export type TechStackBenchmarkPricing = {
 export type TechStackTool = {
   benchmarkPricing?: TechStackBenchmarkPricing;
   category: string;
+  description?: string;
   domainId?: string;
   domainName?: string;
   id: string;

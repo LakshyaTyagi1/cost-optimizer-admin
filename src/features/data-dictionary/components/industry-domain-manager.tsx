@@ -71,12 +71,14 @@ const mappingPanelClassName =
 export function IndustryDomainManager({
   domainName,
   domains,
+  inactiveDomains,
   industries,
   industryName,
   isCatalogLoading,
   inactiveIndustries,
   isDomainSaving,
   isDeletingDomain,
+  isPermanentlyDeletingDomain,
   isDeletingIndustry,
   isIndustrySaving,
   isMappingDomain,
@@ -89,8 +91,10 @@ export function IndustryDomainManager({
   setMappingIndustryId,
   onAddDomain,
   onAddIndustry,
+  onActivateDomain,
   onActivateIndustry,
   onDeleteDomain,
+  onPermanentlyDeleteDomain,
   onDeleteIndustry,
   onMapDomain,
   onMapDomainToIndustry,
@@ -99,12 +103,14 @@ export function IndustryDomainManager({
 }: {
   domainName: string;
   domains: DictionaryDomain[];
+  inactiveDomains: DictionaryDomain[];
   industries: DictionaryIndustry[];
   industryName: string;
   inactiveIndustries: DictionaryIndustry[];
   isCatalogLoading: boolean;
   isDomainSaving: boolean;
   isDeletingDomain: boolean;
+  isPermanentlyDeletingDomain: boolean;
   isDeletingIndustry: boolean;
   isIndustrySaving: boolean;
   isMappingDomain: boolean;
@@ -117,8 +123,10 @@ export function IndustryDomainManager({
   setMappingIndustryId: (value: string) => void;
   onAddDomain: () => Promise<boolean>;
   onAddIndustry: () => Promise<boolean>;
+  onActivateDomain: (domain: DictionaryDomain) => Promise<void>;
   onActivateIndustry: (industry: DictionaryIndustry) => Promise<void>;
   onDeleteDomain: (domainId: string) => Promise<void>;
+  onPermanentlyDeleteDomain: (domain: DictionaryDomain) => Promise<void>;
   onDeleteIndustry: (industryId: string, force?: boolean) => Promise<void>;
   onMapDomain: (domainId: string) => Promise<void>;
   onMapDomainToIndustry: (industryId: string, domainId: string) => Promise<void>;
@@ -135,6 +143,8 @@ export function IndustryDomainManager({
     hasMappedData: boolean;
     industry: DictionaryIndustry;
   } | null>(null);
+  const [inactiveDomainDeleteTarget, setInactiveDomainDeleteTarget] =
+    useState<MappedDictionaryDomain | null>(null);
   const [mappingView, setMappingView] = useState<"manage" | "table">("manage");
   const [reorderToasts, setReorderToasts] = useState<ReorderToastState[]>([]);
   const [canScrollDomainLibraryDown, setCanScrollDomainLibraryDown] = useState(false);
@@ -143,12 +153,22 @@ export function IndustryDomainManager({
   const industryListRef = useRef<HTMLDivElement | null>(null);
   const domainLibraryListRef = useRef<HTMLDivElement | null>(null);
   const mappedDomainListRef = useRef<HTMLDivElement | null>(null);
+  const inactiveDomainDeleteDialogRef = useRef<HTMLDivElement | null>(null);
+  const inactiveDomainDeleteCancelRef = useRef<HTMLButtonElement | null>(null);
+  const inactiveDomainDeleteTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const inactiveDomainDeleteInFlightRef = useRef(false);
   const reorderToastIdRef = useRef(0);
   const reorderToastTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [domainOrderByIndustryId, setDomainOrderByIndustryId] = useState<Record<string, string[]>>(
     {},
   );
   const [industryOrder, setIndustryOrder] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (inactiveDomainDeleteTarget) {
+      inactiveDomainDeleteCancelRef.current?.focus();
+    }
+  }, [inactiveDomainDeleteTarget]);
   const selectedIndustryId = industries.some((industry) => industry.id === mappingIndustryId)
     ? mappingIndustryId
     : industries[0]?.id || "";
@@ -193,6 +213,19 @@ export function IndustryDomainManager({
     () => getMappedDomainsForIndustry(selectedIndustryId, domains, libraries),
     [domains, libraries, selectedIndustryId],
   );
+  const inactiveMappedDomains = useMemo(
+    () =>
+      orderItemsByDisplayOrder(
+        inactiveDomains
+          .filter((domain) => domain.industryIds.includes(selectedIndustryId))
+          .map((domain) => ({
+            ...domain,
+            key: getDomainIdentity(domain),
+            processCount: 0,
+          })),
+      ),
+    [inactiveDomains, selectedIndustryId],
+  );
   const orderedMappedDomains = useMemo(
     () =>
       orderItemsByKey(
@@ -208,12 +241,21 @@ export function IndustryDomainManager({
       normalizeSearch(domain.name) === normalizedMappedDomainSearch ||
       normalizeSearch(getDomainDisplayTitle(domain.name)) === normalizedMappedDomainSearch,
   );
+  const exactInactiveMappedDomainMatch = inactiveMappedDomains.some(
+    (domain) =>
+      normalizeSearch(domain.name) === normalizedMappedDomainSearch ||
+      normalizeSearch(getDomainDisplayTitle(domain.name)) === normalizedMappedDomainSearch,
+  );
   const exactGlobalDomainMatch = uniqueDomains.some(
     (domain) =>
       normalizeSearch(domain.name) === normalizedMappedDomainSearch ||
       normalizeSearch(getDomainDisplayTitle(domain.name)) === normalizedMappedDomainSearch,
   );
-  const filteredOrderedMappedDomains = orderedMappedDomains.filter(
+  const displayedMappedDomains = useMemo(
+    () => [...orderedMappedDomains, ...inactiveMappedDomains],
+    [inactiveMappedDomains, orderedMappedDomains],
+  );
+  const filteredOrderedMappedDomains = displayedMappedDomains.filter(
     (domain) =>
       !normalizedMappedDomainSearch ||
       normalizeSearch(domain.name).includes(normalizedMappedDomainSearch) ||
@@ -238,6 +280,8 @@ export function IndustryDomainManager({
       ? "Search or create"
       : exactMappedDomainMatch
         ? "Already mapped"
+        : exactInactiveMappedDomainMatch
+          ? "Inactive"
         : exactGlobalDomainMatch
           ? "Enter to map"
           : "Enter to create";
@@ -301,6 +345,13 @@ export function IndustryDomainManager({
     scheduleReorderToastDismiss(toastId, tone);
 
     return toastId;
+  }
+
+  function dismissReorderToast(toastId: string) {
+    clearReorderToastTimeout(toastId);
+    setReorderToasts((currentToasts) =>
+      currentToasts.filter((toast) => toast.id !== toastId),
+    );
   }
 
   function updateReorderToast(
@@ -443,6 +494,17 @@ export function IndustryDomainManager({
       return;
     }
 
+    const inactiveMappedDomain = inactiveMappedDomains.find(
+      (domain) =>
+        normalizeSearch(domain.name) === normalizedSearch ||
+        normalizeSearch(getDomainDisplayTitle(domain.name)) === normalizedSearch,
+    );
+
+    if (inactiveMappedDomain) {
+      void activateDomain(inactiveMappedDomain).then(() => setDomainName(""));
+      return;
+    }
+
     const existingGlobalDomain = uniqueDomains.find(
       (domain) =>
         normalizeSearch(domain.name) === normalizedSearch ||
@@ -503,6 +565,87 @@ export function IndustryDomainManager({
       showReorderToast(`${industry.name} activated`, "success");
     } catch (error) {
       showReorderToast(getErrorMessage(error), "error");
+    }
+  }
+
+  async function activateDomain(domain: DictionaryDomain) {
+    const domainTitle = getDomainDisplayTitle(domain.name);
+
+    try {
+      await onActivateDomain(domain);
+      setDomainName("");
+      showReorderToast(`${domainTitle} activated for ${selectedIndustryName}`, "success");
+    } catch (error) {
+      showReorderToast(`${getErrorMessage(error)}: ${selectedIndustryName}`, "error");
+    }
+  }
+
+  function requestPermanentDomainDelete(
+    domain: MappedDictionaryDomain,
+    trigger: HTMLButtonElement,
+  ) {
+    inactiveDomainDeleteTriggerRef.current = trigger;
+    setInactiveDomainDeleteTarget(domain);
+  }
+
+  function closePermanentDomainDeleteDialog() {
+    if (isPermanentlyDeletingDomain) {
+      return;
+    }
+
+    setInactiveDomainDeleteTarget(null);
+    window.requestAnimationFrame(() => inactiveDomainDeleteTriggerRef.current?.focus());
+  }
+
+  async function permanentlyDeleteDomain(domain: MappedDictionaryDomain) {
+    if (inactiveDomainDeleteInFlightRef.current) {
+      return;
+    }
+
+    inactiveDomainDeleteInFlightRef.current = true;
+    const domainTitle = getDomainDisplayTitle(domain.name);
+
+    try {
+      await onPermanentlyDeleteDomain(domain);
+      setInactiveDomainDeleteTarget(null);
+      inactiveDomainDeleteTriggerRef.current = null;
+      showReorderToast(`${domainTitle} permanently deleted`, "success");
+    } catch (error) {
+      showReorderToast(getErrorMessage(error), "error");
+    } finally {
+      inactiveDomainDeleteInFlightRef.current = false;
+    }
+  }
+
+  function handlePermanentDomainDeleteDialogKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closePermanentDomainDeleteDialog();
+      return;
+    }
+
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    const focusableElements = Array.from(
+      inactiveDomainDeleteDialogRef.current?.querySelectorAll<HTMLButtonElement>(
+        "button:not([disabled])",
+      ) ?? [],
+    );
+
+    if (focusableElements.length === 0) {
+      return;
+    }
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    if (event.shiftKey && document.activeElement === firstElement) {
+      event.preventDefault();
+      lastElement.focus();
+    } else if (!event.shiftKey && document.activeElement === lastElement) {
+      event.preventDefault();
+      firstElement.focus();
     }
   }
 
@@ -930,7 +1073,9 @@ export function IndustryDomainManager({
                   Mapped Domains
                 </p>
                 <p className="shrink-0 truncate text-xs leading-4 font-semibold text-[#A1A1AA]">
-                  {selectedIndustryName} · {mappedDomains.length} mapped
+                  {selectedIndustryName} · {inactiveMappedDomains.length > 0
+                    ? `${mappedDomains.length} active / ${displayedMappedDomains.length} total`
+                    : `${mappedDomains.length} mapped`}
                 </p>
               </div>
             </div>
@@ -984,9 +1129,14 @@ export function IndustryDomainManager({
                         key={domain.id}
                         domain={domain}
                         industryName={selectedIndustryName}
+                        isActivating={isDomainSaving}
                         isDeleting={isDeletingDomain}
                         isDragging={draggedDomainKey === domain.id}
                         onDelete={() => void deleteMappedDomain(domain)}
+                        onPermanentDelete={(trigger) =>
+                          requestPermanentDomainDelete(domain, trigger)
+                        }
+                        onActivate={() => void activateDomain(domain)}
                         onDragEnd={() => setDraggedDomainKey("")}
                         onDragOver={allowDrop}
                         onDragStart={(event) => {
@@ -1197,7 +1347,74 @@ export function IndustryDomainManager({
           </div>
         </div>
       ) : null}
-      <ReorderToastStack toasts={reorderToasts} />
+      {inactiveDomainDeleteTarget ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 px-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="permanent-domain-delete-title"
+          aria-describedby="permanent-domain-delete-description"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closePermanentDomainDeleteDialog();
+            }
+          }}
+          onKeyDown={handlePermanentDomainDeleteDialogKeyDown}
+        >
+          <div
+            ref={inactiveDomainDeleteDialogRef}
+            className="w-full max-w-[460px] rounded-md border border-black/[0.08] bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.2)]"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p
+                  id="permanent-domain-delete-title"
+                  className="text-sm font-bold text-[#171717]"
+                >
+                  Permanently delete {getDomainDisplayTitle(inactiveDomainDeleteTarget.name)}?
+                </p>
+                <p
+                  id="permanent-domain-delete-description"
+                  className="mt-2 text-xs leading-5 font-semibold text-[#86868B]"
+                >
+                  This cannot be undone. The domain and all archived or inactive process and
+                  technology records stored inside it will be permanently removed.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closePermanentDomainDeleteDialog}
+                disabled={isPermanentlyDeletingDomain}
+                className="flex size-8 shrink-0 items-center justify-center rounded-md border border-black/[0.08] text-[#86868B] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed"
+                aria-label="Close permanent domain deletion confirmation"
+                title="Close confirmation"
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="mt-5 flex justify-end gap-2 border-t border-black/[0.06] pt-4">
+              <button
+                ref={inactiveDomainDeleteCancelRef}
+                type="button"
+                onClick={closePermanentDomainDeleteDialog}
+                disabled={isPermanentlyDeletingDomain}
+                className="h-9 rounded-md border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#86868B] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void permanentlyDeleteDomain(inactiveDomainDeleteTarget)}
+                disabled={isPermanentlyDeletingDomain}
+                className="h-9 rounded-md bg-[#EF4444] px-3 text-xs font-bold text-white transition hover:bg-[#DC2626] disabled:cursor-wait disabled:opacity-70"
+              >
+                {isPermanentlyDeletingDomain ? "Deleting..." : "Delete permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <ReorderToastStack onDismiss={dismissReorderToast} toasts={reorderToasts} />
     </section>
   );
 }
@@ -1227,9 +1444,12 @@ function FieldSpinner({ label }: { label: string }) {
 function MappedDomainCard({
   domain,
   industryName,
+  isActivating,
   isDeleting,
   isDragging,
   onDelete,
+  onPermanentDelete,
+  onActivate,
   onDragEnd,
   onDragOver,
   onDragStart,
@@ -1238,9 +1458,12 @@ function MappedDomainCard({
 }: {
   domain: MappedDictionaryDomain;
   industryName: string;
+  isActivating: boolean;
   isDeleting: boolean;
   isDragging: boolean;
   onDelete: () => void;
+  onPermanentDelete: (trigger: HTMLButtonElement) => void;
+  onActivate: () => void;
   onDragEnd: () => void;
   onDragOver: (event: DragEvent<HTMLElement>) => void;
   onDragStart: (event: DragEvent<HTMLElement>) => void;
@@ -1249,45 +1472,86 @@ function MappedDomainCard({
 }) {
   const domainTitle = getDomainDisplayTitle(domain.name);
   const processLabel = domain.processCount === 1 ? "process" : "processes";
+  const isInactive = domain.isActive === false;
 
   return (
     <article
-      draggable
-      aria-label={`${domainTitle} mapped to ${industryName}. ${domain.processCount} ${processLabel}. Press Alt Arrow Left or Alt Arrow Up to move earlier. Press Alt Arrow Right or Alt Arrow Down to move later.`}
-      title={`${domainTitle}: ${domain.processCount} ${processLabel} mapped to ${industryName}. Drag or use Alt Arrow keys to reorder.`}
-      onDragEnd={onDragEnd}
-      onDragOver={onDragOver}
-      onDragStart={onDragStart}
-      onKeyDown={onKeyDown}
-      onDrop={onDrop}
+      draggable={!isInactive}
+      aria-label={
+        isInactive
+          ? `${domainTitle} is inactive and hidden from users. Activate it for ${industryName}.`
+          : `${domainTitle} mapped to ${industryName}. ${domain.processCount} ${processLabel}. Press Alt Arrow Left or Alt Arrow Up to move earlier. Press Alt Arrow Right or Alt Arrow Down to move later.`
+      }
+      title={
+        isInactive
+          ? `${domainTitle} is inactive and hidden from users`
+          : `${domainTitle}: ${domain.processCount} ${processLabel} mapped to ${industryName}. Drag or use Alt Arrow keys to reorder.`
+      }
+      onDragEnd={isInactive ? undefined : onDragEnd}
+      onDragOver={isInactive ? undefined : onDragOver}
+      onDragStart={isInactive ? undefined : onDragStart}
+      onKeyDown={isInactive ? undefined : onKeyDown}
+      onDrop={isInactive ? undefined : onDrop}
       role="listitem"
-      tabIndex={0}
-      className={`flex min-h-[58px] cursor-grab items-center justify-between gap-3 rounded-md border border-black/[0.08] bg-[#FAFAFA] px-4 py-2 transition hover:border-[#B8D8FF] hover:bg-[#F8FBFF] active:cursor-grabbing ${
+      tabIndex={isInactive ? undefined : 0}
+      className={`flex min-h-[58px] items-center justify-between gap-3 rounded-md border border-black/[0.08] px-4 py-2 transition ${
+        isInactive
+          ? "bg-[#F5F5F7] opacity-75"
+          : "cursor-grab bg-[#FAFAFA] hover:border-[#B8D8FF] hover:bg-[#F8FBFF] active:cursor-grabbing"
+      } ${
         isDragging ? "opacity-60" : ""
       }`}
     >
       <div className="min-w-0">
-        <p className="truncate text-sm leading-5 font-bold text-[#171717]">
+        <p className={`truncate text-sm leading-5 font-bold ${isInactive ? "text-[#86868B]" : "text-[#171717]"}`}>
           {domainTitle}
         </p>
         <p className="text-xs leading-4 font-semibold text-[#86868B]">
-          {domain.processCount} processes
+          {isInactive ? "Hidden from users" : `${domain.processCount} processes`}
         </p>
       </div>
       <div className="h-full flex shrink-0 items-center gap-1.5 text-[#A1A1AA]">
-        <span title={`Drag ${domainTitle} to reorder it within ${industryName}`}>
-          <GripVertical size={16} aria-hidden="true" />
-        </span>
-        <button
-          type="button"
-          onClick={onDelete}
-          disabled={isDeleting}
-          title={`Remove ${domainTitle} from ${industryName}`}
-          className="flex size-4 items-center justify-center rounded-md text-[#A1A1AA] transition hover:text-[#EF4444] disabled:cursor-not-allowed disabled:text-[#C7C7CC]"
-          aria-label={`Remove ${domainTitle} from ${industryName}`}
-        >
-          <Trash2 size={16} aria-hidden="true" />
-        </button>
+        {isInactive ? (
+          <>
+            <button
+              type="button"
+              onClick={onActivate}
+              disabled={isActivating || isDeleting}
+              title={`Activate ${domainTitle} for ${industryName}`}
+              className="inline-flex h-7 items-center gap-1 rounded-md bg-white px-2 text-[10px] font-bold text-[#007AFF] transition hover:bg-[#EAF3FF] disabled:cursor-wait disabled:text-[#A1A1AA]"
+              aria-label={`Activate ${domainTitle} for ${industryName}`}
+            >
+              <RotateCcw size={12} aria-hidden="true" />
+              Activate
+            </button>
+            <button
+              type="button"
+              onClick={(event) => onPermanentDelete(event.currentTarget)}
+              disabled={isActivating || isDeleting}
+              title={`Permanently delete ${domainTitle} from ${industryName}`}
+              className="flex size-7 items-center justify-center rounded-md bg-white text-[#EF4444] transition hover:bg-[#FEECEC] disabled:cursor-not-allowed disabled:text-[#C7C7CC]"
+              aria-label={`Permanently delete ${domainTitle} from ${industryName}`}
+            >
+              <Trash2 size={13} aria-hidden="true" />
+            </button>
+          </>
+        ) : (
+          <>
+            <span title={`Drag ${domainTitle} to reorder it within ${industryName}`}>
+              <GripVertical size={16} aria-hidden="true" />
+            </span>
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={isDeleting}
+              title={`Remove ${domainTitle} from ${industryName}`}
+              className="flex size-4 items-center justify-center rounded-md text-[#A1A1AA] transition hover:text-[#EF4444] disabled:cursor-not-allowed disabled:text-[#C7C7CC]"
+              aria-label={`Remove ${domainTitle} from ${industryName}`}
+            >
+              <Trash2 size={16} aria-hidden="true" />
+            </button>
+          </>
+        )}
       </div>
     </article>
   );
