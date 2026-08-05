@@ -72,14 +72,9 @@ export type TechStackTool = {
   benchmarkPricing?: TechStackBenchmarkPricing;
   category: string;
   description?: string;
-  domainId?: string;
-  domainName?: string;
   id: string;
-  industryId?: string;
-  industryName?: string;
   isActive?: boolean;
   name: string;
-  scope?: "common" | "industry-default" | "industry-domain";
   vendor: string;
 };
 
@@ -180,46 +175,3 @@ export const initialDomains: DictionaryDomain[] = [
 ];
 
 export const initialProcessRows: DictionaryProcess[] = [];
-
-export const initialTechnologyRows: TechStackTool[] = [
-  {
-    id: "salesforce-service-cloud",
-    name: "Salesforce Service Cloud",
-    vendor: "Salesforce",
-    category: "CRM / Support",
-  },
-  { id: "zendesk", name: "Zendesk", vendor: "Zendesk", category: "CRM / Support" },
-  {
-    id: "hubspot-service-hub",
-    name: "HubSpot Service Hub",
-    vendor: "HubSpot",
-    category: "CRM / Support",
-  },
-  { id: "freshdesk", name: "Freshdesk", vendor: "Freshworks", category: "CRM / Support" },
-  { id: "kustomer", name: "Kustomer", vendor: "Kustomer", category: "CRM / Support" },
-  { id: "gorgias", name: "Gorgias", vendor: "Gorgias", category: "CRM / Support" },
-  {
-    id: "genesys-cloud-cx",
-    name: "Genesys Cloud CX",
-    vendor: "Genesys",
-    category: "Contact Centre",
-  },
-  { id: "five9", name: "Five9", vendor: "Five9", category: "Contact Centre" },
-  { id: "nice-cxone", name: "NICE CXone", vendor: "NICE", category: "Contact Centre" },
-  { id: "talkdesk", name: "Talkdesk", vendor: "Talkdesk", category: "Contact Centre" },
-  { id: "amazon-connect", name: "Amazon Connect", vendor: "AWS", category: "Contact Centre" },
-  { id: "qualtrics-xm", name: "Qualtrics XM", vendor: "Qualtrics", category: "Survey / VoC" },
-  { id: "medallia", name: "Medallia", vendor: "Medallia", category: "Survey / VoC" },
-  { id: "surveymonkey", name: "SurveyMonkey", vendor: "Momentive", category: "Survey / VoC" },
-  { id: "sprinklr", name: "Sprinklr", vendor: "Sprinklr", category: "Social / Engagement" },
-  { id: "hootsuite", name: "Hootsuite", vendor: "Hootsuite", category: "Social / Engagement" },
-  { id: "brandwatch", name: "Brandwatch", vendor: "Brandwatch", category: "Social / Engagement" },
-  { id: "intercom", name: "Intercom", vendor: "Intercom", category: "Messaging / Support" },
-  { id: "drift", name: "Drift", vendor: "Drift", category: "Messaging / Support" },
-  {
-    id: "whatsapp-business-platform",
-    name: "WhatsApp Business Platform",
-    vendor: "Meta",
-    category: "Messaging / Support",
-  },
-];

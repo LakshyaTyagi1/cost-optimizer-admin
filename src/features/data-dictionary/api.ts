@@ -78,10 +78,7 @@ type ApiTechStack = {
   createdAt?: string;
   description?: string;
   id?: string;
-  industryDomainId?: string;
-  industryId?: string;
   isActive?: boolean;
-  scope?: "common" | "industry-default" | "industry-domain";
   title?: string;
   updatedAt?: string;
 };
@@ -146,7 +143,6 @@ export type DataDictionaryCatalog = {
 
 export type DataDictionaryPayload = DataDictionaryCatalog & {
   processes: DictionaryProcess[];
-  techStack: TechStackTool[];
 };
 
 export type DataDictionaryPagination = {
@@ -177,7 +173,6 @@ export async function fetchDataDictionary(): Promise<DataDictionaryPayload> {
   return {
     ...dictionaryCatalog,
     processes: mappedProcesses,
-    techStack: [],
   };
 }
 
@@ -805,7 +800,6 @@ function mapTechStackTool(tool: ApiTechStack): TechStackTool | null {
     id,
     isActive: tool.isActive !== false,
     name,
-    scope: "common",
     vendor: toDisplayName(tool.company || "") || "Unassigned",
   };
 }

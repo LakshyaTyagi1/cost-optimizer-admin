@@ -439,10 +439,7 @@ export function DataDictionaryPage() {
         industryId: selectedIndustryId,
         name,
       });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
-        queryClient.invalidateQueries({ queryKey: techStackQueryKey }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey });
       setDomainIndustryId(selectedIndustryId);
       setMappingIndustryId(selectedIndustryId);
     } catch (error) {
@@ -660,10 +657,7 @@ export function DataDictionaryPage() {
 
       setDictionaryError("");
       await permanentlyDeleteDomainMutation.mutateAsync(domain);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
-        queryClient.invalidateQueries({ queryKey: techStackQueryKey }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey });
     } catch (error) {
       const message = getErrorMessage(error);
       throw new Error(message);
@@ -690,10 +684,7 @@ export function DataDictionaryPage() {
         industryId: selectedIndustryId,
         name: domain.name,
       });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
-        queryClient.invalidateQueries({ queryKey: techStackQueryKey }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey });
       setDomainIndustryId(selectedIndustryId);
       setMappingIndustryId(selectedIndustryId);
     } catch (error) {
@@ -879,10 +870,7 @@ export function DataDictionaryPage() {
         });
       }
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
-        queryClient.invalidateQueries({ queryKey: techStackQueryKey }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
       setToolForm(emptyToolForm);
       setIsToolFormOpen(false);
       showTechStackToast(
