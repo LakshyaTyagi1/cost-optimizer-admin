@@ -1,15 +1,19 @@
 "use client";
 
-import type {
-  CSSProperties,
-  KeyboardEvent,
-  ReactNode,
+import {
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   Building2,
   CalendarDays,
   Car,
   ChevronDown,
+  ChevronUp,
   Home,
   Landmark,
   LayoutGrid,
@@ -18,6 +22,7 @@ import {
   Search,
   Shield,
   ShoppingBag,
+  SlidersHorizontal,
   Stethoscope,
   Trash2,
   type LucideIcon,
@@ -45,7 +50,7 @@ const tableHeaderTextStyle: CSSProperties = {
 };
 
 const filterShellClassName =
-  "h-10 rounded-md border border-[#DCE8F8] bg-white text-sm font-semibold text-[#171717] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#BBD6FF]";
+  "h-10 rounded-md border border-[#DCE8F8] bg-white text-sm font-semibold text-[#171717] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#BBD6FF] focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/15";
 
 const industryIconStyles: Record<string, { icon: LucideIcon }> = {
   Automotive: { icon: Car },
@@ -129,72 +134,123 @@ export function AssessmentsTable({
   totalAssessments,
   visibleAssessmentCount,
 }: AssessmentsTableProps) {
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const advancedFilterCount = [
+    minimumScoreFilter.trim(),
+    fromDateFilter,
+    toDateFilter,
+  ].filter(Boolean).length;
+
+  function handleResetFilters() {
+    onResetFilters();
+    setShowAdvancedFilters(false);
+  }
+
   return (
     <section className="mt-6 flex min-h-0 flex-1 flex-col lg:mt-8 lg:overflow-hidden" aria-label="Assessments table">
-      <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1.25fr)_minmax(128px,0.8fr)_minmax(118px,0.72fr)_minmax(84px,0.48fr)_minmax(124px,0.68fr)_18px_minmax(124px,0.68fr)_max-content] mb-[13px]">
-        <SearchInput value={searchQuery} onChange={onSearchQueryChange} />
-        <FilterSelect
-          ariaLabel="Filter by industry"
-          value={industryFilter}
-          onChange={onIndustryFilterChange}
-          className="w-full"
-        >
-          <option value="all">All industries</option>
-          {industryOptions.map((industry) => (
-            <option key={industry} value={industry}>
-              {industry}
-            </option>
-          ))}
-        </FilterSelect>
-        <FilterSelect
-          ariaLabel="Filter by status"
-          value={statusFilter}
-          onChange={onStatusFilterChange}
-          className="w-full"
-        >
-          <option value="all">All statuses</option>
-          {statusOptions.map((status) => (
-            <option key={status} value={status}>
-              {status}
-            </option>
-          ))}
-        </FilterSelect>
-        <MetricFilterInput
-          value={minimumScoreFilter}
-          onChange={onMinimumScoreFilterChange}
-        />
-        <DateInput
-          ariaLabel="Updated from date"
-          value={fromDateFilter}
-          onChange={onFromDateFilterChange}
-        />
-        <span className="hidden h-10 items-center px-1 text-xs font-bold text-[#8E9AAB] xl:flex">
-          to
-        </span>
-        <DateInput
-          ariaLabel="Updated to date"
-          value={toDateFilter}
-          onChange={onToDateFilterChange}
-        />
-        <button
-          type="button"
-          onClick={onResetFilters}
-          disabled={!hasActiveFilters}
-          className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-md border border-[#DCE8F8] bg-white px-3 text-sm font-bold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:text-[#A1A1AA] disabled:opacity-60 sm:col-span-2 xl:col-span-1 xl:w-auto"
-          aria-label="Reset assessment filters"
-        >
-          <RotateCcw size={13} aria-hidden="true" />
-          Reset
-        </button>
+      <div className="mb-[13px] space-y-2">
+        <div className="grid grid-cols-1 items-center gap-2 min-[380px]:grid-cols-2 min-[900px]:grid-cols-[minmax(180px,1.2fr)_minmax(140px,0.8fr)_minmax(160px,1fr)_max-content] xl:grid-cols-[minmax(180px,1.2fr)_minmax(128px,0.8fr)_minmax(118px,0.72fr)_minmax(84px,0.48fr)_minmax(150px,0.72fr)_minmax(150px,0.72fr)_40px]">
+          <SearchInput
+            className="min-[380px]:col-span-2 min-[900px]:col-span-1"
+            value={searchQuery}
+            onChange={onSearchQueryChange}
+          />
+          <FilterSelect
+            ariaLabel="Filter by industry"
+            value={industryFilter}
+            onChange={onIndustryFilterChange}
+            className="w-full"
+          >
+            <option value="all">All industries</option>
+            {industryOptions.map((industry) => (
+              <option key={industry} value={industry}>
+                {industry}
+              </option>
+            ))}
+          </FilterSelect>
+          <FilterSelect
+            ariaLabel="Filter by status"
+            value={statusFilter}
+            onChange={onStatusFilterChange}
+            className="w-full"
+          >
+            <option value="all">All statuses</option>
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </FilterSelect>
+
+          <div className="grid grid-cols-[minmax(0,1fr)_40px] gap-2 min-[380px]:col-span-2 min-[900px]:col-span-1 xl:hidden">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters((current) => !current)}
+              className="inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-md border border-[#DCE8F8] bg-white px-3 text-xs font-semibold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#007AFF]/30 hover:text-[#007AFF]"
+              aria-controls="assessment-advanced-filters"
+              aria-expanded={showAdvancedFilters}
+            >
+              <SlidersHorizontal size={13} className="shrink-0" aria-hidden="true" />
+              <span className="truncate">More filters</span>
+              {advancedFilterCount ? (
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#EAF3FF] text-[10px] font-bold text-[#007AFF]">
+                  {advancedFilterCount}
+                </span>
+              ) : null}
+              {showAdvancedFilters ? (
+                <ChevronUp size={13} className="shrink-0" aria-hidden="true" />
+              ) : (
+                <ChevronDown size={13} className="shrink-0" aria-hidden="true" />
+              )}
+            </button>
+            <ResetFiltersButton
+              disabled={!hasActiveFilters}
+              onClick={handleResetFilters}
+            />
+          </div>
+
+          <div
+            id="assessment-advanced-filters"
+            className={`${showAdvancedFilters ? "grid" : "hidden"} order-5 grid-cols-1 gap-2 rounded-md border border-[#DCE8F8] bg-[#F8FBFF] p-2 min-[380px]:col-span-2 min-[380px]:grid-cols-2 md:grid-cols-3 min-[900px]:col-span-4 xl:contents`}
+          >
+            <MetricFilterInput
+              className="min-[380px]:col-span-2 md:col-span-1"
+              value={minimumScoreFilter}
+              onChange={onMinimumScoreFilterChange}
+            />
+            <DateInput
+              ariaLabel="Updated from date"
+              value={fromDateFilter}
+              onChange={onFromDateFilterChange}
+            />
+            <DateInput
+              ariaLabel="Updated to date"
+              value={toDateFilter}
+              onChange={onToDateFilterChange}
+            />
+          </div>
+
+          <div className="hidden xl:block">
+            <ResetFiltersButton
+              disabled={!hasActiveFilters}
+              onClick={handleResetFilters}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-black/[0.08] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+        <TabletSortToolbar
+          direction={sortDirection}
+          onSort={onSort}
+          sortKey={sortKey}
+        />
         <div className="flex-1 overflow-auto">
-          <div className="space-y-2 p-3 md:hidden">
+          <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 lg:hidden">
             {isLoading ? <AssessmentMobileCardsSkeleton /> : null}
 
             {!isLoading && pagedAssessments.length === 0 ? (
-              <div className="rounded-md border border-black/[0.08] bg-white px-4 py-8 text-center text-sm font-semibold text-[#86868B]">
+              <div className="rounded-md border border-black/[0.08] bg-white px-4 py-8 text-center text-sm font-semibold text-[#86868B] sm:col-span-2">
                 {errorMessage || "No assessments found."}
               </div>
             ) : null}
@@ -214,16 +270,16 @@ export function AssessmentsTable({
               : null}
           </div>
 
-          <table className="hidden w-full min-w-[1170px] table-fixed border-collapse md:table">
+          <table className="hidden w-full min-w-[700px] table-fixed border-collapse lg:table min-[1460px]:min-w-[1170px]">
             <colgroup>
-              <col className="w-[294px]" />
-              <col className="w-[139px]" />
-              <col className="w-[105px]" />
-              <col className="w-[130px]" />
-              <col className="w-[130px]" />
-              <col className="w-[115px]" />
-              <col className="w-[210px]" />
-              <col className="w-[47px]" />
+              <col className="w-[32%] min-[1460px]:w-[294px]" />
+              <col className="hidden min-[1460px]:table-column min-[1460px]:w-[139px]" />
+              <col className="w-[10%] min-[1460px]:w-[105px]" />
+              <col className="w-[14%] min-[1460px]:w-[130px]" />
+              <col className="w-[14%] min-[1460px]:w-[130px]" />
+              <col className="hidden min-[1460px]:table-column min-[1460px]:w-[115px]" />
+              <col className="w-[23%] min-[1460px]:w-[210px]" />
+              <col className="w-[7%] min-[1460px]:w-[47px]" />
             </colgroup>
             <thead className="sticky top-0 z-10">
               <tr className="h-9 border-b border-black/[0.08] bg-[#FAFAFA] text-left">
@@ -233,7 +289,7 @@ export function AssessmentsTable({
                   label="Company"
                   onSort={() => onSort("company")}
                 />
-                <TableHeader label="Industry" />
+                <TableHeader label="Industry" className="hidden min-[1460px]:table-cell" />
                 <SortableHeader
                   active={sortKey === "score"}
                   direction={sortDirection}
@@ -252,9 +308,9 @@ export function AssessmentsTable({
                   label="Savings"
                   onSort={() => onSort("savings")}
                 />
-                <TableHeader label="Last Updated" />
+                <TableHeader label="Last Updated" className="hidden min-[1460px]:table-cell" />
                 <TableHeader label="Status" />
-                <th className="w-12 px-4 align-middle" aria-label="Actions" />
+                <th className="w-12 px-1 align-middle min-[1460px]:px-4" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
@@ -288,8 +344,8 @@ export function AssessmentsTable({
           </table>
         </div>
 
-        <div className="flex min-h-[44px] shrink-0 flex-wrap items-center justify-between gap-3 border-t border-black/[0.08] px-5 py-2 text-[11px] font-normal leading-[16.5px] tracking-[0.06px] text-[#86868B]">
-          <span>
+        <div className="flex min-h-[44px] shrink-0 flex-col items-center justify-center gap-2 border-t border-black/[0.08] px-3 py-3 text-center text-[11px] leading-[16.5px] font-normal tracking-[0.06px] text-[#86868B] sm:flex-row sm:flex-wrap sm:justify-between sm:gap-3 sm:px-5 sm:py-2 sm:text-left">
+          <span className="min-w-0">
             {visibleAssessmentCount
               ? `Showing ${firstRowIndex}-${lastRowIndex} of ${visibleAssessmentCount} users`
               : "Showing 0 of 0"}
@@ -329,7 +385,7 @@ function AssessmentRow({
 
   return (
     <tr
-      className={`h-[58px] cursor-pointer border-b border-black/[0.05] transition focus:outline-none last:border-b-0 ${isHighlighted
+      className={`h-[68px] cursor-pointer border-b border-black/[0.05] transition focus:outline-none last:border-b-0 min-[1460px]:h-[58px] ${isHighlighted
           ? "assessment-highlight-flash hover:bg-[#FAFAFA] focus:bg-[#FAFAFA]"
           : "hover:bg-[#FAFAFA] focus:bg-[#FAFAFA]"
         }`}
@@ -337,15 +393,21 @@ function AssessmentRow({
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      <td className="py-3 pr-6 pl-[60px]">
+      <td className="py-3 pr-4 pl-5 min-[1460px]:pr-6 min-[1460px]:pl-[60px]">
         <p className="max-w-[280px] truncate text-[13px] font-semibold leading-[19.5px] tracking-[-0.08px] text-[#000000]">
           {assessment.company}
         </p>
         <p className="max-w-[280px] truncate text-[11px] font-normal leading-[16.5px] tracking-[0.06px] text-[#86868B]">
           {assessment.contact}
         </p>
+        <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] leading-[15px] font-medium text-[#86868B] min-[1460px]:hidden">
+          <IndustryIcon industry={assessment.industry} />
+          <span className="truncate">{assessment.industry}</span>
+          <span aria-hidden="true">•</span>
+          <span className="shrink-0">{formatDate(assessment.updatedAt)}</span>
+        </div>
       </td>
-      <td className="px-0 py-3">
+      <td className="hidden px-0 py-3 min-[1460px]:table-cell">
         <div className="flex max-w-[160px] items-center gap-2 text-xs font-normal leading-[18px] text-[#555555]">
           <IndustryIcon industry={assessment.industry} />
           <span className="truncate">{assessment.industry}</span>
@@ -360,13 +422,15 @@ function AssessmentRow({
       <td className="px-0 py-3 text-xs font-medium leading-[18px] text-[#10B981]">
         <MetricValue value={assessment.savings} mutedValue="--" />
       </td>
-      <td className="px-0 py-3 text-[11px] font-semibold text-[#555555]">
+      <td className="hidden px-0 py-3 text-[11px] font-semibold text-[#555555] min-[1460px]:table-cell">
         <MetricValue value={formatDate(assessment.updatedAt)} mutedValue="--" />
       </td>
       <td className="px-0 py-3">
-        <AssessmentStatusPill label={assessment.status} tone={statusTone} />
+        <span className="whitespace-nowrap">
+          <AssessmentStatusPill label={assessment.status} tone={statusTone} />
+        </span>
       </td>
-      <td className="px-4 py-3 text-right">
+      <td className="px-1 py-3 text-right min-[1460px]:px-4">
         <button
           type="button"
           disabled
@@ -398,32 +462,34 @@ function AssessmentMobileCard({
     <button
       type="button"
       onClick={onOpen}
-      className={`w-full rounded-md border border-black/[0.08] bg-white p-4 text-left shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition hover:border-[#007AFF]/25 hover:bg-[#FAFCFF] ${isHighlighted ? "assessment-highlight-flash" : ""
+      className={`w-full rounded-md border border-black/[0.08] bg-white p-3 text-left shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition hover:border-[#007AFF]/25 hover:bg-[#FAFCFF] min-[380px]:p-4 ${isHighlighted ? "assessment-highlight-flash" : ""
         }`}
       aria-label={`Open ${assessment.company}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="break-words text-sm leading-5 font-bold text-[#171717]">
-            {assessment.company}
-          </p>
-          <p className="mt-1 break-words text-xs leading-4 font-semibold text-[#8E9AAB]">
-            {assessment.contact}
-          </p>
-        </div>
-        <AssessmentStatusPill label={assessment.status} tone={statusTone} />
+      <div className="min-w-0">
+        <p className="break-words text-sm leading-5 font-bold text-[#171717]">
+          {assessment.company}
+        </p>
+        <p className="mt-1 break-words text-xs leading-4 font-semibold text-[#8E9AAB]">
+          {assessment.contact}
+        </p>
       </div>
 
-      <div className="mt-3 flex min-w-0 items-center gap-2 text-xs font-semibold text-[#555555]">
-        <IndustryIcon industry={assessment.industry} />
-        <span className="min-w-0 truncate">{assessment.industry}</span>
+      <div className="mt-3 flex min-w-0 items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-[#555555]">
+          <IndustryIcon industry={assessment.industry} />
+          <span className="min-w-0 truncate">{assessment.industry}</span>
+        </span>
+        <span className="shrink-0 whitespace-nowrap">
+          <AssessmentStatusPill label={assessment.status} tone={statusTone} />
+        </span>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <MobileMetric label="DI Score" tone="blue" value={assessment.score} />
-        <MobileMetric label="Total Cost" value={totalCostValue} />
-        <MobileMetric label="Savings" tone="green" value={assessment.savings} />
-        <MobileMetric label="Submissions" value={String(assessment.assessments.length)} />
+      <div className="mt-4 grid grid-cols-2 gap-2 min-[380px]:gap-3">
+        <MobileMetric compact label="DI Score" tone="blue" value={assessment.score} />
+        <MobileMetric compact label="Total Cost" value={totalCostValue} />
+        <MobileMetric compact label="Savings" tone="green" value={assessment.savings} />
+        <MobileMetric compact label="Submissions" value={String(assessment.assessments.length)} />
       </div>
     </button>
   );
@@ -431,15 +497,15 @@ function AssessmentMobileCard({
 
 function AssessmentMobileCardsSkeleton() {
   return (
-    <div className="space-y-2" aria-label="Loading assessments">
+    <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-2" aria-label="Loading assessments">
       {Array.from({ length: 4 }).map((_, index) => (
         <div
           key={index}
-          className="rounded-md border border-black/[0.08] bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)]"
+          className="rounded-md border border-black/[0.08] bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.05)] min-[380px]:p-4"
         >
           <div className="h-4 w-3/4 animate-pulse rounded-full bg-black/[0.06]" />
           <div className="mt-2 h-3 w-1/2 animate-pulse rounded-full bg-black/[0.06]" />
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="mt-4 grid grid-cols-2 gap-2 min-[380px]:gap-3">
             {Array.from({ length: 4 }).map((__, itemIndex) => (
               <div key={itemIndex} className="h-12 animate-pulse rounded-md bg-black/[0.04]" />
             ))}
@@ -450,15 +516,71 @@ function AssessmentMobileCardsSkeleton() {
   );
 }
 
+function TabletSortToolbar({
+  direction,
+  onSort,
+  sortKey,
+}: {
+  direction: SortDirection;
+  onSort: (sortKey: SortKey) => void;
+  sortKey: SortKey;
+}) {
+  const nextDirectionLabel = direction === "asc" ? "descending" : "ascending";
+
+  return (
+    <div className="hidden min-h-12 shrink-0 items-center justify-between gap-3 border-b border-black/[0.08] bg-[#FAFAFA] px-3 py-2 md:flex lg:hidden">
+      <span className="text-[10px] leading-[15px] font-semibold tracking-[0.12em] text-[#86868B] uppercase">
+        Sort assessments
+      </span>
+      <div className="flex min-w-0 items-center gap-2">
+        <label className="relative block min-w-0">
+          <span className="sr-only">Sort assessments by</span>
+          <select
+            aria-label="Sort assessments by"
+            value={sortKey}
+            onChange={(event) => onSort(event.target.value as SortKey)}
+            className="h-8 min-w-[150px] cursor-pointer appearance-none rounded-md border border-[#DCE8F8] bg-white pr-8 pl-3 text-xs font-semibold text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
+          >
+            <option value="company">Company</option>
+            <option value="score">DI score</option>
+            <option value="cost">Total cost</option>
+            <option value="savings">Savings</option>
+          </select>
+          <ChevronDown
+            size={13}
+            className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[#007AFF]"
+            aria-hidden="true"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => onSort(sortKey)}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#DCE8F8] bg-white px-2.5 text-xs font-semibold text-[#555555] transition hover:border-[#007AFF]/30 hover:text-[#007AFF]"
+          aria-label={`Sort ${nextDirectionLabel}`}
+          title={`Sort ${nextDirectionLabel}`}
+        >
+          {direction === "asc" ? (
+            <ArrowUp size={13} aria-hidden="true" />
+          ) : (
+            <ArrowDown size={13} aria-hidden="true" />
+          )}
+          <span>{direction === "asc" ? "Ascending" : "Descending"}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AssessmentRowsSkeleton() {
   return (
     <>
       {Array.from({ length: 10 }).map((_, index) => (
-        <tr key={index} className="h-[58px] border-b border-black/[0.05]">
-          <td className="py-3 pr-6 pl-[60px]">
+        <tr key={index} className="h-[68px] border-b border-black/[0.05] min-[1460px]:h-[58px]">
+          <td className="py-3 pr-4 pl-5 min-[1460px]:pr-6 min-[1460px]:pl-[60px]">
             <div className="h-4 max-w-[280px] animate-pulse rounded-full bg-black/[0.06]" />
+            <div className="mt-2 h-2.5 max-w-[170px] animate-pulse rounded-full bg-black/[0.05] min-[1460px]:hidden" />
           </td>
-          <td className="px-0 py-3">
+          <td className="hidden px-0 py-3 min-[1460px]:table-cell">
             <div className="h-4 max-w-[150px] animate-pulse rounded-full bg-black/[0.06]" />
           </td>
           <td className="px-0 py-3">
@@ -470,13 +592,13 @@ function AssessmentRowsSkeleton() {
           <td className="px-0 py-3">
             <div className="h-4 max-w-[104px] animate-pulse rounded-full bg-black/[0.06]" />
           </td>
-          <td className="px-0 py-3">
+          <td className="hidden px-0 py-3 min-[1460px]:table-cell">
             <div className="h-4 max-w-[104px] animate-pulse rounded-full bg-black/[0.06]" />
           </td>
           <td className="px-0 py-3">
             <div className="h-4 max-w-[180px] animate-pulse rounded-full bg-black/[0.06]" />
           </td>
-          <td className="px-4 py-3">
+          <td className="px-1 py-3 min-[1460px]:px-4">
             <div className="ml-auto h-4 w-3 animate-pulse rounded-full bg-black/[0.04]" />
           </td>
         </tr>
@@ -486,21 +608,23 @@ function AssessmentRowsSkeleton() {
 }
 
 function SearchInput({
+  className = "",
   onChange,
   value,
 }: {
+  className?: string;
   onChange: (value: string) => void;
   value: string;
 }) {
   return (
-    <label className={`flex min-w-0 items-center gap-2 px-3 ${filterShellClassName}`}>
+    <label className={`flex min-w-0 items-center gap-2 px-3 ${filterShellClassName} ${className}`}>
       <Search size={13} className="text-[#A1A1AA]" aria-hidden="true" />
       <input
         aria-label="Search company, contact, or region"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="min-w-0 flex-1 bg-transparent text-[13px] leading-[19.5px] font-normal tracking-[-0.08px] text-[#171717] outline-none placeholder:text-[#17171780] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
-        placeholder="Search company, contact, region..."
+        placeholder="Search assessments"
         type="search"
       />
     </label>
@@ -540,14 +664,16 @@ function FilterSelect({
 }
 
 function MetricFilterInput({
+  className = "",
   onChange,
   value,
 }: {
+  className?: string;
   onChange: (value: string) => void;
   value: string;
 }) {
   return (
-    <label className={`flex min-w-0 items-center gap-2 px-3 ${filterShellClassName}`}>
+    <label className={`flex min-w-0 items-center gap-2 px-3 ${filterShellClassName} ${className}`}>
       <Percent size={13} className="text-[#007AFF]" aria-hidden="true" />
       <input
         aria-label="Minimum DI score"
@@ -577,10 +703,31 @@ function DateInput({
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 cursor-pointer bg-transparent text-sm font-semibold text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
+        className="min-w-0 flex-1 cursor-pointer bg-transparent text-[13px] leading-[19.5px] font-semibold tracking-[-0.08px] text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
         type="date"
       />
     </label>
+  );
+}
+
+function ResetFiltersButton({
+  disabled,
+  onClick,
+}: {
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex size-10 items-center justify-center rounded-md border border-[#DCE8F8] bg-white text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:text-[#A1A1AA] disabled:opacity-60"
+      aria-label="Reset assessment filters"
+      title="Reset filters"
+    >
+      <RotateCcw size={14} aria-hidden="true" />
+    </button>
   );
 }
 
@@ -595,7 +742,10 @@ function SortableHeader({
   label: string;
   onSort: () => void;
 }) {
-  const headerPadding = label === "Company" ? "py-0 pr-0 pl-[60px]" : "px-0 py-0";
+  const headerPadding =
+    label === "Company"
+      ? "py-0 pr-0 pl-5 min-[1460px]:pl-[60px]"
+      : "px-0 py-0";
 
   return (
     <th className={`${headerPadding} align-middle`}>
@@ -612,9 +762,15 @@ function SortableHeader({
   );
 }
 
-function TableHeader({ label }: { label: string }) {
+function TableHeader({
+  className = "",
+  label,
+}: {
+  className?: string;
+  label: string;
+}) {
   return (
-    <th className="px-0 py-0 align-middle">
+    <th className={`px-0 py-0 align-middle ${className}`}>
       <span
         className={`inline-flex h-9 items-center whitespace-nowrap ${tableHeaderTextClass}`}
         style={tableHeaderTextStyle}
@@ -665,10 +821,44 @@ function PaginationControls({
   page: number;
   pageCount: number;
 }) {
-  const pages = getVisiblePages(page, pageCount);
+  const mobilePages = getVisiblePages(page, pageCount, 3);
+  const largerPages = getVisiblePages(page, pageCount, 5);
 
   return (
-    <div className="flex items-center gap-1">
+    <>
+      <PaginationButtonSet
+        className="flex sm:hidden"
+        onPageChange={onPageChange}
+        page={page}
+        pageCount={pageCount}
+        pages={mobilePages}
+      />
+      <PaginationButtonSet
+        className="hidden sm:flex"
+        onPageChange={onPageChange}
+        page={page}
+        pageCount={pageCount}
+        pages={largerPages}
+      />
+    </>
+  );
+}
+
+function PaginationButtonSet({
+  className,
+  onPageChange,
+  page,
+  pageCount,
+  pages,
+}: {
+  className: string;
+  onPageChange: (page: number) => void;
+  page: number;
+  pageCount: number;
+  pages: number[];
+}) {
+  return (
+    <div className={`${className} items-center gap-1`}>
       <button
         type="button"
         onClick={() => onPageChange(Math.max(1, page - 1))}
@@ -683,6 +873,8 @@ function PaginationControls({
           key={item}
           type="button"
           onClick={() => onPageChange(item)}
+          aria-current={item === page ? "page" : undefined}
+          aria-label={`Page ${item}${item === page ? ", current page" : ""}`}
           className={`flex size-7 items-center justify-center rounded-md border text-xs font-bold ${item === page
               ? "border-[#007AFF] bg-[#007AFF] text-white"
               : "border-black/[0.08] bg-white text-[#555555]"
@@ -704,9 +896,13 @@ function PaginationControls({
   );
 }
 
-function getVisiblePages(page: number, pageCount: number) {
-  const start = Math.max(1, Math.min(page - 2, pageCount - 4));
-  const end = Math.min(pageCount, start + 4);
+function getVisiblePages(page: number, pageCount: number, maximumVisiblePages: number) {
+  const pageOffset = Math.floor(maximumVisiblePages / 2);
+  const start = Math.max(
+    1,
+    Math.min(page - pageOffset, pageCount - maximumVisiblePages + 1),
+  );
+  const end = Math.min(pageCount, start + maximumVisiblePages - 1);
 
   return Array.from({ length: end - start + 1 }, (_, index) => start + index);
 }

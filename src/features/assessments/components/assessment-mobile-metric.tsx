@@ -1,4 +1,5 @@
 type AssessmentMobileMetricProps = {
+  compact?: boolean;
   label: string;
   mutedValue?: string;
   tone?: "blue" | "default" | "green";
@@ -6,6 +7,7 @@ type AssessmentMobileMetricProps = {
 };
 
 export function AssessmentMobileMetric({
+  compact = false,
   label,
   mutedValue = "--",
   tone = "default",
@@ -17,13 +19,22 @@ export function AssessmentMobileMetric({
       : tone === "green"
         ? "text-[#10B981]"
         : "text-[#171717]";
+  const shellClass = compact
+    ? "px-2 py-2 min-[380px]:px-3"
+    : "px-3 py-2";
+  const labelClass = compact
+    ? "text-[8px] min-[380px]:text-[9px]"
+    : "text-[9px]";
+  const valueClass = compact
+    ? "break-words text-[10px] leading-4 min-[380px]:text-xs"
+    : "truncate text-xs";
 
   return (
-    <div className="min-w-0 rounded-md bg-[#F8FAFC] px-3 py-2">
-      <p className="text-[9px] font-bold tracking-[0.12em] text-[#8E9AAB] uppercase">
+    <div className={`min-w-0 rounded-md bg-[#F8FAFC] ${shellClass}`}>
+      <p className={`${labelClass} font-bold tracking-[0.12em] text-[#8E9AAB] uppercase`}>
         {label}
       </p>
-      <p className={`mt-1 truncate text-xs font-bold ${toneClass}`}>
+      <p className={`mt-1 font-bold ${toneClass} ${valueClass}`}>
         <MetricValue value={value} mutedValue={mutedValue} />
       </p>
     </div>
