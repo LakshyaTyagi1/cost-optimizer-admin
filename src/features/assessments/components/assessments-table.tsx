@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  useEffect,
+  useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent,
@@ -50,7 +52,7 @@ const tableHeaderTextStyle: CSSProperties = {
 };
 
 const filterShellClassName =
-  "h-10 rounded-md border border-[#DCE8F8] bg-white text-sm font-semibold text-[#171717] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#BBD6FF] focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/15";
+  "h-11 rounded-md border border-[#DCE8F8] bg-white text-sm font-semibold text-[#171717] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#BBD6FF] focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/15 sm:h-10";
 
 const industryIconStyles: Record<string, { icon: LucideIcon }> = {
   Automotive: { icon: Car },
@@ -135,11 +137,53 @@ export function AssessmentsTable({
   visibleAssessmentCount,
 }: AssessmentsTableProps) {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const advancedFilterCount = [
+  const advancedFiltersRef = useRef<HTMLDivElement>(null);
+  const moreFiltersButtonRef = useRef<HTMLButtonElement>(null);
+  const hiddenFilterCount = [
+    industryFilter !== "all" ? industryFilter : "",
+    statusFilter !== "all" ? statusFilter : "",
     minimumScoreFilter.trim(),
     fromDateFilter,
     toDateFilter,
   ].filter(Boolean).length;
+
+  useEffect(() => {
+    if (!showAdvancedFilters) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!(event.target instanceof Node)) {
+        return;
+      }
+
+      if (
+        !advancedFiltersRef.current?.contains(event.target) &&
+        !moreFiltersButtonRef.current?.contains(event.target)
+      ) {
+        setShowAdvancedFilters(false);
+      }
+    }
+
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      setShowAdvancedFilters(false);
+      if (moreFiltersButtonRef.current?.getClientRects().length) {
+        moreFiltersButtonRef.current.focus();
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showAdvancedFilters]);
 
   function handleResetFilters() {
     onResetFilters();
@@ -147,54 +191,30 @@ export function AssessmentsTable({
   }
 
   return (
-    <section className="mt-6 flex min-h-0 flex-1 flex-col lg:mt-8 lg:overflow-hidden" aria-label="Assessments table">
-      <div className="mb-[13px] space-y-2">
-        <div className="grid grid-cols-1 items-center gap-2 min-[380px]:grid-cols-2 min-[900px]:grid-cols-[minmax(180px,1.2fr)_minmax(140px,0.8fr)_minmax(160px,1fr)_max-content] xl:grid-cols-[minmax(180px,1.2fr)_minmax(128px,0.8fr)_minmax(118px,0.72fr)_minmax(84px,0.48fr)_minmax(150px,0.72fr)_minmax(150px,0.72fr)_40px]">
+    <section className="mt-4 max-sm:flex max-sm:flex-1 max-sm:flex-col sm:mt-6 lg:mt-8 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden" aria-label="Assessments table">
+      <div className="@container/assessment-filters mb-3 space-y-2 sm:mb-[13px]">
+        <div className="relative grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(190px,0.55fr)] @min-[980px]/assessment-filters:grid-cols-[minmax(170px,1.2fr)_minmax(110px,0.75fr)_minmax(110px,0.75fr)_minmax(78px,0.45fr)_minmax(132px,0.75fr)_minmax(132px,0.75fr)_40px]">
           <SearchInput
-            className="min-[380px]:col-span-2 min-[900px]:col-span-1"
+            className="@min-[980px]/assessment-filters:col-span-1"
             value={searchQuery}
             onChange={onSearchQueryChange}
           />
-          <FilterSelect
-            ariaLabel="Filter by industry"
-            value={industryFilter}
-            onChange={onIndustryFilterChange}
-            className="w-full"
-          >
-            <option value="all">All industries</option>
-            {industryOptions.map((industry) => (
-              <option key={industry} value={industry}>
-                {industry}
-              </option>
-            ))}
-          </FilterSelect>
-          <FilterSelect
-            ariaLabel="Filter by status"
-            value={statusFilter}
-            onChange={onStatusFilterChange}
-            className="w-full"
-          >
-            <option value="all">All statuses</option>
-            {statusOptions.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </FilterSelect>
 
-          <div className="grid grid-cols-[minmax(0,1fr)_40px] gap-2 min-[380px]:col-span-2 min-[900px]:col-span-1 xl:hidden">
+          <div className="grid grid-cols-[minmax(0,1fr)_40px] gap-2 @min-[980px]/assessment-filters:hidden">
             <button
+              ref={moreFiltersButtonRef}
               type="button"
               onClick={() => setShowAdvancedFilters((current) => !current)}
-              className="inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-md border border-[#DCE8F8] bg-white px-3 text-xs font-semibold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#007AFF]/30 hover:text-[#007AFF]"
+              className="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-md border border-[#DCE8F8] bg-white px-3 text-sm font-semibold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] sm:h-10 sm:text-xs"
               aria-controls="assessment-advanced-filters"
               aria-expanded={showAdvancedFilters}
             >
               <SlidersHorizontal size={13} className="shrink-0" aria-hidden="true" />
               <span className="truncate">More filters</span>
-              {advancedFilterCount ? (
+              {hiddenFilterCount ? (
                 <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#EAF3FF] text-[10px] font-bold text-[#007AFF]">
-                  {advancedFilterCount}
+                  {hiddenFilterCount}
+                  <span className="sr-only"> active filters</span>
                 </span>
               ) : null}
               {showAdvancedFilters ? (
@@ -210,27 +230,56 @@ export function AssessmentsTable({
           </div>
 
           <div
+            ref={advancedFiltersRef}
             id="assessment-advanced-filters"
-            className={`${showAdvancedFilters ? "grid" : "hidden"} order-5 grid-cols-1 gap-2 rounded-md border border-[#DCE8F8] bg-[#F8FBFF] p-2 min-[380px]:col-span-2 min-[380px]:grid-cols-2 md:grid-cols-3 min-[900px]:col-span-4 xl:contents`}
+            className={`${showAdvancedFilters ? "grid" : "hidden"} absolute top-[calc(100%+0.5rem)] right-0 z-20 max-h-[min(60vh,24rem)] w-full max-w-[620px] grid-cols-1 gap-2 overflow-y-auto overscroll-contain rounded-md border border-[#DCE8F8] bg-white p-3 shadow-[0_16px_36px_rgba(15,23,42,0.14)] min-[380px]:grid-cols-2 @min-[640px]/assessment-filters:grid-cols-3 @min-[980px]/assessment-filters:static @min-[980px]/assessment-filters:contents`}
           >
+            <FilterSelect
+              ariaLabel="Filter by industry"
+              value={industryFilter}
+              onChange={onIndustryFilterChange}
+              className="w-full"
+            >
+              <option value="all">All industries</option>
+              {industryOptions.map((industry) => (
+                <option key={industry} value={industry}>
+                  {industry}
+                </option>
+              ))}
+            </FilterSelect>
+            <FilterSelect
+              ariaLabel="Filter by status"
+              value={statusFilter}
+              onChange={onStatusFilterChange}
+              className="w-full"
+            >
+              <option value="all">All statuses</option>
+              {statusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </FilterSelect>
             <MetricFilterInput
-              className="min-[380px]:col-span-2 md:col-span-1"
+              className="min-[380px]:col-span-2 @min-[640px]/assessment-filters:col-span-1"
               value={minimumScoreFilter}
               onChange={onMinimumScoreFilterChange}
             />
             <DateInput
               ariaLabel="Updated from date"
+              className="min-[380px]:col-span-2 @min-[640px]/assessment-filters:col-span-1"
               value={fromDateFilter}
               onChange={onFromDateFilterChange}
             />
             <DateInput
               ariaLabel="Updated to date"
+              className="min-[380px]:col-span-2 @min-[640px]/assessment-filters:col-span-1"
               value={toDateFilter}
               onChange={onToDateFilterChange}
             />
           </div>
 
-          <div className="hidden xl:block">
+          <div className="hidden @min-[980px]/assessment-filters:block">
             <ResetFiltersButton
               disabled={!hasActiveFilters}
               onClick={handleResetFilters}
@@ -239,18 +288,18 @@ export function AssessmentsTable({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-black/[0.08] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+      <div className="flex flex-1 flex-col overflow-visible bg-transparent sm:min-h-0 sm:overflow-hidden sm:rounded-md sm:border sm:border-black/[0.08] sm:bg-white sm:shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
         <TabletSortToolbar
           direction={sortDirection}
           onSort={onSort}
           sortKey={sortKey}
         />
-        <div className="flex-1 overflow-auto">
-          <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 lg:hidden">
+        <div className="pb-3 sm:pb-0 lg:flex-1 lg:overflow-auto">
+          <div className="grid grid-cols-1 gap-2.5 p-0 sm:gap-3 sm:p-3 lg:hidden">
             {isLoading ? <AssessmentMobileCardsSkeleton /> : null}
 
             {!isLoading && pagedAssessments.length === 0 ? (
-              <div className="rounded-md border border-black/[0.08] bg-white px-4 py-8 text-center text-sm font-semibold text-[#86868B] sm:col-span-2">
+              <div className="rounded-md border border-black/[0.08] bg-white px-4 py-8 text-center text-sm font-semibold text-[#86868B]">
                 {errorMessage || "No assessments found."}
               </div>
             ) : null}
@@ -344,7 +393,7 @@ export function AssessmentsTable({
           </table>
         </div>
 
-        <div className="flex min-h-[44px] shrink-0 flex-col items-center justify-center gap-2 border-t border-black/[0.08] px-3 py-3 text-center text-[11px] leading-[16.5px] font-normal tracking-[0.06px] text-[#86868B] sm:flex-row sm:flex-wrap sm:justify-between sm:gap-3 sm:px-5 sm:py-2 sm:text-left">
+        <div className="mt-auto flex min-h-[44px] shrink-0 flex-col items-center justify-center gap-2 border-t border-black/[0.08] px-3 py-3 text-center text-xs leading-[18px] font-normal tracking-[0.06px] text-[#86868B] sm:mt-0 sm:flex-row sm:flex-wrap sm:justify-between sm:gap-3 sm:px-5 sm:py-2 sm:text-left sm:text-[11px] sm:leading-[16.5px]">
           <span className="min-w-0">
             {visibleAssessmentCount
               ? `Showing ${firstRowIndex}-${lastRowIndex} of ${visibleAssessmentCount} users`
@@ -462,34 +511,46 @@ function AssessmentMobileCard({
     <button
       type="button"
       onClick={onOpen}
-      className={`w-full rounded-md border border-black/[0.08] bg-white p-3 text-left shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition hover:border-[#007AFF]/25 hover:bg-[#FAFCFF] min-[380px]:p-4 ${isHighlighted ? "assessment-highlight-flash" : ""
+      className={`w-full rounded-lg border border-[#E1E7EF] bg-white p-3 text-left shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition hover:border-[#007AFF]/25 hover:bg-[#FAFCFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/25 sm:rounded-md sm:border-black/[0.08] sm:p-4 sm:shadow-[0_1px_3px_rgba(15,23,42,0.05)] ${isHighlighted ? "assessment-highlight-flash" : ""
         }`}
       aria-label={`Open ${assessment.company}`}
     >
-      <div className="min-w-0">
-        <p className="break-words text-sm leading-5 font-bold text-[#171717]">
-          {assessment.company}
-        </p>
-        <p className="mt-1 break-words text-xs leading-4 font-semibold text-[#8E9AAB]">
-          {assessment.contact}
-        </p>
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_7rem] items-start gap-x-2 gap-y-0 min-[360px]:grid-cols-[minmax(0,1fr)_9rem] sm:block">
+        <div className="contents sm:block">
+          <p className="col-start-1 row-start-1 min-w-0 self-start break-words text-sm leading-5 font-semibold text-[#171717] sm:font-bold">
+            {assessment.company}
+          </p>
+          <p className="col-start-1 row-start-2 min-w-0 self-start break-words text-xs leading-4 font-medium text-[#8E9AAB] sm:mt-1 sm:font-semibold">
+            {assessment.contact}
+          </p>
+        </div>
+
+        <div className="contents sm:hidden">
+          <span className="col-start-2 row-start-1 flex w-full min-w-0 max-w-full shrink-0 self-start justify-end whitespace-normal [&>span]:max-w-full [&>span]:justify-end [&>span]:gap-1 [&>span]:px-2 [&>span]:py-1 [&>span]:text-right [&>span]:text-[10px] [&>span]:leading-[14px] [&>span]:whitespace-normal [&>span>span]:shrink-0">
+            <AssessmentStatusPill label={assessment.status} tone={statusTone} />
+          </span>
+          <span className="col-start-2 row-start-2 flex w-full min-w-0 self-start items-center justify-end gap-1.5 text-xs leading-4 font-medium text-[#555555]">
+            <IndustryIcon industry={assessment.industry} />
+            <span className="min-w-0 truncate text-right">{assessment.industry}</span>
+          </span>
+        </div>
+
+        <div className="mt-3 hidden min-w-0 items-center justify-between gap-2 sm:flex">
+          <span className="flex min-w-0 items-center gap-2 text-xs leading-[18px] font-semibold text-[#555555]">
+            <IndustryIcon industry={assessment.industry} />
+            <span className="min-w-0 truncate">{assessment.industry}</span>
+          </span>
+          <span className="max-w-full shrink-0 whitespace-nowrap">
+            <AssessmentStatusPill label={assessment.status} tone={statusTone} />
+          </span>
+        </div>
       </div>
 
-      <div className="mt-3 flex min-w-0 items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-[#555555]">
-          <IndustryIcon industry={assessment.industry} />
-          <span className="min-w-0 truncate">{assessment.industry}</span>
-        </span>
-        <span className="shrink-0 whitespace-nowrap">
-          <AssessmentStatusPill label={assessment.status} tone={statusTone} />
-        </span>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-2 min-[380px]:gap-3">
-        <MobileMetric compact label="DI Score" tone="blue" value={assessment.score} />
-        <MobileMetric compact label="Total Cost" value={totalCostValue} />
-        <MobileMetric compact label="Savings" tone="green" value={assessment.savings} />
-        <MobileMetric compact label="Submissions" value={String(assessment.assessments.length)} />
+      <div className="mt-3 flex items-stretch gap-1.5 sm:mt-4 sm:grid sm:grid-cols-4 sm:gap-3">
+        <MobileMetric className="flex-[0.75_1_0%]" compact label="DI Score" tone="blue" value={assessment.score} />
+        <MobileMetric className="flex-[1.125_1_0%]" compact label="Total Cost" value={totalCostValue} />
+        <MobileMetric className="flex-[1.125_1_0%]" compact label="Savings" tone="green" value={assessment.savings} />
+        <MobileMetric className="hidden sm:block" compact label="Submissions" value={String(assessment.assessments.length)} />
       </div>
     </button>
   );
@@ -497,17 +558,25 @@ function AssessmentMobileCard({
 
 function AssessmentMobileCardsSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-2" aria-label="Loading assessments">
+    <div className="grid grid-cols-1 gap-2.5 sm:gap-3" aria-label="Loading assessments">
       {Array.from({ length: 4 }).map((_, index) => (
         <div
           key={index}
-          className="rounded-md border border-black/[0.08] bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.05)] min-[380px]:p-4"
+          className="rounded-lg border border-[#E1E7EF] bg-white p-3 shadow-[0_2px_8px_rgba(15,23,42,0.06)] sm:rounded-md sm:border-black/[0.08] sm:p-4 sm:shadow-[0_1px_3px_rgba(15,23,42,0.05)]"
         >
           <div className="h-4 w-3/4 animate-pulse rounded-full bg-black/[0.06]" />
           <div className="mt-2 h-3 w-1/2 animate-pulse rounded-full bg-black/[0.06]" />
-          <div className="mt-4 grid grid-cols-2 gap-2 min-[380px]:gap-3">
+          <div className="mt-3 flex gap-1.5 sm:grid sm:grid-cols-4 sm:gap-3">
             {Array.from({ length: 4 }).map((__, itemIndex) => (
-              <div key={itemIndex} className="h-12 animate-pulse rounded-md bg-black/[0.04]" />
+              <div
+                key={itemIndex}
+                className={`${itemIndex === 3
+                  ? "hidden sm:block"
+                  : itemIndex === 0
+                    ? "flex-[0.75_1_0%]"
+                    : "flex-[1.125_1_0%]"
+                  } h-10 animate-pulse rounded-md bg-black/[0.04] sm:h-12`}
+              />
             ))}
           </div>
         </div>
@@ -618,12 +687,12 @@ function SearchInput({
 }) {
   return (
     <label className={`flex min-w-0 items-center gap-2 px-3 ${filterShellClassName} ${className}`}>
-      <Search size={13} className="text-[#A1A1AA]" aria-hidden="true" />
+      <Search size={13} className="size-[15px] text-[#A1A1AA] sm:size-[13px]" aria-hidden="true" />
       <input
         aria-label="Search company, contact, or region"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 bg-transparent text-[13px] leading-[19.5px] font-normal tracking-[-0.08px] text-[#171717] outline-none placeholder:text-[#17171780] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
+        className="min-w-0 flex-1 bg-transparent text-base leading-6 font-normal tracking-[-0.08px] text-[#171717] outline-none placeholder:text-[#17171780] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0 sm:text-[13px] sm:leading-[19.5px]"
         placeholder="Search assessments"
         type="search"
       />
@@ -650,7 +719,7 @@ function FilterSelect({
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-full w-full cursor-pointer appearance-none rounded-md bg-transparent pr-9 pl-3 text-sm font-semibold text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
+        className="h-full w-full cursor-pointer appearance-none rounded-md bg-transparent pr-9 pl-3 text-base font-semibold text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0 sm:text-sm"
       >
         {children}
       </select>
@@ -679,7 +748,7 @@ function MetricFilterInput({
         aria-label="Minimum DI score"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#171717] outline-none placeholder:text-[#A1A1AA] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
+        className="min-w-0 flex-1 bg-transparent text-base font-semibold text-[#171717] outline-none placeholder:text-[#A1A1AA] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0 sm:text-sm"
         inputMode="numeric"
         placeholder="DI min"
       />
@@ -689,21 +758,23 @@ function MetricFilterInput({
 
 function DateInput({
   ariaLabel,
+  className = "",
   onChange,
   value,
 }: {
   ariaLabel: string;
+  className?: string;
   onChange: (value: string) => void;
   value: string;
 }) {
   return (
-    <label className={`flex min-w-0 items-center gap-2 px-3 ${filterShellClassName}`}>
+    <label className={`flex min-w-0 items-center gap-2 px-3 ${filterShellClassName} ${className}`}>
       <CalendarDays size={13} className="text-[#007AFF]" aria-hidden="true" />
       <input
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 cursor-pointer bg-transparent text-[13px] leading-[19.5px] font-semibold tracking-[-0.08px] text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
+        className="min-w-0 flex-1 cursor-pointer bg-transparent text-base leading-6 font-semibold tracking-[-0.08px] text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0 sm:text-[13px] sm:leading-[19.5px]"
         type="date"
       />
     </label>
@@ -722,7 +793,7 @@ function ResetFiltersButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex size-10 items-center justify-center rounded-md border border-[#DCE8F8] bg-white text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:text-[#A1A1AA] disabled:opacity-60"
+      className="inline-flex size-11 items-center justify-center rounded-md border border-[#DCE8F8] bg-white text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:text-[#A1A1AA] disabled:opacity-60 sm:size-10"
       aria-label="Reset assessment filters"
       title="Reset filters"
     >
@@ -863,7 +934,7 @@ function PaginationButtonSet({
         type="button"
         onClick={() => onPageChange(Math.max(1, page - 1))}
         disabled={page <= 1}
-        className="flex size-7 items-center justify-center rounded-md border border-black/[0.08] text-[#555555] disabled:cursor-not-allowed disabled:text-[#C1C7D0]"
+        className="flex size-9 items-center justify-center rounded-md border border-black/[0.08] text-[#555555] disabled:cursor-not-allowed disabled:text-[#C1C7D0] sm:size-7"
         aria-label="Previous page"
       >
         &lt;
@@ -875,7 +946,7 @@ function PaginationButtonSet({
           onClick={() => onPageChange(item)}
           aria-current={item === page ? "page" : undefined}
           aria-label={`Page ${item}${item === page ? ", current page" : ""}`}
-          className={`flex size-7 items-center justify-center rounded-md border text-xs font-bold ${item === page
+          className={`flex size-9 items-center justify-center rounded-md border text-xs font-bold sm:size-7 ${item === page
               ? "border-[#007AFF] bg-[#007AFF] text-white"
               : "border-black/[0.08] bg-white text-[#555555]"
             }`}
@@ -887,7 +958,7 @@ function PaginationButtonSet({
         type="button"
         onClick={() => onPageChange(Math.min(pageCount, page + 1))}
         disabled={page >= pageCount}
-        className="flex size-7 items-center justify-center rounded-md border border-black/[0.08] text-[#555555] disabled:cursor-not-allowed disabled:text-[#C1C7D0]"
+        className="flex size-9 items-center justify-center rounded-md border border-black/[0.08] text-[#555555] disabled:cursor-not-allowed disabled:text-[#C1C7D0] sm:size-7"
         aria-label="Next page"
       >
         &gt;

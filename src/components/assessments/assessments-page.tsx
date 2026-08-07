@@ -245,27 +245,27 @@ export function AssessmentsPage() {
 
   return (
     <AdminShell activeItem="Assessments">
-      <div className="flex min-h-[calc(100vh-56px)] w-full min-w-0 flex-col lg:h-full lg:min-h-0 lg:overflow-hidden lg:pr-6">
-        <header className="flex shrink-0 flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-[22px] leading-[33px] font-semibold tracking-[0.18px] text-[#171717] sm:text-[26px] sm:leading-[39px] sm:tracking-[0.22px]">
+      <div className="flex min-h-[calc(100dvh-32px)] w-full min-w-0 flex-col sm:min-h-[calc(100vh-56px)] lg:h-full lg:min-h-0 lg:overflow-hidden lg:pr-6">
+        <header className="flex shrink-0 items-start justify-between gap-2 min-[380px]:gap-3 sm:flex-wrap sm:gap-4">
+          <div className="min-w-0">
+            <h1 className="truncate text-[22px] leading-7 font-semibold tracking-[0.18px] text-[#171717] sm:text-[26px] sm:leading-[39px] sm:tracking-[0.22px]">
               Assessments
             </h1>
-            <p className="mt-1 text-[13px] leading-[19.5px] font-normal tracking-[-0.08px] text-[#86868B]">
+            <p className="mt-0.5 text-xs leading-[18px] font-normal tracking-[-0.08px] text-[#86868B] sm:mt-1 sm:text-[13px] sm:leading-[19.5px]">
               {isLoading
                 ? "Loading submissions..."
                 : `${assessmentSummaries.length} users from ${totalAssessments} total submissions`}
             </p>
           </div>
 
-          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+          <div className="flex shrink-0 items-center">
             <button
               type="button"
               onClick={handleExportAssessments}
               disabled={!filteredAssessments.length}
-              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-xs! font-medium leading-4.5 text-[#555555] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2 text-xs! font-medium leading-4.5 whitespace-nowrap text-[#555555] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:opacity-50 min-[340px]:px-2.5 min-[380px]:gap-2 min-[380px]:px-3 sm:h-9"
             >
-              <ArrowDownToLine size={13} aria-hidden="true" />
+              <ArrowDownToLine size={13} className="hidden min-[340px]:block" aria-hidden="true" />
               Export CSV
             </button>
           </div>
