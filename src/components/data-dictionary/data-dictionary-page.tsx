@@ -27,6 +27,8 @@ import type { ProcessFormState } from "./new-process-modal";
 import type { ToolFormState } from "./tech-stack-tool-modal";
 import {
   activateAllDataDictionaryTechStack,
+  addDataDictionaryDefaultIndustries,
+  addDataDictionaryDefaultIndustryDomainProcesses,
   addDataDictionaryDefaultIndustryProcesses,
   archiveAllDataDictionaryTechStack,
   createDataDictionaryDomain,
@@ -73,10 +75,7 @@ import {
   AutomationLevelsCard,
   ProcessTiersCard,
 } from "@/features/data-dictionary/components/reference-scale-cards";
-import {
-  normalizeSearch,
-  toDisplayName,
-} from "@/features/data-dictionary/utils/domain-mapping";
+import { normalizeSearch, toDisplayName } from "@/features/data-dictionary/utils/domain-mapping";
 import {
   createDictionaryProcessListRows,
   createDomainIdentityById,
@@ -108,42 +107,25 @@ const emptyLibraries: DictionaryLibrary[] = [];
 const emptyProcesses: DictionaryProcess[] = [];
 const emptyTechStack: TechStackTool[] = [];
 const DeleteProcessConfirmationModal = dynamic<DeleteProcessConfirmationModalProps>(
-  () =>
-    import("./confirmation-modals").then(
-      (module) => module.DeleteProcessConfirmationModal,
-    ),
+  () => import("./confirmation-modals").then((module) => module.DeleteProcessConfirmationModal),
   { ssr: false },
 );
 const DeleteToolConfirmationModal = dynamic<DeleteToolConfirmationModalProps>(
-  () =>
-    import("./confirmation-modals").then(
-      (module) => module.DeleteToolConfirmationModal,
-    ),
+  () => import("./confirmation-modals").then((module) => module.DeleteToolConfirmationModal),
   { ssr: false },
 );
 const DeleteAllToolsConfirmationModal = dynamic<DeleteAllToolsConfirmationModalProps>(
-  () =>
-    import("./confirmation-modals").then(
-      (module) => module.DeleteAllToolsConfirmationModal,
-    ),
+  () => import("./confirmation-modals").then((module) => module.DeleteAllToolsConfirmationModal),
   { ssr: false },
 );
 const ArchiveAllToolsConfirmationModal = dynamic<ArchiveAllToolsConfirmationModalProps>(
-  () =>
-    import("./confirmation-modals").then(
-      (module) => module.ArchiveAllToolsConfirmationModal,
-    ),
+  () => import("./confirmation-modals").then((module) => module.ArchiveAllToolsConfirmationModal),
   { ssr: false },
 );
 const ActivateAllToolsConfirmationModal = dynamic<ActivateAllToolsConfirmationModalProps>(
-  () =>
-    import("./confirmation-modals").then(
-      (module) => module.ActivateAllToolsConfirmationModal,
-    ),
+  () => import("./confirmation-modals").then((module) => module.ActivateAllToolsConfirmationModal),
   { ssr: false },
 );
-
-
 
 export function DataDictionaryPage() {
   const queryClient = useQueryClient();
@@ -166,7 +148,8 @@ export function DataDictionaryPage() {
   const [processActionId, setProcessActionId] = useState("");
   const [processDeleteTarget, setProcessDeleteTarget] = useState<DictionaryProcess | null>(null);
   const [currencyRateInput, setCurrencyRateInput] = useState<string | null>(null);
-  const [savedDisplayToBaseCurrencyRateOverride, setSavedDisplayToBaseCurrencyRateOverride] = useState<number | null>(null);
+  const [savedDisplayToBaseCurrencyRateOverride, setSavedDisplayToBaseCurrencyRateOverride] =
+    useState<number | null>(null);
   const [toolForm, setToolForm] = useState<ToolFormState>(emptyToolForm);
   const [toolActionId, setToolActionId] = useState("");
   const [editingTool, setEditingTool] = useState<TechStackTool | null>(null);
@@ -197,6 +180,9 @@ export function DataDictionaryPage() {
   });
   const createIndustryMutation = useMutation({
     mutationFn: createDataDictionaryIndustry,
+  });
+  const addDefaultIndustriesMutation = useMutation({
+    mutationFn: addDataDictionaryDefaultIndustries,
   });
   const activateIndustryMutation = useMutation({
     mutationFn: createDataDictionaryIndustry,
@@ -230,6 +216,9 @@ export function DataDictionaryPage() {
   });
   const addDefaultIndustryProcessesMutation = useMutation({
     mutationFn: addDataDictionaryDefaultIndustryProcesses,
+  });
+  const addDefaultIndustryDomainProcessesMutation = useMutation({
+    mutationFn: addDataDictionaryDefaultIndustryDomainProcesses,
   });
   const createDomainProcessMutation = useMutation({
     mutationFn: createDataDictionaryDomainProcess,
@@ -287,7 +276,7 @@ export function DataDictionaryPage() {
     [dictionaryData],
   );
   const activeExpandedProcessId =
-    expandedProcessId === initialExpandedProcessId ? processes[0]?.id ?? "" : expandedProcessId;
+    expandedProcessId === initialExpandedProcessId ? (processes[0]?.id ?? "") : expandedProcessId;
   const isProcessSaving =
     addDefaultIndustryProcessesMutation.isPending ||
     createIndustryProcessMutation.isPending ||
@@ -299,8 +288,11 @@ export function DataDictionaryPage() {
     (dictionaryQueryError ? getErrorMessage(dictionaryQueryError) : "") ||
     (techStackQueryError ? getErrorMessage(techStackQueryError) : "");
   const savedDisplayToBaseCurrencyRate =
-    savedDisplayToBaseCurrencyRateOverride ?? dictionaryData?.options.currencyConversionRate ?? defaultDisplayToBaseCurrencyRate;
-  const currencyRateValue = currencyRateInput ?? formatConversionRateInput(savedDisplayToBaseCurrencyRate);
+    savedDisplayToBaseCurrencyRateOverride ??
+    dictionaryData?.options.currencyConversionRate ??
+    defaultDisplayToBaseCurrencyRate;
+  const currencyRateValue =
+    currencyRateInput ?? formatConversionRateInput(savedDisplayToBaseCurrencyRate);
   const domainIdentityById = useMemo(
     () => createDomainIdentityById(domains, libraries),
     [domains, libraries],
@@ -323,11 +315,7 @@ export function DataDictionaryPage() {
   );
   const filteredProcesses = useMemo(
     () =>
-      filterDictionaryProcessRows(
-        processListRows,
-        processFilters,
-        selectedProcessDomainFilterKey,
-      ),
+      filterDictionaryProcessRows(processListRows, processFilters, selectedProcessDomainFilterKey),
     [processFilters, processListRows, selectedProcessDomainFilterKey],
   );
 
@@ -359,9 +347,7 @@ export function DataDictionaryPage() {
     }
 
     const toastTimeout = setTimeout(() => {
-      setTechStackToasts((currentToasts) =>
-        currentToasts.filter((toast) => toast.id !== toastId),
-      );
+      setTechStackToasts((currentToasts) => currentToasts.filter((toast) => toast.id !== toastId));
       techStackToastTimeoutsRef.current.delete(toastId);
     }, dataDictionaryToastDismissMs);
 
@@ -380,13 +366,30 @@ export function DataDictionaryPage() {
       [{ description, id: toastId, message, tone }, ...currentToasts].slice(0, 3),
     );
     scheduleTechStackToastDismiss(toastId, tone);
+    return toastId;
+  }
+
+  function updateTechStackToast(
+    toastId: string,
+    message: string,
+    tone: ReorderToastState["tone"],
+    description?: string,
+  ) {
+    setTechStackToasts((currentToasts) => {
+      const nextToast = { description, id: toastId, message, tone };
+
+      if (!currentToasts.some((toast) => toast.id === toastId)) {
+        return [nextToast, ...currentToasts].slice(0, 3);
+      }
+
+      return currentToasts.map((toast) => (toast.id === toastId ? nextToast : toast));
+    });
+    scheduleTechStackToastDismiss(toastId, tone);
   }
 
   function dismissTechStackToast(toastId: string) {
     clearTechStackToastTimeout(toastId);
-    setTechStackToasts((currentToasts) =>
-      currentToasts.filter((toast) => toast.id !== toastId),
-    );
+    setTechStackToasts((currentToasts) => currentToasts.filter((toast) => toast.id !== toastId));
   }
 
   async function handleAddIndustry() {
@@ -421,6 +424,43 @@ export function DataDictionaryPage() {
 
     setIndustryName("");
     return true;
+  }
+
+  async function handleAddDefaultIndustries(industryKey?: string) {
+    if (addDefaultIndustriesMutation.isPending) {
+      return false;
+    }
+
+    const toastId = showTechStackToast(
+      industryKey ? "Seeding default industry..." : "Seeding all default industries...",
+      "processing",
+    );
+
+    try {
+      setDictionaryError("");
+      const result = await addDefaultIndustriesMutation.mutateAsync(
+        industryKey ? { industryKey } : {},
+      );
+      await queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey });
+
+      const details = [
+        `${result.createdCount} added`,
+        `${result.reactivatedCount} reactivated`,
+        `${result.skippedCount} already configured`,
+      ].join(", ");
+      updateTechStackToast(
+        toastId,
+        industryKey ? "Default industry is configured" : "Default industries are configured",
+        "success",
+        details,
+      );
+      return true;
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setDictionaryError(message);
+      updateTechStackToast(toastId, message, "error");
+      return false;
+    }
   }
 
   async function handleAddDomain() {
@@ -615,8 +655,7 @@ export function DataDictionaryPage() {
         });
       } else if (processForm.domainId) {
         const selectedDomain = domains.find(
-          (domain) =>
-            domain.id === processForm.domainId && domain.industryIds.includes(industryId),
+          (domain) => domain.id === processForm.domainId && domain.industryIds.includes(industryId),
         );
 
         if (!selectedDomain) {
@@ -693,20 +732,31 @@ export function DataDictionaryPage() {
     }
   }
 
-  async function handleAddDefaultIndustryProcesses(industryId: string) {
+  async function handleAddDefaultIndustryProcesses(industryId?: string) {
     if (addDefaultIndustryProcessesMutation.isPending) {
       return false;
     }
 
-    const selectedIndustry = industries.find((industry) => industry.id === industryId);
+    const selectedIndustry = industryId
+      ? industries.find((industry) => industry.id === industryId)
+      : undefined;
+    const isSeedingAllIndustries = !industryId;
+    const toastId = showTechStackToast(
+      isSeedingAllIndustries
+        ? "Seeding all industry default processes..."
+        : `Seeding ${selectedIndustry?.name || "industry"} default processes...`,
+      "processing",
+    );
 
     try {
-      if (!selectedIndustry) {
+      if (industryId && !selectedIndustry) {
         throw new Error("Select an industry before adding default processes");
       }
 
       setDictionaryError("");
-      const result = await addDefaultIndustryProcessesMutation.mutateAsync({ industryId });
+      const result = await addDefaultIndustryProcessesMutation.mutateAsync(
+        industryId ? { industryId } : {},
+      );
       await queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey });
       setProcessPage(1);
 
@@ -716,31 +766,51 @@ export function DataDictionaryPage() {
           `${result.skippedCount} existing ${result.skippedCount === 1 ? "process was" : "processes were"} skipped`,
         );
       }
+      if (result.unavailableIndustryCount > 0) {
+        details.push(
+          `${result.unavailableIndustryCount} supported ${
+            result.unavailableIndustryCount === 1 ? "industry was" : "industries were"
+          } not configured`,
+        );
+      }
       const description = details.join(" · ") || "Process Library";
 
       if (result.createdCount > 0) {
-        showTechStackToast(
-          `${result.createdCount} ${selectedIndustry.name} default ${
-            result.createdCount === 1 ? "process" : "processes"
-          } added`,
+        updateTechStackToast(
+          toastId,
+          isSeedingAllIndustries
+            ? `${result.createdCount} industry default ${
+                result.createdCount === 1 ? "process" : "processes"
+              } added`
+            : `${result.createdCount} ${selectedIndustry?.name || "industry"} default ${
+                result.createdCount === 1 ? "process" : "processes"
+              } added`,
           "success",
           description,
         );
       } else if (result.skippedCount > 0) {
-        showTechStackToast(
-          `${selectedIndustry.name} default processes are already up to date`,
+        updateTechStackToast(
+          toastId,
+          isSeedingAllIndustries
+            ? "All configured industry defaults are already up to date"
+            : `${selectedIndustry?.name || "Industry"} default processes are already up to date`,
           "success",
           description,
         );
-      } else if (result.totalCount > 0) {
-        const message = `${selectedIndustry.name} defaults could not be added because the industry changed. Refresh and retry.`;
+      } else if (isSeedingAllIndustries && result.unavailableIndustryCount > 0) {
+        const message = "No supported industries are currently configured for default processes";
         setDictionaryError(message);
-        showTechStackToast(message, "error", description);
+        updateTechStackToast(toastId, message, "error", description);
+        return false;
+      } else if (result.totalCount > 0) {
+        const message = `${selectedIndustry?.name || "Industry"} defaults could not be added because the catalog changed. Refresh and retry.`;
+        setDictionaryError(message);
+        updateTechStackToast(toastId, message, "error", description);
         return false;
       } else {
-        const message = `No built-in default processes are available for ${selectedIndustry.name}`;
+        const message = `No industry-specific default processes are available for ${selectedIndustry?.name || "the selected industry"}`;
         setDictionaryError(message);
-        showTechStackToast(message, "error", description);
+        updateTechStackToast(toastId, message, "error", description);
         return false;
       }
 
@@ -748,7 +818,103 @@ export function DataDictionaryPage() {
     } catch (error) {
       const message = getErrorMessage(error);
       setDictionaryError(message);
-      showTechStackToast(message, "error");
+      updateTechStackToast(toastId, message, "error");
+      return false;
+    }
+  }
+
+  async function handleAddDefaultIndustryDomainProcesses(industryDomainId?: string) {
+    if (addDefaultIndustryDomainProcessesMutation.isPending) {
+      return false;
+    }
+
+    const selectedMapping = industryDomainId
+      ? libraries.find((library) => library.id === industryDomainId)
+      : undefined;
+    const isSeedingAllMappings = !industryDomainId;
+    const mappingLabel = selectedMapping
+      ? `${selectedMapping.industryName} — ${selectedMapping.domainName}`
+      : "Industry × Domain";
+    const toastId = showTechStackToast(
+      isSeedingAllMappings
+        ? "Seeding all Industry × Domain default processes..."
+        : `Seeding ${mappingLabel} default processes...`,
+      "processing",
+    );
+
+    try {
+      if (industryDomainId && !selectedMapping) {
+        throw new Error("Select an active Industry × Domain mapping before adding defaults");
+      }
+
+      setDictionaryError("");
+      const result = await addDefaultIndustryDomainProcessesMutation.mutateAsync(
+        industryDomainId ? { industryDomainId } : {},
+      );
+      await queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey });
+      setProcessPage(1);
+
+      const unavailableCount =
+        result.unavailableIndustryDomainCount ?? result.unavailableDomainCount ?? 0;
+      const details = [];
+      if (result.skippedCount > 0) {
+        details.push(
+          `${result.skippedCount} existing ${result.skippedCount === 1 ? "process was" : "processes were"} skipped`,
+        );
+      }
+      if (unavailableCount > 0) {
+        details.push(
+          `${unavailableCount} ${unavailableCount === 1 ? "mapping has" : "mappings have"} no built-in defaults`,
+        );
+      }
+      const description = details.join(" · ") || "Industry × Domain Defaults";
+
+      if (result.createdCount > 0) {
+        updateTechStackToast(
+          toastId,
+          isSeedingAllMappings
+            ? `${result.createdCount} Industry × Domain default ${
+                result.createdCount === 1 ? "process" : "processes"
+              } added`
+            : `${result.createdCount} ${mappingLabel} default ${
+                result.createdCount === 1 ? "process" : "processes"
+              } added`,
+          "success",
+          description,
+        );
+      } else if (result.skippedCount > 0) {
+        updateTechStackToast(
+          toastId,
+          isSeedingAllMappings
+            ? "All configured Industry × Domain defaults are already up to date"
+            : `${mappingLabel} defaults are already up to date`,
+          "success",
+          description,
+        );
+      } else if (unavailableCount > 0) {
+        const message = isSeedingAllMappings
+          ? "No supported active Industry × Domain mappings are configured"
+          : `No built-in domain defaults are available for ${mappingLabel}`;
+        setDictionaryError(message);
+        updateTechStackToast(toastId, message, "error", description);
+        return false;
+      } else if (result.totalCount > 0) {
+        const message = `${mappingLabel} defaults could not be added because the catalog changed. Refresh and retry.`;
+        setDictionaryError(message);
+        updateTechStackToast(toastId, message, "error", description);
+        return false;
+      } else {
+        const message = `No Industry × Domain default processes are available for ${mappingLabel}`;
+        setDictionaryError(message);
+        updateTechStackToast(toastId, message, "error", description);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setDictionaryError(message);
+      updateTechStackToast(toastId, message, "error");
       return false;
     }
   }
@@ -1007,22 +1173,23 @@ export function DataDictionaryPage() {
 
     try {
       setDictionaryError("");
-      const { activatedCount, skippedCount } =
-        await activateAllTechStackMutation.mutateAsync();
+      const { activatedCount, skippedCount } = await activateAllTechStackMutation.mutateAsync();
       setIsActivateAllToolsOpen(false);
       setToolPage(1);
       await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
       setToolDeleteTarget(null);
       handleCloseToolForm();
 
-      const message = activatedCount > 0
-        ? `${activatedCount} ${activatedCount === 1 ? "tool" : "tools"} activated in Technology Stack Library`
-        : skippedCount > 0
-          ? "Duplicate archived tools remain inactive"
-          : "All technology tools are already active";
-      const description = skippedCount > 0
-        ? `${skippedCount} duplicate ${skippedCount === 1 ? "tool was" : "tools were"} left archived`
-        : undefined;
+      const message =
+        activatedCount > 0
+          ? `${activatedCount} ${activatedCount === 1 ? "tool" : "tools"} activated in Technology Stack Library`
+          : skippedCount > 0
+            ? "Duplicate archived tools remain inactive"
+            : "All technology tools are already active";
+      const description =
+        skippedCount > 0
+          ? `${skippedCount} duplicate ${skippedCount === 1 ? "tool was" : "tools were"} left archived`
+          : undefined;
       showTechStackToast(message, "success", description);
     } catch (error) {
       const message = getErrorMessage(error);
@@ -1165,7 +1332,12 @@ export function DataDictionaryPage() {
             isDeletingDomain={deleteProcessLibraryMutation.isPending}
             isPermanentlyDeletingDomain={permanentlyDeleteDomainMutation.isPending}
             isDeletingIndustry={deleteIndustryMutation.isPending}
-            isIndustrySaving={createIndustryMutation.isPending || activateIndustryMutation.isPending}
+            isDefaultIndustriesSaving={addDefaultIndustriesMutation.isPending}
+            isIndustrySaving={
+              createIndustryMutation.isPending ||
+              activateIndustryMutation.isPending ||
+              addDefaultIndustriesMutation.isPending
+            }
             isMappingDomain={createProcessLibraryMutation.isPending}
             libraries={libraries}
             inactiveIndustries={inactiveIndustries}
@@ -1182,6 +1354,7 @@ export function DataDictionaryPage() {
             onDeleteDomain={handleDeleteDomain}
             onPermanentlyDeleteDomain={handlePermanentlyDeleteDomain}
             onDeleteIndustry={handleDeleteIndustry}
+            onSeedDefaultIndustries={handleAddDefaultIndustries}
             onMapDomain={handleMapDomain}
             onMapDomainToIndustry={handleMapDomainToIndustry}
             onReorderDomains={handleReorderDomains}
@@ -1196,6 +1369,9 @@ export function DataDictionaryPage() {
             filteredProcesses={filteredProcesses}
             industries={industries}
             isCatalogLoading={isCatalogLoading}
+            isDefaultDomainProcessesSaving={
+              addDefaultIndustryDomainProcessesMutation.isPending
+            }
             isDefaultProcessesSaving={addDefaultIndustryProcessesMutation.isPending}
             isProcessSaving={isProcessSaving}
             isProcessFormOpen={isProcessFormOpen}
@@ -1209,6 +1385,7 @@ export function DataDictionaryPage() {
             processPage={processPage}
             processSearch={processSearch}
             processes={processes}
+            libraries={libraries}
             setExpandedProcessId={setExpandedProcessId}
             setIsProcessFormOpen={setIsProcessFormOpen}
             setProcessDomainFilter={handleProcessDomainFilterChange}
@@ -1217,6 +1394,7 @@ export function DataDictionaryPage() {
             setProcessPage={setProcessPage}
             setProcessSearch={handleProcessSearchChange}
             onAddProcess={handleAddProcess}
+            onAddDefaultDomainProcesses={handleAddDefaultIndustryDomainProcesses}
             onAddDefaultProcesses={handleAddDefaultIndustryProcesses}
             currencyRateInput={currencyRateValue}
             isCurrencyRateSaving={updateCurrencyConversionRateMutation.isPending}
@@ -1229,10 +1407,7 @@ export function DataDictionaryPage() {
             onToggleProcessStatus={handleToggleProcessStatus}
           />
         </LazyViewportSection>
-        <LazyViewportSection
-          minHeight={535}
-          onVisible={handleTechnologyStackVisible}
-        >
+        <LazyViewportSection minHeight={535} onVisible={handleTechnologyStackVisible}>
           <TechnologyStackCard
             filteredTools={filteredTools}
             isActivatingAllTools={activateAllTechStackMutation.isPending}
@@ -1270,7 +1445,9 @@ export function DataDictionaryPage() {
         </LazyViewportSection>
         {processDeleteTarget ? (
           <DeleteProcessConfirmationModal
-            isDeleting={deleteProcessMutation.isPending && processActionId === processDeleteTarget.id}
+            isDeleting={
+              deleteProcessMutation.isPending && processActionId === processDeleteTarget.id
+            }
             process={processDeleteTarget}
             onCancel={() => {
               if (!deleteProcessMutation.isPending) {

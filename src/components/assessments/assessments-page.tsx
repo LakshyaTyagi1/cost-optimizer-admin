@@ -251,7 +251,7 @@ export function AssessmentsPage() {
             <h1 className="truncate text-[22px] leading-7 font-semibold tracking-[0.18px] text-[#171717] sm:text-[26px] sm:leading-[39px] sm:tracking-[0.22px]">
               Assessments
             </h1>
-            <p className="mt-0.5 text-xs leading-[18px] font-normal tracking-[-0.08px] text-[#86868B] sm:mt-1 sm:text-[13px] sm:leading-[19.5px]">
+            <p className="text-xs leading-[18px] font-normal tracking-[-0.08px] text-[#86868B] sm:text-[13px] sm:leading-[19.5px]">
               {isLoading
                 ? "Loading submissions..."
                 : `${assessmentSummaries.length} users from ${totalAssessments} total submissions`}

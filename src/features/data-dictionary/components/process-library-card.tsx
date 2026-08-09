@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   Building2,
@@ -20,12 +20,14 @@ import { TierPill } from "@/features/data-dictionary/components/tier-pill";
 import type {
   DictionaryDomain,
   DictionaryIndustry,
+  DictionaryLibrary,
   DictionaryProcess,
   ProcessOption,
 } from "@/features/data-dictionary/model";
 import {
   getDomainDisplayTitle,
   getDomainIdentity,
+  getLibraryIdentity,
   getUniqueDomains,
 } from "@/features/data-dictionary/utils/domain-mapping";
 import { getPaginationPages } from "@/features/data-dictionary/utils/pagination";
@@ -33,6 +35,8 @@ import type {
   NewProcessModalProps,
   ProcessFormState,
 } from "@/components/data-dictionary/new-process-modal";
+import type { IndustryDefaultsWorkspaceProps } from "@/features/data-dictionary/components/industry-defaults-workspace";
+import type { IndustryDomainDefaultsWorkspaceProps } from "@/features/data-dictionary/components/industry-domain-defaults-workspace";
 
 const industryDefaultDomainFilter = "industry-default";
 const processLibraryPageSize = 10;
@@ -41,6 +45,22 @@ const NewProcessModal = dynamic<NewProcessModalProps>(
   () =>
     import("@/components/data-dictionary/new-process-modal").then(
       (module) => module.NewProcessModal,
+    ),
+  { ssr: false },
+);
+
+const IndustryDefaultsWorkspace = dynamic<IndustryDefaultsWorkspaceProps>(
+  () =>
+    import("@/features/data-dictionary/components/industry-defaults-workspace").then(
+      (module) => module.IndustryDefaultsWorkspace,
+    ),
+  { ssr: false },
+);
+
+const IndustryDomainDefaultsWorkspace = dynamic<IndustryDomainDefaultsWorkspaceProps>(
+  () =>
+    import("@/features/data-dictionary/components/industry-domain-defaults-workspace").then(
+      (module) => module.IndustryDomainDefaultsWorkspace,
     ),
   { ssr: false },
 );
@@ -56,6 +76,7 @@ export function ProcessLibraryCard({
   filteredProcesses,
   industries,
   isCatalogLoading,
+  isDefaultDomainProcessesSaving,
   isDefaultProcessesSaving,
   isCurrencyRateSaving,
   isProcessSaving,
@@ -67,6 +88,7 @@ export function ProcessLibraryCard({
   processPage,
   processSearch,
   processes,
+  libraries,
   savedDisplayToBaseCurrencyRate,
   setExpandedProcessId,
   setCurrencyRateInput,
@@ -77,6 +99,7 @@ export function ProcessLibraryCard({
   setProcessPage,
   setProcessSearch,
   onAddProcess,
+  onAddDefaultDomainProcesses,
   onAddDefaultProcesses,
   onDeleteProcess,
   onEditProcess,
@@ -94,6 +117,7 @@ export function ProcessLibraryCard({
   filteredProcesses: DictionaryProcess[];
   industries: DictionaryIndustry[];
   isCatalogLoading: boolean;
+  isDefaultDomainProcessesSaving: boolean;
   isDefaultProcessesSaving: boolean;
   isCurrencyRateSaving: boolean;
   isProcessSaving: boolean;
@@ -105,6 +129,7 @@ export function ProcessLibraryCard({
   processPage: number;
   processSearch: string;
   processes: DictionaryProcess[];
+  libraries: DictionaryLibrary[];
   savedDisplayToBaseCurrencyRate: number;
   setExpandedProcessId: (value: string) => void;
   setCurrencyRateInput: (value: string) => void;
@@ -117,7 +142,8 @@ export function ProcessLibraryCard({
   setProcessPage: (value: number) => void;
   setProcessSearch: (value: string) => void;
   onAddProcess: (event: FormEvent<HTMLFormElement>) => void;
-  onAddDefaultProcesses: (industryId: string) => Promise<boolean>;
+  onAddDefaultDomainProcesses: (industryDomainId?: string) => Promise<boolean>;
+  onAddDefaultProcesses: (industryId?: string) => Promise<boolean>;
   onDeleteProcess: (process: DictionaryProcess) => void;
   onEditProcess: (process: DictionaryProcess) => void;
   onOpenNewProcessForm: () => void;
@@ -125,17 +151,12 @@ export function ProcessLibraryCard({
   onToggleProcessStatus: (process: DictionaryProcess) => void;
 }) {
   const [isDefaultIndustryDialogOpen, setIsDefaultIndustryDialogOpen] = useState(false);
-  const [defaultIndustryId, setDefaultIndustryId] = useState("");
-  const defaultIndustrySelectRef = useRef<HTMLSelectElement | null>(null);
+  const [isDefaultIndustryDomainDialogOpen, setIsDefaultIndustryDomainDialogOpen] = useState(false);
   const totalProcessPages = Math.ceil(filteredProcesses.length / processLibraryPageSize);
   const safeProcessPage = Math.min(Math.max(processPage, 1), Math.max(totalProcessPages, 1));
   const processStartIndex = (safeProcessPage - 1) * processLibraryPageSize;
   const visibleProcesses = useMemo(
-    () =>
-      filteredProcesses.slice(
-        processStartIndex,
-        processStartIndex + processLibraryPageSize,
-      ),
+    () => filteredProcesses.slice(processStartIndex, processStartIndex + processLibraryPageSize),
     [filteredProcesses, processStartIndex],
   );
   const processPaginationPages = useMemo(
@@ -143,10 +164,23 @@ export function ProcessLibraryCard({
     [safeProcessPage, totalProcessPages],
   );
   const domainFilterOptions = useMemo(() => getUniqueDomains(domains), [domains]);
+  const preferredIndustryDomainId = useMemo(() => {
+    const hasIndustryFilter = processIndustryFilter !== "all";
+    const hasDomainFilter =
+      processDomainFilter !== "all" && processDomainFilter !== industryDefaultDomainFilter;
+
+    return (
+      libraries.find(
+        (library) =>
+          (!hasIndustryFilter || library.industryId === processIndustryFilter) &&
+          (!hasDomainFilter || getLibraryIdentity(library) === processDomainFilter),
+      )?.id ||
+      libraries[0]?.id ||
+      ""
+    );
+  }, [libraries, processDomainFilter, processIndustryFilter]);
   const hasProcessFilters =
-    processSearch.trim() ||
-    processIndustryFilter !== "all" ||
-    processDomainFilter !== "all";
+    processSearch.trim() || processIndustryFilter !== "all" || processDomainFilter !== "all";
   const handleProcessIndustryFilterChange = useCallback(
     (nextIndustryFilter: string) => {
       setProcessIndustryFilter(nextIndustryFilter);
@@ -163,42 +197,8 @@ export function ProcessLibraryCard({
     setProcessPage(1);
   }, [setProcessDomainFilter, setProcessIndustryFilter, setProcessPage, setProcessSearch]);
 
-  useEffect(() => {
-    if (!isDefaultIndustryDialogOpen) {
-      return;
-    }
-
-    defaultIndustrySelectRef.current?.focus();
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isDefaultProcessesSaving) {
-        setIsDefaultIndustryDialogOpen(false);
-      }
-    };
-    window.addEventListener("keydown", handleEscape);
-
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [isDefaultIndustryDialogOpen, isDefaultProcessesSaving]);
-
   function openDefaultIndustryDialog() {
-    const preferredIndustryId =
-      processIndustryFilter !== "all" &&
-      industries.some((industry) => industry.id === processIndustryFilter)
-        ? processIndustryFilter
-        : industries[0]?.id || "";
-
-    setDefaultIndustryId(preferredIndustryId);
     setIsDefaultIndustryDialogOpen(true);
-  }
-
-  async function addSelectedIndustryDefaults() {
-    if (!defaultIndustryId || isDefaultProcessesSaving) {
-      return;
-    }
-
-    const wasAdded = await onAddDefaultProcesses(defaultIndustryId);
-    if (wasAdded) {
-      setIsDefaultIndustryDialogOpen(false);
-    }
   }
 
   return (
@@ -207,14 +207,14 @@ export function ProcessLibraryCard({
         <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
           Process Library ({processes.length})
         </p>
-        <div className="flex flex-wrap items-center justify-end gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
           <button
             type="button"
             onClick={openDefaultIndustryDialog}
             disabled={isCatalogLoading || isProcessSaving || industries.length === 0}
-            className="inline-flex cursor-pointer items-center gap-1 text-xs font-bold text-[#007AFF] transition hover:text-[#0051D5] disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Choose an industry and add its missing default processes"
-            title="Choose an industry and add only its missing built-in processes"
+            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-[#007AFF]/25 px-3 text-xs font-bold text-[#007AFF] transition hover:border-[#007AFF]/45 hover:bg-[#F8FAFF] hover:text-[#0051D5] disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Choose an industry and add its missing industry-specific defaults"
+            title="Add only the selected industry's missing default processes"
           >
             {isDefaultProcessesSaving ? (
               <span
@@ -228,9 +228,29 @@ export function ProcessLibraryCard({
           </button>
           <button
             type="button"
+            onClick={() => setIsDefaultIndustryDomainDialogOpen(true)}
+            disabled={isCatalogLoading || isProcessSaving || libraries.length === 0}
+            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-[#007AFF]/25 px-3 text-xs font-bold text-[#007AFF] transition hover:border-[#007AFF]/45 hover:bg-[#F8FAFF] hover:text-[#0051D5] disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Choose an industry and domain mapping and add its missing domain defaults"
+            title="Add only the selected industry and domain mapping's missing default processes"
+          >
+            {isDefaultDomainProcessesSaving ? (
+              <span
+                className="size-3 animate-spin rounded-full border border-[#007AFF]/30 border-t-[#007AFF]"
+                aria-hidden="true"
+              />
+            ) : (
+              <Sparkles size={12} aria-hidden="true" />
+            )}
+            {isDefaultDomainProcessesSaving
+              ? "Adding defaults..."
+              : "Add Industry × Domain Defaults"}
+          </button>
+          <button
+            type="button"
             onClick={onOpenNewProcessForm}
             disabled={isCatalogLoading || isProcessSaving}
-            className="inline-flex cursor-pointer items-center gap-1 text-xs font-bold text-[#007AFF] transition hover:text-[#0051D5] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-[#007AFF]/25 px-3 text-xs font-bold text-[#007AFF] transition hover:border-[#007AFF]/45 hover:bg-[#F8FAFF] hover:text-[#0051D5] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus size={12} aria-hidden="true" />
             Add Process
@@ -238,104 +258,27 @@ export function ProcessLibraryCard({
         </div>
       </div>
       {isDefaultIndustryDialogOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 backdrop-blur-[1px]"
-          role="presentation"
-          onClick={() => {
-            if (!isDefaultProcessesSaving) {
-              setIsDefaultIndustryDialogOpen(false);
-            }
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="add-industry-defaults-title"
-            aria-describedby="add-industry-defaults-description"
-            className="w-full max-w-[440px] rounded-md border border-[#B3D7FF] bg-[#F0F9FF] p-5 shadow-[0_24px_70px_rgba(15,23,42,0.22)]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p id="add-industry-defaults-title" className="text-sm font-bold text-[#171717]">
-                  Add Industry Defaults
-                </p>
-                <p
-                  id="add-industry-defaults-description"
-                  className="mt-1 text-xs leading-5 font-semibold text-[#86868B]"
-                >
-                  Choose which industry should receive its missing built-in processes. Existing
-                  processes will not be changed or duplicated.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsDefaultIndustryDialogOpen(false)}
-                disabled={isDefaultProcessesSaving}
-                className="flex size-8 shrink-0 items-center justify-center rounded-md border border-black/[0.08] bg-white text-[#86868B] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed"
-                aria-label="Close industry default selection"
-              >
-                <span aria-hidden="true">×</span>
-              </button>
-            </div>
-            <label className="mt-4 block">
-              <span className="mb-1.5 block text-[10px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
-                Industry
-              </span>
-              <div className="relative">
-                <Building2
-                  size={14}
-                  className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A1A1AA]"
-                  aria-hidden="true"
-                />
-                <select
-                  ref={defaultIndustrySelectRef}
-                  value={defaultIndustryId}
-                  onChange={(event) => setDefaultIndustryId(event.target.value)}
-                  disabled={isDefaultProcessesSaving}
-                  className="h-10 w-full appearance-none rounded-md border border-[#D9E3F0] bg-white pr-9 pl-9 text-sm font-semibold text-[#333333] outline-none transition focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10 disabled:cursor-wait"
-                >
-                  {industries.map((industry) => (
-                    <option key={industry.id} value={industry.id}>
-                      {industry.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[#86868B]"
-                  aria-hidden="true"
-                />
-              </div>
-            </label>
-            <div className="mt-5 flex justify-end gap-2 border-t border-black/[0.06] pt-4">
-              <button
-                type="button"
-                onClick={() => setIsDefaultIndustryDialogOpen(false)}
-                disabled={isDefaultProcessesSaving}
-                className="h-9 rounded-md border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#86868B] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void addSelectedIndustryDefaults()}
-                disabled={!defaultIndustryId || isDefaultProcessesSaving}
-                className="inline-flex h-9 items-center gap-2 rounded-md bg-[#007AFF] px-3 text-xs font-bold text-white transition hover:bg-[#0063CC] disabled:cursor-wait disabled:bg-[#A8CCF8]"
-              >
-                {isDefaultProcessesSaving ? (
-                  <span
-                    className="size-3 animate-spin rounded-full border border-white/40 border-t-white"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <Sparkles size={12} aria-hidden="true" />
-                )}
-                {isDefaultProcessesSaving ? "Adding defaults..." : "Add defaults"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <IndustryDefaultsWorkspace
+          industries={industries}
+          initialIndustryId={
+            processIndustryFilter !== "all" &&
+            industries.some((industry) => industry.id === processIndustryFilter)
+              ? processIndustryFilter
+              : industries[0]?.id || ""
+          }
+          isSeeding={isDefaultProcessesSaving}
+          onClose={() => setIsDefaultIndustryDialogOpen(false)}
+          onSeedDefaults={onAddDefaultProcesses}
+        />
+      ) : null}
+      {isDefaultIndustryDomainDialogOpen ? (
+        <IndustryDomainDefaultsWorkspace
+          initialIndustryDomainId={preferredIndustryDomainId}
+          isSeeding={isDefaultDomainProcessesSaving}
+          libraries={libraries}
+          onClose={() => setIsDefaultIndustryDomainDialogOpen(false)}
+          onSeedDefaults={onAddDefaultDomainProcesses}
+        />
       ) : null}
       <div className="px-5 pt-4">
         <div className="flex flex-wrap gap-2">
@@ -346,7 +289,7 @@ export function ProcessLibraryCard({
             className="w-full sm:w-[238px]"
           />
           <label
-            className="relative flex h-9 w-full min-w-0 items-center rounded-md border border-[#D9E3F0] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#B8D8FF] focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/10 sm:w-[190px]"
+            className="relative flex h-9 w-full min-w-0 items-center rounded-md border border-[#D9E3F0] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/10 hover:border-[#B8D8FF] sm:w-[190px]"
             title="Filter processes by industry"
           >
             <Building2
@@ -358,7 +301,7 @@ export function ProcessLibraryCard({
               value={processIndustryFilter}
               onChange={(event) => handleProcessIndustryFilterChange(event.target.value)}
               aria-label="Filter processes by industry"
-              className="h-full w-full appearance-none rounded-md bg-transparent pr-9 pl-9 text-sm font-semibold text-[#333333] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
+              className="h-full w-full appearance-none rounded-md bg-transparent pr-9 pl-9 text-sm font-semibold text-[#333333] outline-none focus:!ring-0 focus:!outline-none focus-visible:!ring-0 focus-visible:!outline-none"
             >
               <option value="all">All industries</option>
               {industries.map((industry) => (
@@ -374,7 +317,7 @@ export function ProcessLibraryCard({
             />
           </label>
           <label
-            className="relative flex h-9 w-full min-w-0 items-center rounded-md border border-[#D9E3F0] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#B8D8FF] focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/10 sm:w-[190px]"
+            className="relative flex h-9 w-full min-w-0 items-center rounded-md border border-[#D9E3F0] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/10 hover:border-[#B8D8FF] sm:w-[190px]"
             title="Filter processes by domain"
           >
             <Database
@@ -386,7 +329,7 @@ export function ProcessLibraryCard({
               value={processDomainFilter}
               onChange={(event) => setProcessDomainFilter(event.target.value)}
               aria-label="Filter processes by domain"
-              className="h-full w-full appearance-none rounded-md bg-transparent pr-9 pl-9 text-sm font-semibold text-[#333333] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
+              className="h-full w-full appearance-none rounded-md bg-transparent pr-9 pl-9 text-sm font-semibold text-[#333333] outline-none focus:!ring-0 focus:!outline-none focus-visible:!ring-0 focus-visible:!outline-none"
             >
               <option value="all">All domains</option>
               <option value={industryDefaultDomainFilter}>Industry default</option>
@@ -555,9 +498,7 @@ function ProcessRow({
           <span className="text-[11px] font-bold tracking-[0.02em] text-[#AAAAAA]">
             {process.code}
           </span>
-          <span className="truncate text-[13px] font-bold text-[#333333]">
-            {process.name}
-          </span>
+          <span className="truncate text-[13px] font-bold text-[#333333]">{process.name}</span>
         </button>
         <div className="ml-auto flex shrink-0 items-center justify-end gap-10">
           <div className="flex shrink-0 items-center justify-end gap-4">
@@ -581,7 +522,12 @@ function ProcessRow({
               aria-label="Edit process"
               title="Edit process"
             >
-              <svg className="pointer-events-none size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <svg
+                className="pointer-events-none size-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
                 <path
                   d="M15.8226 9.83829C16.0429 9.61805 16.1667 9.31932 16.1668 9.00781C16.1668 8.69631 16.0431 8.39754 15.8228 8.17725C15.6026 7.95695 15.3039 7.83317 14.9924 7.83313C14.6809 7.83309 14.3821 7.9568 14.1618 8.17704L8.60097 13.7391C8.50423 13.8356 8.43268 13.9543 8.39264 14.085L7.84222 15.8983C7.83145 15.9343 7.83064 15.9726 7.83987 16.0091C7.84909 16.0455 7.86802 16.0788 7.89463 16.1054C7.92125 16.1319 7.95456 16.1508 7.99103 16.16C8.02751 16.1692 8.06579 16.1683 8.1018 16.1575L9.91555 15.6075C10.046 15.5678 10.1648 15.4967 10.2614 15.4004L15.8226 9.83829Z"
                   stroke="currentColor"
@@ -612,9 +558,7 @@ function ProcessRow({
               }}
               disabled={isBusy}
               className={`w-[72px] rounded-full py-1 text-right text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                isActive
-                  ? "text-[#10B981]"
-                  : "text-[#86868B] hover:text-[#555555]"
+                isActive ? "text-[#10B981]" : "text-[#86868B] hover:text-[#555555]"
               }`}
               title={isActive ? "Deactivate process" : "Activate process"}
               aria-label={isActive ? "Deactivate process" : "Activate process"}
@@ -680,13 +624,9 @@ function ProcessMobileRow({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-bold tracking-[0.02em] text-[#AAAAAA]">
-              {process.code}
-            </p>
-            <h3 className="mt-1 break-words text-sm font-bold text-[#333333]">
-              {process.name}
-            </h3>
-            <p className="mt-1 break-words text-xs font-semibold leading-5 text-[#86868B]">
+            <p className="text-[11px] font-bold tracking-[0.02em] text-[#AAAAAA]">{process.code}</p>
+            <h3 className="mt-1 text-sm font-bold break-words text-[#333333]">{process.name}</h3>
+            <p className="mt-1 text-xs leading-5 font-semibold break-words text-[#86868B]">
               {process.description || "Process details are available for this mapped COS process."}
             </p>
           </div>
@@ -831,7 +771,6 @@ function ProcessListState({ label }: { label: string }) {
   );
 }
 
-
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -840,7 +779,6 @@ function Metric({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
 
 function getDomainCode(domain: string) {
   if (domain === "CX") return "CX";
@@ -858,5 +796,3 @@ function getDomainCode(domain: string) {
     .join("")
     .slice(0, 3);
 }
-
-

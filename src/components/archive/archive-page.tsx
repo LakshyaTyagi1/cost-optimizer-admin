@@ -6,6 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Archive, RotateCcw, Search, Trash2 } from "lucide-react";
 
 import {
+  permanentlyDeleteAllArchivedDataDictionaryProcesses,
   permanentlyDeleteDataDictionaryProcess,
   restoreDataDictionaryProcess,
 } from "@/features/data-dictionary/api";
@@ -26,6 +27,8 @@ export function ArchivePage() {
   const [deletingProcessId, setDeletingProcessId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<DictionaryProcess | null>(null);
   const [deleteError, setDeleteError] = useState("");
+  const [isDeleteAllDialogOpen, setIsDeleteAllDialogOpen] = useState(false);
+  const [deleteAllError, setDeleteAllError] = useState("");
   const {
     data: archivedProcesses = [],
     error,
@@ -36,6 +39,9 @@ export function ArchivePage() {
   });
   const permanentlyDeleteProcessMutation = useMutation({
     mutationFn: permanentlyDeleteDataDictionaryProcess,
+  });
+  const permanentlyDeleteAllProcessesMutation = useMutation({
+    mutationFn: permanentlyDeleteAllArchivedDataDictionaryProcesses,
   });
   const filteredProcesses = useMemo(() => {
     const query = normalizeSearch(search);
@@ -99,6 +105,24 @@ export function ArchivePage() {
     }
   }
 
+  async function handlePermanentlyDeleteAllProcesses() {
+    if (archivedProcesses.length === 0 || permanentlyDeleteAllProcessesMutation.isPending) {
+      return;
+    }
+
+    try {
+      setDeleteAllError("");
+      await permanentlyDeleteAllProcessesMutation.mutateAsync();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: archiveProcessesQueryKey }),
+        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
+      ]);
+      setIsDeleteAllDialogOpen(false);
+    } catch (error) {
+      setDeleteAllError(getErrorMessage(error, "Unable to permanently delete archived processes"));
+    }
+  }
+
   return (
     <AdminShell activeItem="Archive">
       <div className="lg:pr-6">
@@ -114,20 +138,41 @@ export function ArchivePage() {
             <p className="min-w-0 text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
               Archived Processes ({archivedProcesses.length})
             </p>
-            <label
-              className="flex h-9 w-full items-center gap-2 rounded-md border border-black/[0.08] px-3 sm:w-[280px]"
-              title="Search archived processes"
-            >
-              <Search size={14} className="text-[#A1A1AA]" aria-hidden="true" />
-              <input
-                aria-label="Search archived processes"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="min-w-0 flex-1 text-xs font-semibold outline-none placeholder:text-[#A1A1AA]"
-                placeholder="Search archived processes..."
-                type="search"
-              />
-            </label>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+              <label
+                className="flex h-9 w-full items-center gap-2 rounded-md border border-black/[0.08] px-3 sm:w-[280px]"
+                title="Search archived processes"
+              >
+                <Search size={14} className="text-[#A1A1AA]" aria-hidden="true" />
+                <input
+                  aria-label="Search archived processes"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  className="min-w-0 flex-1 text-xs font-semibold outline-none placeholder:text-[#A1A1AA]"
+                  placeholder="Search archived processes..."
+                  type="search"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteAllError("");
+                  setIsDeleteAllDialogOpen(true);
+                }}
+                disabled={
+                  isLoading ||
+                  archivedProcesses.length === 0 ||
+                  restoreProcessMutation.isPending ||
+                  permanentlyDeleteProcessMutation.isPending ||
+                  permanentlyDeleteAllProcessesMutation.isPending
+                }
+                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-[#FECACA] bg-white px-3 text-xs font-bold whitespace-nowrap text-[#EF4444] transition hover:border-[#EF4444] hover:bg-[#FEF2F2] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                aria-label="Delete all archived processes permanently"
+              >
+                <Trash2 size={13} aria-hidden="true" />
+                Delete all
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 min-h-[170px] rounded-md border border-black/[0.06] bg-white">
@@ -208,6 +253,22 @@ export function ArchivePage() {
             }}
             onConfirm={() => {
               void handlePermanentlyDeleteProcess();
+            }}
+          />
+        ) : null}
+        {isDeleteAllDialogOpen ? (
+          <PermanentDeleteAllProcessesModal
+            count={archivedProcesses.length}
+            errorMessage={deleteAllError}
+            isDeleting={permanentlyDeleteAllProcessesMutation.isPending}
+            onCancel={() => {
+              if (!permanentlyDeleteAllProcessesMutation.isPending) {
+                setDeleteAllError("");
+                setIsDeleteAllDialogOpen(false);
+              }
+            }}
+            onConfirm={() => {
+              void handlePermanentlyDeleteAllProcesses();
             }}
           />
         ) : null}
@@ -510,6 +571,73 @@ function PermanentDeleteProcessModal({
               <Trash2 size={13} aria-hidden="true" />
             )}
             {isDeleting ? "Deleting..." : "Delete permanently"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PermanentDeleteAllProcessesModal({
+  count,
+  errorMessage,
+  isDeleting,
+  onCancel,
+  onConfirm,
+}: {
+  count: number;
+  errorMessage: string;
+  isDeleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4 backdrop-blur-[2px]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="permanent-delete-all-processes-title"
+    >
+      <div className="w-full max-w-[420px] rounded-xl border border-black/[0.08] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.20)]">
+        <div className="flex size-10 items-center justify-center rounded-full bg-[#FEF2F2] text-[#EF4444]">
+          <Trash2 size={18} aria-hidden="true" />
+        </div>
+        <h2
+          id="permanent-delete-all-processes-title"
+          className="mt-4 text-base font-bold text-[#171717]"
+        >
+          Delete all archived processes?
+        </h2>
+        <p className="mt-2 text-sm leading-6 font-semibold text-[#6E6E73]">
+          This will permanently remove all {count} archived process{" "}
+          {count === 1 ? "record" : "records"}. This action cannot be undone.
+        </p>
+        {errorMessage ? (
+          <p className="mt-3 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-xs font-bold text-[#B91C1C]">
+            {errorMessage}
+          </p>
+        ) : null}
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isDeleting}
+            className="inline-flex h-9 items-center justify-center rounded-md border border-black/[0.08] bg-white px-4 text-xs font-bold text-[#555555] transition hover:bg-[#F5F5F7] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isDeleting || count === 0}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#EF4444] px-4 text-xs font-bold text-white transition hover:bg-[#DC2626] disabled:cursor-wait disabled:opacity-70"
+          >
+            {isDeleting ? (
+              <span className="size-3 animate-spin rounded-full border border-white/30 border-t-white" />
+            ) : (
+              <Trash2 size={13} aria-hidden="true" />
+            )}
+            {isDeleting ? "Deleting all..." : "Delete all permanently"}
           </button>
         </div>
       </div>

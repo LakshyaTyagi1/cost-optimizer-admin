@@ -103,7 +103,7 @@ export function AdminShell({
           onToggleCollapsed={handleToggleSidebarCollapsed}
         />
         <main className="min-w-0 bg-white">
-          <div className="h-full px-2.5 pt-3 pb-5 sm:px-6 sm:pt-8 lg:ml-6 lg:max-w-none lg:px-0 lg:pt-8 lg:pb-4">
+          <div className="h-full px-2.5 pt-3 pb-5 sm:px-6 sm:pt-7 lg:ml-6 lg:max-w-none lg:px-0 lg:pt-8 lg:pb-4">
             {children}
           </div>
         </main>

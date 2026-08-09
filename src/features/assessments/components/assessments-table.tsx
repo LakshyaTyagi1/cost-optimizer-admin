@@ -139,13 +139,13 @@ export function AssessmentsTable({
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const advancedFiltersRef = useRef<HTMLDivElement>(null);
   const moreFiltersButtonRef = useRef<HTMLButtonElement>(null);
-  const hiddenFilterCount = [
+  const coreHiddenFilterCount = [
     industryFilter !== "all" ? industryFilter : "",
     statusFilter !== "all" ? statusFilter : "",
     minimumScoreFilter.trim(),
-    fromDateFilter,
-    toDateFilter,
   ].filter(Boolean).length;
+  const phoneHiddenFilterCount =
+    coreHiddenFilterCount + Number(Boolean(fromDateFilter)) + Number(Boolean(toDateFilter));
 
   useEffect(() => {
     if (!showAdvancedFilters) {
@@ -193,12 +193,30 @@ export function AssessmentsTable({
   return (
     <section className="mt-4 max-sm:flex max-sm:flex-1 max-sm:flex-col sm:mt-6 lg:mt-8 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden" aria-label="Assessments table">
       <div className="@container/assessment-filters mb-3 space-y-2 sm:mb-[13px]">
-        <div className="relative grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(190px,0.55fr)] @min-[980px]/assessment-filters:grid-cols-[minmax(170px,1.2fr)_minmax(110px,0.75fr)_minmax(110px,0.75fr)_minmax(78px,0.45fr)_minmax(132px,0.75fr)_minmax(132px,0.75fr)_40px]">
+        <div className="relative grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(190px,0.55fr)] @min-[640px]/assessment-filters:grid-cols-[minmax(150px,1fr)_minmax(132px,0.8fr)_minmax(132px,0.8fr)_minmax(190px,0.9fr)] @min-[980px]/assessment-filters:grid-cols-[minmax(170px,1.2fr)_minmax(110px,0.75fr)_minmax(110px,0.75fr)_minmax(78px,0.45fr)_minmax(132px,0.75fr)_minmax(132px,0.75fr)_40px]">
           <SearchInput
             className="@min-[980px]/assessment-filters:col-span-1"
             value={searchQuery}
             onChange={onSearchQueryChange}
           />
+
+          <div className="hidden min-w-0 @min-[640px]/assessment-filters:block @min-[980px]/assessment-filters:hidden">
+            <DateInput
+              ariaLabel="Updated from date"
+              className="w-full"
+              value={fromDateFilter}
+              onChange={onFromDateFilterChange}
+            />
+          </div>
+
+          <div className="hidden min-w-0 @min-[640px]/assessment-filters:block @min-[980px]/assessment-filters:hidden">
+            <DateInput
+              ariaLabel="Updated to date"
+              className="w-full"
+              value={toDateFilter}
+              onChange={onToDateFilterChange}
+            />
+          </div>
 
           <div className="grid grid-cols-[minmax(0,1fr)_40px] gap-2 @min-[980px]/assessment-filters:hidden">
             <button
@@ -211,9 +229,15 @@ export function AssessmentsTable({
             >
               <SlidersHorizontal size={13} className="shrink-0" aria-hidden="true" />
               <span className="truncate">More filters</span>
-              {hiddenFilterCount ? (
-                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#EAF3FF] text-[10px] font-bold text-[#007AFF]">
-                  {hiddenFilterCount}
+              {phoneHiddenFilterCount ? (
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#EAF3FF] text-[10px] font-bold text-[#007AFF] @min-[640px]/assessment-filters:hidden">
+                  {phoneHiddenFilterCount}
+                  <span className="sr-only"> active filters</span>
+                </span>
+              ) : null}
+              {coreHiddenFilterCount ? (
+                <span className="hidden size-5 shrink-0 items-center justify-center rounded-full bg-[#EAF3FF] text-[10px] font-bold text-[#007AFF] @min-[640px]/assessment-filters:flex @min-[980px]/assessment-filters:hidden">
+                  {coreHiddenFilterCount}
                   <span className="sr-only"> active filters</span>
                 </span>
               ) : null}
@@ -267,13 +291,13 @@ export function AssessmentsTable({
             />
             <DateInput
               ariaLabel="Updated from date"
-              className="min-[380px]:col-span-2 @min-[640px]/assessment-filters:col-span-1"
+              className="min-[380px]:col-span-2 @min-[640px]/assessment-filters:hidden @min-[980px]/assessment-filters:col-span-1 @min-[980px]/assessment-filters:flex"
               value={fromDateFilter}
               onChange={onFromDateFilterChange}
             />
             <DateInput
               ariaLabel="Updated to date"
-              className="min-[380px]:col-span-2 @min-[640px]/assessment-filters:col-span-1"
+              className="min-[380px]:col-span-2 @min-[640px]/assessment-filters:hidden @min-[980px]/assessment-filters:col-span-1 @min-[980px]/assessment-filters:flex"
               value={toDateFilter}
               onChange={onToDateFilterChange}
             />

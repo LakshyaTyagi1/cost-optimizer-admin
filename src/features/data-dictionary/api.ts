@@ -1,8 +1,4 @@
-import {
-  fetchAdminApiData,
-  fetchAdminApiList,
-  type AdminApiListPayload,
-} from "@/lib/api/client";
+import { fetchAdminApiData, fetchAdminApiList, type AdminApiListPayload } from "@/lib/api/client";
 
 import {
   processCategories,
@@ -18,6 +14,7 @@ import {
 
 type ApiEntity = {
   _id?: string;
+  associatedProcessCount?: number;
   displayOrder?: number;
   id?: string;
   isActive?: boolean;
@@ -164,6 +161,80 @@ export type DefaultIndustryProcessImportResult = {
   unavailableIndustryCount: number;
 };
 
+export type DefaultIndustryRow = {
+  categories: string[];
+  defaultProcessCount: number;
+  industryKey: string;
+  industryName: string;
+  status: "active" | "inactive" | "missing";
+  tiers: string[];
+};
+
+export type DefaultIndustryGrid = {
+  rows: DefaultIndustryRow[];
+  totalCount: number;
+};
+
+export type DefaultIndustryImportResult = {
+  createdCount: number;
+  reactivatedCount: number;
+  skippedCount: number;
+  totalCount: number;
+};
+
+export type IndustryDefaultProcessGridRow = {
+  category: string;
+  description: string;
+  industryKey: string;
+  industryName: string;
+  isActive: boolean;
+  name: string;
+  slug: string;
+  tier: string;
+};
+
+export type IndustryDefaultProcessGrid = {
+  columns: Array<{
+    key: string;
+    label: string;
+    required: boolean;
+  }>;
+  industryCount: number;
+  rows: IndustryDefaultProcessGridRow[];
+  totalCount: number;
+};
+
+export type IndustryDomainDefaultProcessImportResult = {
+  createdCount: number;
+  skippedCount: number;
+  totalCount: number;
+  unavailableDomainCount?: number;
+  unavailableIndustryDomainCount: number;
+};
+
+export type IndustryDomainDefaultProcessGridRow = {
+  category: string;
+  description: string;
+  domainKey: string;
+  domainName: string;
+  isActive: boolean;
+  name: string;
+  scope: string;
+  slug: string;
+  tier: string;
+};
+
+export type IndustryDomainDefaultProcessGrid = {
+  columns: Array<{
+    key: string;
+    label: string;
+    required: boolean;
+  }>;
+  domainCount: number;
+  rows: IndustryDomainDefaultProcessGridRow[];
+  totalCount: number;
+};
+
 const adminBasePath = "/adm/cos-process-management";
 
 export async function fetchDataDictionary(): Promise<DataDictionaryPayload> {
@@ -195,12 +266,8 @@ export async function fetchMappedProcesses(catalog: DataDictionaryCatalog) {
   ]);
 
   const mappedProcessRows = [
-    ...industryProcesses.map((process) =>
-      mapProcess(process, "industry-default", catalog),
-    ),
-    ...domainProcesses.map((process) =>
-      mapProcess(process, "industry-domain", catalog),
-    ),
+    ...industryProcesses.map((process) => mapProcess(process, "industry-default", catalog)),
+    ...domainProcesses.map((process) => mapProcess(process, "industry-domain", catalog)),
   ]
     .filter((process): process is DictionaryProcess => Boolean(process))
     .filter((process) => process.isActive !== false);
@@ -293,6 +360,17 @@ export async function createDataDictionaryIndustry(payload: { name: string }) {
   return mapIndustry(industry);
 }
 
+export async function fetchDataDictionaryDefaultIndustries() {
+  return fetchApi<DefaultIndustryGrid>(`${adminBasePath}/industries/defaults`);
+}
+
+export async function addDataDictionaryDefaultIndustries(payload: { industryKey?: string }) {
+  return fetchApi<DefaultIndustryImportResult>(`${adminBasePath}/industries/defaults`, {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
 export async function deleteDataDictionaryIndustry(payload: {
   force?: boolean;
   industryId: string;
@@ -353,7 +431,9 @@ export async function reorderDataDictionaryIndustries(payload: { industryIds: st
     method: "PUT",
   });
 
-  return industries.map(mapIndustry).filter((industry): industry is DictionaryIndustry => Boolean(industry));
+  return industries
+    .map(mapIndustry)
+    .filter((industry): industry is DictionaryIndustry => Boolean(industry));
 }
 
 export async function reorderDataDictionaryDomains(payload: {
@@ -381,13 +461,15 @@ export async function createDataDictionaryIndustryProcess(
   return getId(process);
 }
 
-export async function addDataDictionaryDefaultIndustryProcesses(payload: {
-  industryId: string;
-}) {
+export async function addDataDictionaryDefaultIndustryProcesses(payload: { industryId?: string }) {
   return fetchApi<DefaultIndustryProcessImportResult>(
     `${adminBasePath}/industry-processes/defaults`,
     { body: JSON.stringify(payload), method: "POST" },
   );
+}
+
+export async function fetchDataDictionaryIndustryDefaultGrid() {
+  return fetchApi<IndustryDefaultProcessGrid>(`${adminBasePath}/industry-processes/defaults`);
 }
 
 export async function createDataDictionaryDomainProcess(
@@ -401,7 +483,22 @@ export async function createDataDictionaryDomainProcess(
   return getId(process);
 }
 
-export async function createDataDictionaryTechStack(payload: DataDictionaryTechStackPayload): Promise<string> {
+export async function addDataDictionaryDefaultIndustryDomainProcesses(payload: {
+  industryDomainId?: string;
+}) {
+  return fetchApi<IndustryDomainDefaultProcessImportResult>(`${adminBasePath}/processes/defaults`, {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
+export async function fetchDataDictionaryIndustryDomainDefaultGrid() {
+  return fetchApi<IndustryDomainDefaultProcessGrid>(`${adminBasePath}/processes/defaults`);
+}
+
+export async function createDataDictionaryTechStack(
+  payload: DataDictionaryTechStackPayload,
+): Promise<string> {
   const tool = await fetchApi<ApiTechStack>(`${adminBasePath}/tech-stack`, {
     body: JSON.stringify(toApiTechStackPayload(payload)),
     method: "POST",
@@ -476,10 +573,13 @@ export async function archiveAllDataDictionaryTechStack() {
 }
 
 export async function deleteAllDataDictionaryTechStack() {
-  const deleteAllToolsResponse = await fetchApi<{ deletedCount?: number }>(`${adminBasePath}/tech-stack`, {
-    method: "DELETE",
-    params: { scope: "common" },
-  });
+  const deleteAllToolsResponse = await fetchApi<{ deletedCount?: number }>(
+    `${adminBasePath}/tech-stack`,
+    {
+      method: "DELETE",
+      params: { scope: "common" },
+    },
+  );
 
   return Number(deleteAllToolsResponse.deletedCount || 0);
 }
@@ -529,6 +629,20 @@ export async function permanentlyDeleteDataDictionaryProcess(process: Dictionary
   return getId(deletedProcess);
 }
 
+export type DeleteAllArchivedProcessesResult = {
+  counts: {
+    industryDefault: number;
+    industryDomain: number;
+  };
+  deletedCount: number;
+};
+
+export async function permanentlyDeleteAllArchivedDataDictionaryProcesses() {
+  return fetchApi<DeleteAllArchivedProcessesResult>(`${adminBasePath}/archive/processes`, {
+    method: "DELETE",
+  });
+}
+
 export async function restoreDataDictionaryProcess(process: DictionaryProcess) {
   const restoredProcess = await fetchApi<ApiProcess>(`${getProcessPath(process)}/restore`, {
     method: "PATCH",
@@ -546,7 +660,9 @@ export async function updateDataDictionaryCurrencyConversionRate(rate: number) {
     },
   );
 
-  const savedRate = Number(settingsResponse.displayToBaseCurrencyRate ?? settingsResponse.currencyConversionRate);
+  const savedRate = Number(
+    settingsResponse.displayToBaseCurrencyRate ?? settingsResponse.currencyConversionRate,
+  );
   return Number.isFinite(savedRate) && savedRate > 0 ? savedRate : rate;
 }
 
@@ -647,7 +763,10 @@ function mapCatalog(catalogPayload: ApiCatalogPayload = {}): DataDictionaryCatal
     libraries: sortByDisplayOrder(libraries),
     options: {
       categories: mapProcessOptions(catalogPayload.options?.categories),
-      currencyConversionRate: getCurrencyConversionRate(catalogPayload.options?.displayToBaseCurrencyRate ?? catalogPayload.options?.currencyConversionRate),
+      currencyConversionRate: getCurrencyConversionRate(
+        catalogPayload.options?.displayToBaseCurrencyRate ??
+          catalogPayload.options?.currencyConversionRate,
+      ),
       tiers: mapProcessOptions(catalogPayload.options?.tiers, getStaticTierOptions()),
     },
   };
@@ -662,12 +781,17 @@ function getCurrencyConversionRate(conversionRateValue: unknown) {
 function mapIndustry(industry?: ApiEntity): DictionaryIndustry | null {
   const id = getId(industry);
   const name = toDisplayName(industry?.name || industry?.slug || "");
+  const associatedProcessCount = industry?.associatedProcessCount;
 
   if (!id || !name) {
     return null;
   }
 
   return {
+    associatedProcessCount:
+      typeof associatedProcessCount === "number" && Number.isFinite(associatedProcessCount)
+        ? Math.max(0, Math.floor(associatedProcessCount))
+        : undefined,
     displayOrder: Number(industry?.displayOrder) || 0,
     id,
     isActive: industry?.isActive !== false,
@@ -769,7 +893,10 @@ function mapProcess(
       scope === "industry-domain"
         ? domain?.name || domainLibrary?.domainName || processDomainName || "Mapped Domain"
         : "Industry Default",
-    domainId: scope === "industry-domain" ? domain?.id || domainLibrary?.domainId || domainId : "industry-default",
+    domainId:
+      scope === "industry-domain"
+        ? domain?.id || domainLibrary?.domainId || domainId
+        : "industry-default",
     hours: formatHours(process.hoursPerYear),
     id,
     industryIds: industry?.id ? [industry.id] : industryId ? [industryId] : [],
@@ -780,7 +907,8 @@ function mapProcess(
     source: scope === "industry-domain" ? "Industry x Domain" : "Industry Default",
     tier: toTierLabel(process.tier),
     tierValue: process.tier || "",
-    industryLabel: industry?.name || domainLibrary?.industryName || processIndustryName || undefined,
+    industryLabel:
+      industry?.name || domainLibrary?.industryName || processIndustryName || undefined,
   };
 }
 
@@ -804,14 +932,18 @@ function mapTechStackTool(tool: ApiTechStack): TechStackTool | null {
   };
 }
 
-function mapTechStackBenchmarkPricing(value: ApiTechStack["benchmarkPricing"]): TechStackBenchmarkPricing | undefined {
+function mapTechStackBenchmarkPricing(
+  value: ApiTechStack["benchmarkPricing"],
+): TechStackBenchmarkPricing | undefined {
   if (!value || value.currency !== "USD") {
     return undefined;
   }
 
   const monthlyOperationalCost = normalizeOptionalBenchmarkCost(value.monthlyOperationalCost);
   const setupCost = normalizeOptionalBenchmarkCost(value.setupCost);
-  const confidence = ["published", "indicative", "quote-required"].includes(String(value.confidence))
+  const confidence = ["published", "indicative", "quote-required"].includes(
+    String(value.confidence),
+  )
     ? (value.confidence as TechStackBenchmarkPricing["confidence"])
     : undefined;
 
@@ -923,8 +1055,7 @@ function toApiProcessPayload<T extends DataDictionaryProcessPayload>(payload: T)
 }
 
 function getProcessPath(process: DictionaryProcess) {
-  const collectionPath =
-    process.scope === "industry-default" ? "industry-processes" : "processes";
+  const collectionPath = process.scope === "industry-default" ? "industry-processes" : "processes";
 
   return `${adminBasePath}/${collectionPath}/${process.id}`;
 }
@@ -991,10 +1122,7 @@ async function fetchAllListApi<T>(
     ),
   );
 
-  return [
-    ...(firstPage.data ?? []),
-    ...remainingPages.flatMap((page) => page.data ?? []),
-  ];
+  return [...(firstPage.data ?? []), ...remainingPages.flatMap((page) => page.data ?? [])];
 }
 
 function getId(entity?: ApiEntity | string | null) {

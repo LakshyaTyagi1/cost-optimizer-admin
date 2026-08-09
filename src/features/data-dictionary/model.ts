@@ -1,4 +1,5 @@
 export type DictionaryIndustry = {
+  associatedProcessCount?: number;
   displayOrder?: number;
   id: string;
   isActive?: boolean;

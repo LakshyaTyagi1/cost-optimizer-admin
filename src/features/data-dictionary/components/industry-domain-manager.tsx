@@ -11,6 +11,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import dynamic from "next/dynamic";
 import {
   Building2,
   Check,
@@ -22,6 +23,7 @@ import {
   Plus,
   RotateCcw,
   Search,
+  Sparkles,
   Table2,
   Trash2,
   X,
@@ -55,6 +57,7 @@ import {
   type MappedDictionaryDomain,
 } from "@/features/data-dictionary/utils/domain-mapping";
 import { getErrorMessage } from "@/features/data-dictionary/utils/error";
+import type { DefaultIndustriesWorkspaceProps } from "@/features/data-dictionary/components/default-industries-workspace";
 
 const dataDictionaryToastDismissMs = 8000;
 
@@ -67,6 +70,13 @@ const mappingGridClassName =
   "grid min-h-[320px] items-start gap-4 xl:grid-cols-[350px_minmax(0,1fr)_320px]";
 const mappingPanelClassName =
   "relative h-[320px] min-h-[320px] overflow-hidden rounded-md border border-black/[0.06] bg-white p-4";
+const DefaultIndustriesWorkspace = dynamic<DefaultIndustriesWorkspaceProps>(
+  () =>
+    import("@/features/data-dictionary/components/default-industries-workspace").then(
+      (module) => module.DefaultIndustriesWorkspace,
+    ),
+  { ssr: false },
+);
 
 export function IndustryDomainManager({
   domainName,
@@ -80,6 +90,7 @@ export function IndustryDomainManager({
   isDeletingDomain,
   isPermanentlyDeletingDomain,
   isDeletingIndustry,
+  isDefaultIndustriesSaving,
   isIndustrySaving,
   isMappingDomain,
   libraries,
@@ -96,6 +107,7 @@ export function IndustryDomainManager({
   onDeleteDomain,
   onPermanentlyDeleteDomain,
   onDeleteIndustry,
+  onSeedDefaultIndustries,
   onMapDomain,
   onMapDomainToIndustry,
   onReorderDomains,
@@ -112,6 +124,7 @@ export function IndustryDomainManager({
   isDeletingDomain: boolean;
   isPermanentlyDeletingDomain: boolean;
   isDeletingIndustry: boolean;
+  isDefaultIndustriesSaving: boolean;
   isIndustrySaving: boolean;
   isMappingDomain: boolean;
   libraries: DictionaryLibrary[];
@@ -128,6 +141,7 @@ export function IndustryDomainManager({
   onDeleteDomain: (domainId: string) => Promise<void>;
   onPermanentlyDeleteDomain: (domain: DictionaryDomain) => Promise<void>;
   onDeleteIndustry: (industryId: string, force?: boolean) => Promise<void>;
+  onSeedDefaultIndustries: (industryKey?: string) => Promise<boolean>;
   onMapDomain: (domainId: string) => Promise<void>;
   onMapDomainToIndustry: (industryId: string, domainId: string) => Promise<void>;
   onReorderDomains: (industryId: string, domainIds: string[]) => Promise<void>;
@@ -141,11 +155,14 @@ export function IndustryDomainManager({
     domainNames: string[];
     domainProcessCount: number;
     hasMappedData: boolean;
+    hasProcesses: boolean;
     industry: DictionaryIndustry;
+    processCount: number;
   } | null>(null);
   const [inactiveDomainDeleteTarget, setInactiveDomainDeleteTarget] =
     useState<MappedDictionaryDomain | null>(null);
   const [mappingView, setMappingView] = useState<"manage" | "table">("manage");
+  const [isDefaultIndustriesDialogOpen, setIsDefaultIndustriesDialogOpen] = useState(false);
   const [reorderToasts, setReorderToasts] = useState<ReorderToastState[]>([]);
   const [canScrollDomainLibraryDown, setCanScrollDomainLibraryDown] = useState(false);
   const [canScrollIndustriesDown, setCanScrollIndustriesDown] = useState(false);
@@ -264,7 +281,8 @@ export function IndustryDomainManager({
   const mappedDomainKeys = new Set(mappedDomains.map((domain) => domain.key));
   const normalizedDomainSearch = normalizeSearch(domainSearch);
   const filteredGlobalDomains = uniqueDomains.filter(
-    (domain) => !normalizedDomainSearch || normalizeSearch(domain.name).includes(normalizedDomainSearch),
+    (domain) =>
+      !normalizedDomainSearch || normalizeSearch(domain.name).includes(normalizedDomainSearch),
   );
   const isDeletingMapping = isDeletingDomain || isDeletingIndustry;
   const industryFieldHint = !normalizedIndustrySearch
@@ -326,9 +344,7 @@ export function IndustryDomainManager({
     }
 
     const toastTimeout = setTimeout(() => {
-      setReorderToasts((currentToasts) =>
-        currentToasts.filter((toast) => toast.id !== toastId),
-      );
+      setReorderToasts((currentToasts) => currentToasts.filter((toast) => toast.id !== toastId));
       reorderToastTimeoutsRef.current.delete(toastId);
     }, dataDictionaryToastDismissMs);
 
@@ -349,16 +365,10 @@ export function IndustryDomainManager({
 
   function dismissReorderToast(toastId: string) {
     clearReorderToastTimeout(toastId);
-    setReorderToasts((currentToasts) =>
-      currentToasts.filter((toast) => toast.id !== toastId),
-    );
+    setReorderToasts((currentToasts) => currentToasts.filter((toast) => toast.id !== toastId));
   }
 
-  function updateReorderToast(
-    toastId: string,
-    message: string,
-    tone: ReorderToastState["tone"],
-  ) {
+  function updateReorderToast(toastId: string, message: string, tone: ReorderToastState["tone"]) {
     setReorderToasts((currentToasts) => {
       const toastExists = currentToasts.some((toast) => toast.id === toastId);
       const nextToast = { id: toastId, message, tone };
@@ -489,7 +499,10 @@ export function IndustryDomainManager({
     );
 
     if (existingMappedDomain) {
-      showReorderToast(`${getDomainDisplayTitle(existingMappedDomain.name)} is already mapped to ${selectedIndustryName}`, "success");
+      showReorderToast(
+        `${getDomainDisplayTitle(existingMappedDomain.name)} is already mapped to ${selectedIndustryName}`,
+        "success",
+      );
       setDomainName("");
       return;
     }
@@ -527,27 +540,38 @@ export function IndustryDomainManager({
     }
 
     const industryMappedDomains = getMappedDomainsForIndustry(industryId, domains, libraries);
-    const defaultProcessCount = processes.filter(
-      (process) =>
-        process.scope === "industry-default" && process.industryIds.includes(industryId),
-    ).length;
-    const domainProcessCount = industryMappedDomains.reduce(
-      (count, domain) => count + domain.processCount,
-      0,
+    const industryProcesses = processes.filter((process) =>
+      process.industryIds.includes(industryId),
     );
+    const processCount = getAssociatedProcessCount(industry, industryProcesses.length);
+    const defaultProcessCount = industryProcesses.filter(
+      (process) => process.scope === "industry-default",
+    ).length;
+    const domainProcessCount = industryProcesses.length - defaultProcessCount;
 
     return {
       defaultProcessCount,
       domainNames: industryMappedDomains.map((domain) => getDomainDisplayTitle(domain.name)),
       domainProcessCount,
-      hasMappedData:
-        industryMappedDomains.length > 0 || defaultProcessCount > 0 || domainProcessCount > 0,
+      hasProcesses: processCount > 0,
+      hasMappedData: industryMappedDomains.length > 0 || processCount > 0,
       industry,
+      processCount,
     };
   }
 
   async function deleteIndustry(industryId: string, force = false) {
     const industry = orderedIndustries.find((item) => item.id === industryId);
+    const deleteImpact = getIndustryDeleteImpact(industryId);
+
+    if (deleteImpact?.hasProcesses) {
+      setIndustryDeleteImpact(null);
+      showReorderToast(
+        `${deleteImpact.industry.name} cannot be deactivated while processes exist. Remove or archive its processes first.`,
+        "error",
+      );
+      return;
+    }
 
     try {
       await onDeleteIndustry(industryId, force);
@@ -654,6 +678,16 @@ export function IndustryDomainManager({
 
     if (!deleteImpact) {
       showReorderToast("Industry not found", "error");
+      return;
+    }
+
+    if (deleteImpact.hasProcesses) {
+      showReorderToast(
+        `${deleteImpact.industry.name} cannot be deactivated while ${deleteImpact.processCount} ${
+          deleteImpact.processCount === 1 ? "process exists" : "processes exist"
+        }. Remove the ${deleteImpact.processCount === 1 ? "process" : "processes"} first.`,
+        "error",
+      );
       return;
     }
 
@@ -845,6 +879,16 @@ export function IndustryDomainManager({
         <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
           Industry and domain mapping
         </p>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setIsDefaultIndustriesDialogOpen(true)}
+            disabled={isCatalogLoading || isDefaultIndustriesSaving}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#B8D8FF] bg-[#F4FAFF] px-3 text-[11px] font-bold text-[#007AFF] transition hover:border-[#007AFF] hover:bg-[#EAF4FF] disabled:cursor-wait disabled:opacity-50"
+          >
+            <Sparkles size={12} aria-hidden="true" />
+            Add default industries
+          </button>
         <div
           aria-label="Industry and domain mapping view"
           className="inline-flex h-8 items-center rounded-md border border-black/[0.08] bg-[#F5F5F7] p-0.5"
@@ -880,6 +924,14 @@ export function IndustryDomainManager({
           </button>
         </div>
       </div>
+      </div>
+      {isDefaultIndustriesDialogOpen ? (
+        <DefaultIndustriesWorkspace
+          isSeeding={isDefaultIndustriesSaving}
+          onClose={() => setIsDefaultIndustriesDialogOpen(false)}
+          onSeedDefaults={onSeedDefaultIndustries}
+        />
+      ) : null}
       <div className="px-5 py-5">
         {isCatalogLoading ? (
           <IndustryDomainSkeleton />
@@ -893,10 +945,7 @@ export function IndustryDomainManager({
           />
         ) : (
           <div className={mappingGridClassName}>
-            <section
-              className={mappingPanelClassName}
-              style={mappingColumnStyle}
-            >
+            <section className={mappingPanelClassName} style={mappingColumnStyle}>
             <div className="min-h-8 border-b border-black/[0.06]">
               <div className="flex min-h-5 items-center justify-between gap-3">
                 <p className="min-w-0 text-[11px] leading-4 font-bold tracking-[0.08em] text-[#86868B] uppercase">
@@ -915,7 +964,7 @@ export function IndustryDomainManager({
                   onChange={(event) => setIndustryName(event.target.value)}
                   onKeyDown={handleIndustrySearchKeyDown}
                   disabled={isIndustrySaving}
-                  className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[#555555] outline-none placeholder:text-[#A1A1AA] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0 disabled:cursor-wait"
+                    className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[#555555] outline-none placeholder:text-[#A1A1AA] focus:!ring-0 focus:!outline-none focus-visible:!ring-0 focus-visible:!outline-none disabled:cursor-wait"
                   placeholder="Search industry or type new name"
                   title="Search industries, select an existing match, or press Enter to create a new industry"
                 />
@@ -938,6 +987,14 @@ export function IndustryDomainManager({
                   const isSelected = industry.id === selectedIndustryId;
                   const domainCount = domainCountByIndustryId.get(industry.id) ?? 0;
                   const isInactiveIndustry = industry.isActive === false;
+                    const visibleProcessCount = processes.filter((process) =>
+                      process.industryIds.includes(industry.id),
+                    ).length;
+                    const processCount = getAssociatedProcessCount(
+                      industry,
+                      visibleProcessCount,
+                    );
+                    const cannotDeactivate = !isInactiveIndustry && processCount > 0;
 
                   return (
                     <div
@@ -1010,36 +1067,38 @@ export function IndustryDomainManager({
                           {isInactiveIndustry ? "Hidden" : domainCount}
                         </span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          isInactiveIndustry
-                            ? void activateIndustry(industry)
-                            : requestDeleteIndustry(industry.id)
-                        }
-                        disabled={isDeletingMapping || isIndustrySaving}
-                        className={`flex size-7 items-center justify-center rounded-md transition disabled:cursor-not-allowed disabled:text-[#C7C7CC] ${
-                          isInactiveIndustry
-                            ? "text-[#007AFF] hover:bg-[#EAF3FF]"
-                            : "text-[#A1A1AA] hover:bg-[#FFF7F7] hover:text-[#EF4444]"
-                        }`}
-                        aria-label={
-                          isInactiveIndustry
-                            ? `Activate ${industry.name} industry`
-                            : `Deactivate ${industry.name} industry`
-                        }
-                        title={
-                          isInactiveIndustry
-                            ? `Activate ${industry.name} industry`
-                            : `Deactivate ${industry.name} industry`
-                        }
-                      >
-                        {isInactiveIndustry ? (
-                          <RotateCcw size={14} aria-hidden="true" />
-                        ) : (
-                          <EyeOff size={14} aria-hidden="true" />
-                        )}
-                      </button>
+                      {isInactiveIndustry || !cannotDeactivate ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            isInactiveIndustry
+                              ? void activateIndustry(industry)
+                              : requestDeleteIndustry(industry.id)
+                          }
+                          disabled={isDeletingMapping || isIndustrySaving}
+                          className={`flex size-7 items-center justify-center rounded-md transition disabled:cursor-not-allowed disabled:text-[#C7C7CC] ${
+                            isInactiveIndustry
+                              ? "text-[#007AFF] hover:bg-[#EAF3FF]"
+                              : "text-[#A1A1AA] hover:bg-[#FFF7F7] hover:text-[#EF4444]"
+                          }`}
+                          aria-label={
+                            isInactiveIndustry
+                              ? `Activate ${industry.name} industry`
+                              : `Deactivate ${industry.name} industry`
+                          }
+                          title={
+                            isInactiveIndustry
+                              ? `Activate ${industry.name} industry`
+                              : `Deactivate ${industry.name} industry`
+                          }
+                        >
+                          {isInactiveIndustry ? (
+                            <RotateCcw size={14} aria-hidden="true" />
+                          ) : (
+                            <EyeOff size={14} aria-hidden="true" />
+                          )}
+                        </button>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -1063,17 +1122,15 @@ export function IndustryDomainManager({
             </div>
           </section>
 
-          <section
-            className={mappingPanelClassName}
-            style={mappingColumnStyle}
-          >
+            <section className={mappingPanelClassName} style={mappingColumnStyle}>
             <div className="min-h-8 border-b border-black/[0.06]">
               <div className="flex min-h-5 items-center justify-between gap-3">
                 <p className="min-w-0 text-[11px] leading-4 font-bold tracking-[0.08em] text-[#86868B] uppercase">
                   Mapped Domains
                 </p>
                 <p className="shrink-0 truncate text-xs leading-4 font-semibold text-[#A1A1AA]">
-                  {selectedIndustryName} · {inactiveMappedDomains.length > 0
+                    {selectedIndustryName} ·{" "}
+                    {inactiveMappedDomains.length > 0
                     ? `${mappedDomains.length} active / ${displayedMappedDomains.length} total`
                     : `${mappedDomains.length} mapped`}
                 </p>
@@ -1090,8 +1147,12 @@ export function IndustryDomainManager({
                   }}
                   onKeyDown={handleDomainSearchKeyDown}
                   disabled={!selectedIndustryId || isDomainSaving || isMappingDomain}
-                  className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[#555555] outline-none placeholder:text-[#A1A1AA] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0 disabled:cursor-not-allowed disabled:text-[#A1A1AA]"
-                  placeholder={selectedIndustryId ? "Search domain or type new name" : "Select an industry first"}
+                    className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[#555555] outline-none placeholder:text-[#A1A1AA] focus:!ring-0 focus:!outline-none focus-visible:!ring-0 focus-visible:!outline-none disabled:cursor-not-allowed disabled:text-[#A1A1AA]"
+                    placeholder={
+                      selectedIndustryId
+                        ? "Search domain or type new name"
+                        : "Select an industry first"
+                    }
                   title={
                     selectedIndustryId
                       ? `Search mapped domains, map an existing global domain, or press Enter to create under ${selectedIndustryName}`
@@ -1121,8 +1182,8 @@ export function IndustryDomainManager({
                 >
                   <div className="grid gap-2 md:grid-cols-2">
                     <p id="mapped-domain-keyboard-help" className="sr-only">
-                      Press Alt Arrow Left or Alt Arrow Up to move a domain earlier. Press Alt Arrow
-                      Right or Alt Arrow Down to move a domain later.
+                        Press Alt Arrow Left or Alt Arrow Up to move a domain earlier. Press Alt
+                        Arrow Right or Alt Arrow Down to move a domain later.
                     </p>
                     {filteredOrderedMappedDomains.map((domain) => (
                       <MappedDomainCard
@@ -1170,11 +1231,11 @@ export function IndustryDomainManager({
             )}
           </section>
 
-          <section
-            className={mappingPanelClassName}
-            style={mappingColumnStyle}
+            <section className={mappingPanelClassName} style={mappingColumnStyle}>
+              <ColumnHeader
+                label="Domain Library"
+                meta={`${uniqueDomains.length} unique libraries`}
           >
-            <ColumnHeader label="Domain Library" meta={`${uniqueDomains.length} unique libraries`}>
               <span
                 className="rounded-full bg-[#F5F5F7] px-2 py-1 text-[10px] font-bold text-[#86868B]"
                 title="Duplicate domain names are grouped into one library item"
@@ -1275,15 +1336,12 @@ export function IndustryDomainManager({
           <div className="w-full max-w-[520px] rounded-md border border-black/[0.08] bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.18)]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p
-                  id="delete-industry-title"
-                  className="text-sm font-bold text-[#171717]"
-                >
+                <p id="delete-industry-title" className="text-sm font-bold text-[#171717]">
                   Deactivate {industryDeleteImpact.industry.name}
                 </p>
                 <p className="mt-2 text-xs leading-5 font-semibold text-[#86868B]">
-                  This will hide the industry and its mapped data from customer process
-                  options. You can activate the industry again from this list.
+                  This will hide the industry and its mapped data from customer process options. You
+                  can activate the industry again from this list.
                 </p>
               </div>
               <button
@@ -1298,9 +1356,18 @@ export function IndustryDomainManager({
               </button>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <DeleteImpactMetric label="Mapped domains" value={industryDeleteImpact.domainNames.length} />
-              <DeleteImpactMetric label="Default processes" value={industryDeleteImpact.defaultProcessCount} />
-              <DeleteImpactMetric label="Domain processes" value={industryDeleteImpact.domainProcessCount} />
+              <DeleteImpactMetric
+                label="Mapped domains"
+                value={industryDeleteImpact.domainNames.length}
+              />
+              <DeleteImpactMetric
+                label="Default processes"
+                value={industryDeleteImpact.defaultProcessCount}
+              />
+              <DeleteImpactMetric
+                label="Domain processes"
+                value={industryDeleteImpact.domainProcessCount}
+              />
             </div>
             {industryDeleteImpact.domainNames.length > 0 ? (
               <div className="mt-4 rounded-md border border-black/[0.06] bg-[#FAFAFA] p-3">
@@ -1335,9 +1402,7 @@ export function IndustryDomainManager({
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  void deleteIndustry(industryDeleteImpact.industry.id, true)
-                }
+                onClick={() => void deleteIndustry(industryDeleteImpact.industry.id, true)}
                 disabled={isDeletingIndustry}
                 className="h-9 rounded-md bg-[#EF4444] px-3 text-xs font-bold text-white transition hover:bg-[#DC2626] disabled:cursor-wait disabled:opacity-70"
               >
@@ -1367,10 +1432,7 @@ export function IndustryDomainManager({
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p
-                  id="permanent-domain-delete-title"
-                  className="text-sm font-bold text-[#171717]"
-                >
+                <p id="permanent-domain-delete-title" className="text-sm font-bold text-[#171717]">
                   Permanently delete {getDomainDisplayTitle(inactiveDomainDeleteTarget.name)}?
                 </p>
                 <p
@@ -1419,12 +1481,19 @@ export function IndustryDomainManager({
   );
 }
 
+function getAssociatedProcessCount(
+  industry: DictionaryIndustry,
+  visibleProcessCount: number,
+) {
+  return typeof industry.associatedProcessCount === "number"
+    ? Math.max(industry.associatedProcessCount, visibleProcessCount)
+    : visibleProcessCount;
+}
+
 function DeleteImpactMetric({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-md border border-black/[0.06] bg-[#FAFAFA] p-3">
-      <p className="text-[10px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
-        {label}
-      </p>
+      <p className="text-[10px] font-bold tracking-[0.08em] text-[#86868B] uppercase">{label}</p>
       <p className="mt-1 text-xl font-bold text-[#171717]">{value}</p>
     </div>
   );
@@ -1498,19 +1567,19 @@ function MappedDomainCard({
         isInactive
           ? "bg-[#F5F5F7] opacity-75"
           : "cursor-grab bg-[#FAFAFA] hover:border-[#B8D8FF] hover:bg-[#F8FBFF] active:cursor-grabbing"
-      } ${
-        isDragging ? "opacity-60" : ""
-      }`}
+      } ${isDragging ? "opacity-60" : ""}`}
     >
       <div className="min-w-0">
-        <p className={`truncate text-sm leading-5 font-bold ${isInactive ? "text-[#86868B]" : "text-[#171717]"}`}>
+        <p
+          className={`truncate text-sm leading-5 font-bold ${isInactive ? "text-[#86868B]" : "text-[#171717]"}`}
+        >
           {domainTitle}
         </p>
         <p className="text-xs leading-4 font-semibold text-[#86868B]">
           {isInactive ? "Hidden from users" : `${domain.processCount} processes`}
         </p>
       </div>
-      <div className="h-full flex shrink-0 items-center gap-1.5 text-[#A1A1AA]">
+      <div className="flex h-full shrink-0 items-center gap-1.5 text-[#A1A1AA]">
         {isInactive ? (
           <>
             <button
@@ -1557,14 +1626,7 @@ function MappedDomainCard({
   );
 }
 
-
-function ScrollDownButton({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) {
+function ScrollDownButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -1666,11 +1728,7 @@ function IndustryDomainRelationTable({
   }
 
   if (industries.length === 0 || domains.length === 0) {
-    return (
-      <EmptyState
-        label="Add industries and domains to see the relation table."
-      />
-    );
+    return <EmptyState label="Add industries and domains to see the relation table." />;
   }
 
   return (
@@ -1795,4 +1853,3 @@ function IndustryDomainSkeleton() {
     </div>
   );
 }
-
