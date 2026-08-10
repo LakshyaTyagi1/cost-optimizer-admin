@@ -217,6 +217,8 @@ export type IndustryDomainDefaultProcessGridRow = {
   description: string;
   domainKey: string;
   domainName: string;
+  industryKey?: string;
+  industryName?: string;
   isActive: boolean;
   name: string;
   scope: string;
@@ -231,6 +233,7 @@ export type IndustryDomainDefaultProcessGrid = {
     required: boolean;
   }>;
   domainCount: number;
+  industryCount?: number;
   rows: IndustryDomainDefaultProcessGridRow[];
   totalCount: number;
 };
@@ -846,6 +849,10 @@ function mapLibrary(
       toDisplayName(industry?.name || industry?.slug || "") ||
       fallbackNames.industryName ||
       "Mapped Industry",
+    industrySlug:
+      mapping?.industrySlug ||
+      industry?.slug ||
+      toSlug(mapping?.industryName || industry?.name || fallbackNames.industryName || ""),
     isActive: mapping?.isActive !== false,
     processCount: Math.max(0, Number(mapping?.processCount) || 0),
   };

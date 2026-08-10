@@ -26,7 +26,7 @@ export type IndustryDefaultsWorkspaceProps = {
 };
 
 function getIndustryKey(industry: DictionaryIndustry) {
-  return industry.slug || toSlug(industry.name);
+  return toSlug(industry.slug || industry.name);
 }
 
 function normalizeRow(row: IndustryDefaultProcessGridRow): IndustryDefaultProcessGridRow {
@@ -90,17 +90,28 @@ export function IndustryDefaultsWorkspace({
     [rows, tableIndustryKey],
   );
   const processListOptions = useMemo<DefaultsProcessListOption[]>(() => {
-    const rowCountByIndustry = new Map<string, number>();
+    const configuredIndustryKeys = new Set(industryChoices.map((industry) => industry.key));
+    const sourceIndustries = new Map<string, { count: number; name: string }>();
+
     rows.forEach((row) => {
-      rowCountByIndustry.set(row.industryKey, (rowCountByIndustry.get(row.industryKey) || 0) + 1);
+      if (!row.industryKey) {
+        return;
+      }
+
+      const currentIndustry = sourceIndustries.get(row.industryKey);
+      sourceIndustries.set(row.industryKey, {
+        count: (currentIndustry?.count || 0) + 1,
+        name: currentIndustry?.name || row.industryName || row.industryKey,
+      });
     });
 
     return [
       { value: "all", label: "All industries", count: rows.length },
-      ...industryChoices.map((industry) => ({
-        value: industry.key,
-        label: industry.name,
-        count: rowCountByIndustry.get(industry.key) || 0,
+      ...Array.from(sourceIndustries, ([industryKey, sourceIndustry]) => ({
+        value: industryKey,
+        label: sourceIndustry.name,
+        count: sourceIndustry.count,
+        isConfigured: configuredIndustryKeys.has(industryKey),
       })),
     ];
   }, [industryChoices, rows]);
@@ -155,8 +166,8 @@ export function IndustryDefaultsWorkspace({
       descriptionId="industry-defaults-workspace-description"
       description={
         <>
-          Review the built-in industry-specific process list, then seed the selected industry or all
-          configured industries. Domain processes are always excluded.
+          Review the built-in industry-specific process list, then add the default processes for the
+          selected industry or all configured industries. Domain processes are always excluded.
         </>
       }
       icon={<FileSpreadsheet size={17} aria-hidden="true" />}
@@ -166,7 +177,7 @@ export function IndustryDefaultsWorkspace({
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:gap-2">
           <label className="block min-w-0 md:w-[320px] xl:w-auto xl:min-w-[260px] xl:flex-1">
             <span className="mb-1 block text-[10px] font-bold tracking-[0.08em] text-[#68686D] uppercase">
-              Industry to seed
+              Target industry
             </span>
             <span className="relative block">
               <Building2
@@ -197,7 +208,7 @@ export function IndustryDefaultsWorkspace({
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#007AFF] px-4 text-xs font-bold whitespace-nowrap text-white transition hover:bg-[#0063CC] focus-visible:ring-2 focus-visible:ring-[#007AFF]/25 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-wait disabled:bg-[#A8CCF8] md:w-auto"
             >
               <Sparkles size={14} aria-hidden="true" />
-              Seed selected
+              Add selected defaults
             </button>
             <button
               type="button"
@@ -206,7 +217,7 @@ export function IndustryDefaultsWorkspace({
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#9BC7F7] bg-white px-4 text-xs font-bold whitespace-nowrap text-[#0063CC] transition hover:bg-[#EAF4FF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/20 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-wait disabled:opacity-50 md:w-auto"
             >
               <Sparkles size={14} aria-hidden="true" />
-              Seed all industries
+              Add defaults to all industries
             </button>
           </div>
           <span className="hidden h-10 w-px shrink-0 bg-[#D7E7F6] xl:block" aria-hidden="true" />

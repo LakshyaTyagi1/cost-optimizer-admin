@@ -47,10 +47,11 @@ export function createProcessFormFromProcess(
     costCurrency: process.costCurrency || (process.cost.startsWith("$") ? "USD" : "AED"),
     description: process.description,
     domainId: process.scope === "industry-domain" ? process.domainId || "" : "",
-    hours: process.hours === "Not set" ? "1200" : formatProcessAmountInput(parseAmount(process.hours)),
+    hours:
+      process.hours === "Not set" ? "1200" : formatProcessAmountInput(parseAmount(process.hours)),
     industryId: process.industryIds[0] || industries[0]?.id || "",
     name: process.name,
-    tier: process.tier,
+    tier: process.tierValue || toSlug(process.tier),
   };
 }
 
@@ -58,7 +59,9 @@ export function createToolFormFromTool(tool: TechStackTool): ToolFormState {
   return {
     benchmarkCheckedAt: tool.benchmarkPricing?.checkedAt || "",
     benchmarkConfidence: tool.benchmarkPricing?.confidence || "",
-    benchmarkMonthlyOperationalCost: formatOptionalBenchmarkCost(tool.benchmarkPricing?.monthlyOperationalCost),
+    benchmarkMonthlyOperationalCost: formatOptionalBenchmarkCost(
+      tool.benchmarkPricing?.monthlyOperationalCost,
+    ),
     benchmarkSetupCost: formatOptionalBenchmarkCost(tool.benchmarkPricing?.setupCost),
     benchmarkSourceLabel: tool.benchmarkPricing?.sourceLabel || "",
     benchmarkSourceUrl: tool.benchmarkPricing?.sourceUrl || "",
@@ -69,8 +72,13 @@ export function createToolFormFromTool(tool: TechStackTool): ToolFormState {
   };
 }
 
-export function createToolBenchmarkPricingPayload(toolForm: ToolFormState): TechStackBenchmarkPricing | null {
-  const monthlyOperationalCost = parseOptionalBenchmarkCost(toolForm.benchmarkMonthlyOperationalCost, "Monthly operational cost");
+export function createToolBenchmarkPricingPayload(
+  toolForm: ToolFormState,
+): TechStackBenchmarkPricing | null {
+  const monthlyOperationalCost = parseOptionalBenchmarkCost(
+    toolForm.benchmarkMonthlyOperationalCost,
+    "Monthly operational cost",
+  );
   const setupCost = parseOptionalBenchmarkCost(toolForm.benchmarkSetupCost, "Setup cost");
   const sourceLabel = toolForm.benchmarkSourceLabel.trim();
   const sourceUrl = toolForm.benchmarkSourceUrl.trim();
@@ -95,7 +103,14 @@ export function createToolBenchmarkPricingPayload(toolForm: ToolFormState): Tech
     throw new Error("Benchmark checked date must be a valid date");
   }
 
-  if (monthlyOperationalCost === null && setupCost === null && !sourceLabel && !sourceUrl && !checkedAt && !confidence) {
+  if (
+    monthlyOperationalCost === null &&
+    setupCost === null &&
+    !sourceLabel &&
+    !sourceUrl &&
+    !checkedAt &&
+    !confidence
+  ) {
     return null;
   }
 

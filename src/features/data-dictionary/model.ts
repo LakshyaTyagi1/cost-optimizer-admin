@@ -23,6 +23,7 @@ export type DictionaryLibrary = {
   id: string;
   industryId: string;
   industryName: string;
+  industrySlug?: string;
   isActive?: boolean;
   processCount?: number;
 };

@@ -9,10 +9,7 @@ import {
   type ProcessOption,
   type ProcessTier,
 } from "@/features/data-dictionary/model";
-import {
-  formatConversionRateInput,
-  parseAmount,
-} from "@/features/data-dictionary/utils/amount";
+import { formatConversionRateInput, parseAmount } from "@/features/data-dictionary/utils/amount";
 import { toSlug } from "@/features/data-dictionary/utils/domain-mapping";
 
 export type ProcessFormState = {
@@ -75,9 +72,9 @@ export function NewProcessModal({
   );
   const canAddProcess = Boolean(
     processForm.name.trim() &&
-      selectedIndustryId &&
-      processForm.category.trim() &&
-      processForm.tier.trim(),
+    selectedIndustryId &&
+    processForm.category.trim() &&
+    processForm.tier.trim(),
   );
   const currencyRateValue = parseAmount(currencyRateInput);
   const canSaveCurrencyRate =
@@ -213,24 +210,20 @@ export function NewProcessModal({
                 ))}
               </select>
             </Field>
-            <SearchCreateField
-              listId="new-process-category-options"
+            <SelectOnlyField
               label="Category"
               options={categoryOptions}
-              placeholder="Search or create category"
+              placeholder="Select category"
               required
-              value={getOptionInputValue(categoryOptions, processForm.category)}
-              onChange={(value) =>
-                setProcessForm((current) => ({ ...current, category: value }))
-              }
+              value={processForm.category}
+              onChange={(value) => setProcessForm((current) => ({ ...current, category: value }))}
             />
-            <SearchCreateField
-              listId="new-process-tier-options"
+            <SelectOnlyField
               label="Tier"
               options={tierOptions}
-              placeholder="Search or create tier"
+              placeholder="Select tier"
               required
-              value={getOptionInputValue(tierOptions, processForm.tier)}
+              value={processForm.tier}
               onChange={(value) =>
                 setProcessForm((current) => ({
                   ...current,
@@ -284,7 +277,7 @@ export function NewProcessModal({
                     <input
                       value={currencyRateInput}
                       onChange={(event) => setCurrencyRateInput(event.target.value)}
-                      className="h-7 w-[86px] shrink-0 rounded-md border border-[#D9E3F0] bg-white px-2 text-right text-xs font-bold text-[#333333] outline-none transition focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10"
+                      className="h-7 w-[86px] shrink-0 rounded-md border border-[#D9E3F0] bg-white px-2 text-right text-xs font-bold text-[#333333] transition outline-none focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10"
                       inputMode="decimal"
                       aria-label="USD to AED conversion rate"
                     />
@@ -343,9 +336,8 @@ export function NewProcessModal({
   );
 }
 
-function SearchCreateField({
+function SelectOnlyField({
   label,
-  listId,
   onChange,
   options,
   placeholder,
@@ -353,42 +345,44 @@ function SearchCreateField({
   value,
 }: {
   label: string;
-  listId: string;
   onChange: (value: string) => void;
   options: readonly ProcessOption[];
   placeholder: string;
   required?: boolean;
   value: string;
 }) {
-  const isExistingOption = hasMatchingOption(options, value);
+  const normalizedValue = toSlug(value);
+  const selectedOption = options.find(
+    (option) => option.value === normalizedValue || toSlug(option.label) === normalizedValue,
+  );
+  const selectedValue = selectedOption?.value || value;
+  const legacyOption = value.trim() && !selectedOption ? { label: value, value } : null;
 
   return (
     <Field label={label} required={required}>
       <div className="relative">
-        <input
-          value={value}
+        <select
+          value={selectedValue}
           onChange={(event) => onChange(event.target.value)}
-          className={`${fieldInputClass} process-option-combobox appearance-none pr-20`}
-          list={listId}
-          placeholder={placeholder}
-          title={placeholder}
-        />
+          className={`${fieldInputClass} appearance-none pr-10`}
+          required={required}
+        >
+          <option value="" disabled>
+            {placeholder}
+          </option>
+          {legacyOption ? <option value={legacyOption.value}>{legacyOption.label}</option> : null}
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
         <ChevronDown
           size={16}
           className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[#333333]"
           aria-hidden="true"
         />
-        {value.trim() && !isExistingOption ? (
-          <span className="pointer-events-none absolute top-1/2 right-8 -translate-y-1/2 rounded-md bg-[#EAF3FF] px-2 py-0.5 text-[10px] font-bold text-[#007AFF]">
-            New
-          </span>
-        ) : null}
       </div>
-      <datalist id={listId}>
-        {options.map((option) => (
-          <option key={option.value} value={option.label} />
-        ))}
-      </datalist>
     </Field>
   );
 }
@@ -410,29 +404,6 @@ function Field({
       </span>
       {children}
     </label>
-  );
-}
-
-function getOptionInputValue(options: readonly ProcessOption[], value: string) {
-  const normalizedValue = toSlug(value);
-
-  if (!normalizedValue) {
-    return "";
-  }
-
-  return (
-    options.find((option) => option.value === normalizedValue)?.label ||
-    value
-  );
-}
-
-function hasMatchingOption(options: readonly ProcessOption[], value: string) {
-  const normalizedValue = toSlug(value);
-
-  return options.some(
-    (option) =>
-      option.value === normalizedValue ||
-      toSlug(option.label) === normalizedValue,
   );
 }
 
@@ -460,9 +431,7 @@ function convertProcessCost(
   }
 
   const convertedAmount =
-    currentCurrency === "USD" && nextCurrency === "AED"
-      ? amount * rate
-      : amount / rate;
+    currentCurrency === "USD" && nextCurrency === "AED" ? amount * rate : amount / rate;
 
   return formatProcessCostInput(convertedAmount);
 }

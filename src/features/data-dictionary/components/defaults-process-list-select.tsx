@@ -15,6 +15,7 @@ import { createPortal } from "react-dom";
 
 export type DefaultsProcessListOption = {
   count: number;
+  isConfigured?: boolean;
   label: string;
   value: string;
 };
@@ -385,6 +386,22 @@ export function DefaultsProcessListSelect({
                         <span className="min-w-0 flex-1 truncate text-xs font-semibold">
                           {option.label}
                         </span>
+                        {typeof option.isConfigured === "boolean" ? (
+                          <span
+                            className={`inline-flex h-5 shrink-0 items-center rounded-full border px-2 text-[9px] font-bold whitespace-nowrap ${
+                              option.isConfigured
+                                ? "border-[#B7E4CE] bg-[#F0FDF4] text-[#16794A]"
+                                : "border-[#D9E3F0] bg-[#F5F8FB] text-[#68686D]"
+                            }`}
+                            title={
+                              option.isConfigured
+                                ? "Industry is added to the system"
+                                : "Industry is not added to the system"
+                            }
+                          >
+                            {option.isConfigured ? "Configured" : "Not configured"}
+                          </span>
+                        ) : null}
                         <span
                           className={`inline-flex h-5 min-w-7 shrink-0 items-center justify-center rounded-full px-2 text-[10px] font-bold ${
                             isSelected

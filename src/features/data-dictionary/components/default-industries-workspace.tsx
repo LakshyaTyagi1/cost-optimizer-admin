@@ -160,7 +160,7 @@ export function DefaultIndustriesWorkspace({
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#007AFF] px-4 text-xs font-bold whitespace-nowrap text-white transition hover:bg-[#0063CC] focus-visible:ring-2 focus-visible:ring-[#007AFF]/25 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-wait disabled:bg-[#A8CCF8] md:w-auto"
             >
               <Sparkles size={14} aria-hidden="true" />
-              Seed selected
+              Add selected industry
             </button>
             <button
               type="button"
@@ -169,7 +169,7 @@ export function DefaultIndustriesWorkspace({
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#9BC7F7] bg-white px-4 text-xs font-bold whitespace-nowrap text-[#0063CC] transition hover:bg-[#EAF4FF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/20 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-wait disabled:opacity-50 md:w-auto"
             >
               <Sparkles size={14} aria-hidden="true" />
-              Seed all industries
+              Add all default industries
             </button>
           </div>
         </div>

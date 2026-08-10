@@ -432,7 +432,7 @@ export function DataDictionaryPage() {
     }
 
     const toastId = showTechStackToast(
-      industryKey ? "Seeding default industry..." : "Seeding all default industries...",
+      industryKey ? "Adding default industry..." : "Adding all default industries...",
       "processing",
     );
 
@@ -743,8 +743,8 @@ export function DataDictionaryPage() {
     const isSeedingAllIndustries = !industryId;
     const toastId = showTechStackToast(
       isSeedingAllIndustries
-        ? "Seeding all industry default processes..."
-        : `Seeding ${selectedIndustry?.name || "industry"} default processes...`,
+        ? "Adding default processes for all industries..."
+        : `Adding default processes for ${selectedIndustry?.name || "industry"}...`,
       "processing",
     );
 
@@ -837,8 +837,8 @@ export function DataDictionaryPage() {
       : "Industry × Domain";
     const toastId = showTechStackToast(
       isSeedingAllMappings
-        ? "Seeding all Industry × Domain default processes..."
-        : `Seeding ${mappingLabel} default processes...`,
+        ? "Adding default processes for all Industry × Domain mappings..."
+        : `Adding default processes for ${mappingLabel}...`,
       "processing",
     );
 
@@ -1369,9 +1369,7 @@ export function DataDictionaryPage() {
             filteredProcesses={filteredProcesses}
             industries={industries}
             isCatalogLoading={isCatalogLoading}
-            isDefaultDomainProcessesSaving={
-              addDefaultIndustryDomainProcessesMutation.isPending
-            }
+            isDefaultDomainProcessesSaving={addDefaultIndustryDomainProcessesMutation.isPending}
             isDefaultProcessesSaving={addDefaultIndustryProcessesMutation.isPending}
             isProcessSaving={isProcessSaving}
             isProcessFormOpen={isProcessFormOpen}

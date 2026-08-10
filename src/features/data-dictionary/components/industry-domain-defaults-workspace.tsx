@@ -37,6 +37,8 @@ function normalizeRow(
     description: String(row.description || "").trim(),
     domainKey: toSlug(row.domainKey || row.domainName || ""),
     domainName: String(row.domainName || "").trim(),
+    industryKey: toSlug(row.industryKey || row.industryName || ""),
+    industryName: String(row.industryName || "").trim(),
     isActive: row.isActive !== false,
     name: String(row.name || "").trim(),
     scope: String(row.scope || "Domain").trim(),
@@ -47,11 +49,12 @@ function normalizeRow(
 
 function getTierLabel(tier: string) {
   const labels: Record<string, string> = {
-    future: "Future",
-    "future-enhancement": "Future Enhancement",
+    future: "Future Enhancements",
+    "future-enhancement": "Future Enhancements",
+    "future-enhancements": "Future Enhancements",
     "good-to-have": "Good-to-Have",
     "must-have": "Must-Have",
-    "nice-to-have": "Nice to Have",
+    "nice-to-have": "Nice-to-Have",
   };
 
   return labels[toSlug(tier)] || tier;
@@ -87,6 +90,7 @@ export function IndustryDomainDefaultsWorkspace({
           id: library.id,
           domainName: getDomainDisplayTitle(library.domainName),
           industryId: library.industryId,
+          industryKey: toSlug(library.industrySlug || library.industryName),
           industryName: library.industryName,
         })),
     [libraries],
@@ -110,41 +114,48 @@ export function IndustryDomainDefaultsWorkspace({
     [activeMappings, initialIndustryDomainId, selectedMappingId],
   );
   const selectedIndustryId = selectedMapping?.industryId || "";
+  const selectedIndustryKey = selectedMapping?.industryKey || "";
   const seedDomainChoices = useMemo(
     () => activeMappings.filter((mapping) => mapping.industryId === selectedIndustryId),
     [activeMappings, selectedIndustryId],
   );
+  const effectiveRows = useMemo(
+    () => rows.filter((row) => !row.industryKey || row.industryKey === selectedIndustryKey),
+    [rows, selectedIndustryKey],
+  );
   const domainChoices = useMemo(() => {
     const choices = new Map<string, string>();
 
-    rows.forEach((row) => {
+    effectiveRows.forEach((row) => {
       if (row.domainKey && !choices.has(row.domainKey)) {
         choices.set(row.domainKey, row.domainName || getDomainDisplayTitle(row.domainKey));
       }
     });
 
     return Array.from(choices, ([key, name]) => ({ key, name }));
-  }, [rows]);
+  }, [effectiveRows]);
   const displayedRows = useMemo(
     () =>
-      tableDomainKey === "all" ? rows : rows.filter((row) => row.domainKey === tableDomainKey),
-    [rows, tableDomainKey],
+      tableDomainKey === "all"
+        ? effectiveRows
+        : effectiveRows.filter((row) => row.domainKey === tableDomainKey),
+    [effectiveRows, tableDomainKey],
   );
   const processListOptions = useMemo<DefaultsProcessListOption[]>(() => {
     const rowCountByDomain = new Map<string, number>();
-    rows.forEach((row) => {
+    effectiveRows.forEach((row) => {
       rowCountByDomain.set(row.domainKey, (rowCountByDomain.get(row.domainKey) || 0) + 1);
     });
 
     return [
-      { value: "all", label: "All domains", count: rows.length },
+      { value: "all", label: "All domains", count: effectiveRows.length },
       ...domainChoices.map((domain) => ({
         value: domain.key,
         label: getDomainDisplayTitle(domain.name),
         count: rowCountByDomain.get(domain.key) || 0,
       })),
     ];
-  }, [domainChoices, rows]);
+  }, [domainChoices, effectiveRows]);
   const isBusy = isLoading || isSeeding;
 
   useEffect(() => {
@@ -155,9 +166,7 @@ export function IndustryDomainDefaultsWorkspace({
         .then((grid) => {
           if (!isMounted) return;
           setRows((grid.rows || []).map(normalizeRow));
-          setStatusMessage(
-            `${grid.totalCount || grid.rows?.length || 0} domain-specific source rows loaded.`,
-          );
+          setStatusMessage("");
         })
         .catch((error) => {
           if (isMounted) setErrorMessage(getErrorMessage(error));
@@ -214,8 +223,9 @@ export function IndustryDomainDefaultsWorkspace({
       descriptionId="industry-domain-defaults-workspace-description"
       description={
         <>
-          Review the built-in domain process list, then seed the selected active industry × domain
-          mapping or all supported mappings. Industry-specific processes are always excluded.
+          Review the built-in domain process list, then add the default processes for the selected
+          active industry × domain mapping or all supported mappings. Industry-specific processes
+          are always excluded.
         </>
       }
       icon={<FileSpreadsheet size={17} aria-hidden="true" />}
@@ -225,7 +235,7 @@ export function IndustryDomainDefaultsWorkspace({
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(150px,0.8fr)_minmax(180px,1fr)_auto_minmax(190px,0.9fr)] xl:items-end xl:gap-2">
           <label className="block min-w-0">
             <span className="mb-1 block text-[10px] font-bold tracking-[0.08em] text-[#68686D] uppercase">
-              Industry to seed
+              Target industry
             </span>
             <span className="relative block">
               <Building2
@@ -238,7 +248,7 @@ export function IndustryDomainDefaultsWorkspace({
                 value={selectedIndustryId}
                 onChange={(event) => selectIndustry(event.target.value)}
                 disabled={isBusy || industryChoices.length === 0}
-                aria-label="Industry to seed"
+                aria-label="Target industry"
                 className="h-10 w-full appearance-none rounded-lg border border-[#C9DBEE] bg-white pr-8 pl-9 text-sm font-semibold text-[#333] transition outline-none focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10 disabled:cursor-wait"
               >
                 {industryChoices.length === 0 ? (
@@ -254,7 +264,7 @@ export function IndustryDomainDefaultsWorkspace({
           </label>
           <label className="block min-w-0">
             <span className="mb-1 block text-[10px] font-bold tracking-[0.08em] text-[#68686D] uppercase">
-              Domain to seed
+              Target domain
             </span>
             <span className="relative block">
               <Database
@@ -266,7 +276,7 @@ export function IndustryDomainDefaultsWorkspace({
                 value={selectedMapping?.id || ""}
                 onChange={(event) => selectDomain(event.target.value)}
                 disabled={isBusy || seedDomainChoices.length === 0}
-                aria-label="Domain to seed"
+                aria-label="Target domain"
                 className="h-10 w-full appearance-none rounded-lg border border-[#C9DBEE] bg-white pr-8 pl-9 text-sm font-semibold text-[#333] transition outline-none focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10 disabled:cursor-wait"
               >
                 {seedDomainChoices.length === 0 ? (
@@ -288,7 +298,7 @@ export function IndustryDomainDefaultsWorkspace({
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#007AFF] px-4 text-xs font-bold whitespace-nowrap text-white transition hover:bg-[#0063CC] focus-visible:ring-2 focus-visible:ring-[#007AFF]/25 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-wait disabled:bg-[#A8CCF8] md:w-auto"
             >
               <Sparkles size={14} aria-hidden="true" />
-              Seed selected
+              Add selected defaults
             </button>
             <button
               type="button"
@@ -297,7 +307,7 @@ export function IndustryDomainDefaultsWorkspace({
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#9BC7F7] bg-white px-4 text-xs font-bold whitespace-nowrap text-[#0063CC] transition hover:bg-[#EAF4FF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/20 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-wait disabled:opacity-50 md:w-auto"
             >
               <Sparkles size={14} aria-hidden="true" />
-              Seed all mappings
+              Add defaults to all mappings
             </button>
           </div>
           <DefaultsProcessListSelect
@@ -317,7 +327,7 @@ export function IndustryDomainDefaultsWorkspace({
           <p className="text-xs font-semibold text-[#16794A]">{statusMessage}</p>
         ) : (
           <p className="text-xs font-semibold text-[#68686D]">
-            {displayedRows.length} of {rows.length} domain-specific rows displayed
+            {displayedRows.length} of {effectiveRows.length} domain-specific rows displayed
           </p>
         )
       }
@@ -374,7 +384,7 @@ export function IndustryDomainDefaultsWorkspace({
           <tbody>
             {displayedRows.map((row, rowIndex) => (
               <tr
-                key={`${row.domainKey}:${row.slug}:${rowIndex}`}
+                key={`${row.industryKey || "shared"}:${row.domainKey}:${row.slug}:${rowIndex}`}
                 className="h-11 bg-white even:bg-[#FAFCFE]"
               >
                 <td className="border-r border-b border-black/[0.06] px-3 text-center text-[11px] font-semibold text-[#8A8A8F]">
