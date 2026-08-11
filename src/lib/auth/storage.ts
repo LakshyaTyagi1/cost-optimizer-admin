@@ -6,12 +6,16 @@ const userDetailsKey = "admin_user";
 
 export type AdminUser = {
   _id?: string;
+  company?: string;
   email_id?: string;
   first_name?: string;
+  industry?: string;
+  is_company_admin?: boolean;
+  job_title?: string;
   last_name?: string;
   profile_pic_url?: string;
   profilePicUrl?: string;
-  user_access?: string[];
+  user_access?: string | string[];
 };
 
 export function getAccessToken() {

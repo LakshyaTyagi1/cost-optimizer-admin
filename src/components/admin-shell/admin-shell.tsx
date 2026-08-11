@@ -17,7 +17,15 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import type { AdminUser } from "@/lib/auth/storage";
@@ -29,6 +37,7 @@ type NavigationLabel =
   | "Experts"
   | "Team"
   | "Archive"
+  | "Profile"
   | "Settings";
 
 type NavigationItem = {
@@ -36,6 +45,8 @@ type NavigationItem = {
   icon: LucideIcon;
   label: NavigationLabel;
 };
+
+type DesktopSidebarVariant = "default" | "figma";
 
 const navigationItems: readonly NavigationItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -52,53 +63,85 @@ const mobileSidebarTitleId = "mobile-admin-sidebar-title";
 const desktopProfileMenuId = "desktop-admin-profile-menu";
 const mobileProfileMenuId = "mobile-admin-profile-menu";
 const desktopSidebarStateStorageKey = "cost-optimizer-admin:desktop-sidebar-state";
+const desktopSidebarStateChangeEvent = "cost-optimizer-admin:desktop-sidebar-state-change";
+let fallbackDesktopSidebarCollapsedState: boolean | null = null;
 
-function getInitialDesktopSidebarCollapsedState() {
-  if (typeof window === "undefined") {
-    return true;
-  }
-
+function getDesktopSidebarCollapsedSnapshot(defaultCollapsedState: boolean) {
   try {
     const savedSidebarState = window.localStorage.getItem(desktopSidebarStateStorageKey);
 
-    return savedSidebarState !== "expanded";
+    if (savedSidebarState) {
+      return savedSidebarState === "collapsed";
+    }
   } catch {
-    return true;
+    // Fall back to in-memory state when storage is unavailable.
   }
+
+  return fallbackDesktopSidebarCollapsedState ?? defaultCollapsedState;
+}
+
+function subscribeToDesktopSidebarState(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(desktopSidebarStateChangeEvent, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(desktopSidebarStateChangeEvent, onStoreChange);
+  };
 }
 
 export function AdminShell({
   activeItem,
   children,
+  defaultSidebarCollapsed = true,
+  desktopSidebarVariant = "default",
 }: {
   activeItem: NavigationLabel;
   children: ReactNode;
+  defaultSidebarCollapsed?: boolean;
+  desktopSidebarVariant?: DesktopSidebarVariant;
 }) {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(getInitialDesktopSidebarCollapsedState);
+  const getSidebarSnapshot = useCallback(
+    () => getDesktopSidebarCollapsedSnapshot(defaultSidebarCollapsed),
+    [defaultSidebarCollapsed],
+  );
+  const getSidebarServerSnapshot = useCallback(
+    () => defaultSidebarCollapsed,
+    [defaultSidebarCollapsed],
+  );
+  const isSidebarCollapsed = useSyncExternalStore(
+    subscribeToDesktopSidebarState,
+    getSidebarSnapshot,
+    getSidebarServerSnapshot,
+  );
   const sidebarGridClassName = isSidebarCollapsed
     ? "lg:grid-cols-[88px_minmax(0,1fr)]"
     : "lg:grid-cols-[220px_minmax(0,1fr)]";
   const handleToggleSidebarCollapsed = useCallback(() => {
-    setIsSidebarCollapsed((currentValue) => !currentValue);
-  }, []);
+    const nextCollapsedState = !isSidebarCollapsed;
+    fallbackDesktopSidebarCollapsedState = nextCollapsedState;
 
-  useEffect(() => {
     try {
       window.localStorage.setItem(
         desktopSidebarStateStorageKey,
-        isSidebarCollapsed ? "collapsed" : "expanded",
+        nextCollapsedState ? "collapsed" : "expanded",
       );
     } catch {
       // Ignore storage failures; the sidebar still works for the current session.
     }
+
+    window.dispatchEvent(new Event(desktopSidebarStateChangeEvent));
   }, [isSidebarCollapsed]);
 
   return (
     <div className="min-h-screen bg-white text-[#171717]">
-      <div className={`grid min-h-dvh grid-cols-[44px_minmax(0,1fr)] transition-[grid-template-columns] duration-200 ease-out min-[380px]:grid-cols-[48px_minmax(0,1fr)] sm:grid-cols-[56px_minmax(0,1fr)] motion-reduce:transition-none ${sidebarGridClassName}`}>
+      <div
+        className={`grid min-h-dvh grid-cols-[44px_minmax(0,1fr)] transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none min-[380px]:grid-cols-[48px_minmax(0,1fr)] sm:grid-cols-[56px_minmax(0,1fr)] ${sidebarGridClassName}`}
+      >
         <MobileSidebar activeItem={activeItem} />
         <Sidebar
           activeItem={activeItem}
+          desktopVariant={desktopSidebarVariant}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapsed={handleToggleSidebarCollapsed}
         />
@@ -112,11 +155,7 @@ export function AdminShell({
   );
 }
 
-const MobileSidebar = memo(function MobileSidebar({
-  activeItem,
-}: {
-  activeItem: NavigationLabel;
-}) {
+const MobileSidebar = memo(function MobileSidebar({ activeItem }: { activeItem: NavigationLabel }) {
   const router = useRouter();
   const { logout, user } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -163,7 +202,10 @@ const MobileSidebar = memo(function MobileSidebar({
       style={{ height: "100dvh", minHeight: "100svh" }}
     >
       <header className="flex h-14 shrink-0 items-center justify-center border-b border-[#00000014]">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-black text-white" aria-hidden="true">
+        <span
+          className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-black text-white"
+          aria-hidden="true"
+        >
           <ShieldCheck size={16} aria-hidden="true" />
         </span>
         <p id={mobileSidebarTitleId} className="sr-only">
@@ -171,7 +213,10 @@ const MobileSidebar = memo(function MobileSidebar({
         </p>
       </header>
 
-      <nav className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-1 py-4" aria-label="Mobile primary navigation">
+      <nav
+        className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-1 py-4"
+        aria-label="Mobile primary navigation"
+      >
         <ul className="space-y-1">
           {navigationItems.map((item) => {
             const Icon = item.icon;
@@ -182,7 +227,7 @@ const MobileSidebar = memo(function MobileSidebar({
                 <Link
                   href={item.href}
                   prefetch={false}
-                  className={`mx-auto flex size-9 items-center justify-center rounded-xl text-[13px] font-medium leading-[19.5px] tracking-[-0.8px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 min-[380px]:size-10 ${
+                  className={`mx-auto flex size-9 items-center justify-center rounded-xl text-[13px] leading-[19.5px] font-medium tracking-[-0.8px] transition focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 focus-visible:outline-none min-[380px]:size-10 ${
                     active
                       ? "bg-[#007AFF] text-white"
                       : "text-[#555555] hover:bg-black/[0.04] hover:text-[#171717]"
@@ -205,7 +250,9 @@ const MobileSidebar = memo(function MobileSidebar({
         aria-labelledby="mobile-admin-account-title"
         style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
-        <p id="mobile-admin-account-title" className="sr-only">Signed-in admin account</p>
+        <p id="mobile-admin-account-title" className="sr-only">
+          Signed-in admin account
+        </p>
         {showProfileMenu ? (
           <div
             id={mobileProfileMenuId}
@@ -214,12 +261,26 @@ const MobileSidebar = memo(function MobileSidebar({
             className="absolute bottom-3 left-[calc(100%+8px)] z-50 w-44 origin-bottom-left rounded-md border border-black/[0.08] bg-white p-1 shadow-[0_8px_30px_rgba(15,23,42,0.12)]"
           >
             <div className="border-b border-black/[0.06] px-3 py-2">
-              <p className="truncate text-xs font-semibold leading-4.5 text-[#000000] capitalize">{adminName}</p>
-              <p className="truncate text-[10px] font-normal leading-3.75 tracking-[0.12px] text-[#86868B]">{adminEmail}</p>
+              <p className="truncate text-xs leading-4.5 font-semibold text-[#000000] capitalize">
+                {adminName}
+              </p>
+              <p className="truncate text-[10px] leading-3.75 font-normal tracking-[0.12px] text-[#86868B]">
+                {adminEmail}
+              </p>
             </div>
+            <Link
+              href="/profile"
+              prefetch={false}
+              className="mt-1 flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-semibold text-[#171717] transition hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 focus-visible:outline-none"
+              role="menuitem"
+              onClick={() => setShowProfileMenu(false)}
+            >
+              <UserRound size={14} aria-hidden="true" />
+              View profile
+            </Link>
             <button
               type="button"
-              className="mt-1 flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-bold text-[#EF4444] transition hover:bg-[#FEF2F2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EF4444] focus-visible:ring-offset-2"
+              className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-bold text-[#EF4444] transition hover:bg-[#FEF2F2] focus-visible:ring-2 focus-visible:ring-[#EF4444] focus-visible:ring-offset-2 focus-visible:outline-none"
               role="menuitem"
               onClick={handleLogout}
             >
@@ -230,7 +291,7 @@ const MobileSidebar = memo(function MobileSidebar({
         ) : null}
         <button
           type="button"
-          className="mx-auto flex size-9 items-center justify-center rounded-xl border border-transparent transition hover:border-[#007AFF1F] hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 min-[380px]:size-10"
+          className="mx-auto flex size-9 items-center justify-center rounded-xl border border-transparent transition hover:border-[#007AFF1F] hover:bg-[#F8FAFF] focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 focus-visible:outline-none min-[380px]:size-10"
           aria-label={`${showProfileMenu ? "Close" : "Open"} admin account menu for ${adminName}`}
           aria-expanded={showProfileMenu}
           aria-controls={mobileProfileMenuId}
@@ -246,10 +307,12 @@ const MobileSidebar = memo(function MobileSidebar({
 
 const Sidebar = memo(function Sidebar({
   activeItem,
+  desktopVariant,
   isCollapsed,
   onToggleCollapsed,
 }: {
   activeItem: NavigationLabel;
+  desktopVariant: DesktopSidebarVariant;
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
 }) {
@@ -306,15 +369,20 @@ const Sidebar = memo(function Sidebar({
           isCollapsed ? "justify-start px-5" : "gap-2 px-5 pr-12"
         }`}
       >
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-black text-white" aria-hidden="true">
-          <ShieldCheck size={16} aria-hidden="true" />
+        <span
+          className={`flex shrink-0 items-center justify-center bg-black text-white ${
+            desktopVariant === "figma" ? "size-7 rounded-md" : "size-8 rounded-lg"
+          }`}
+          aria-hidden="true"
+        >
+          <ShieldCheck size={desktopVariant === "figma" ? 14 : 16} aria-hidden="true" />
         </span>
         <p
           id={desktopSidebarTitleId}
           className={
             isCollapsed
               ? "sr-only"
-              : "text-sm tracking-[-0.5px] leading-5.25 font-bold text-[171717]"
+              : "text-sm leading-5.25 font-bold tracking-[-0.5px] text-[#171717]"
           }
         >
           Admin Panel
@@ -324,15 +392,24 @@ const Sidebar = memo(function Sidebar({
           aria-label={isCollapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
           aria-pressed={isCollapsed}
           onClick={handleToggleCollapsed}
-          className={`absolute top-1/2 inline-flex -translate-y-1/2 transform-gpu items-center justify-center rounded-full border border-[#00000014] bg-white text-[#86868B] transition-[background-color,border-color,color,transform] duration-200 ease-out hover:scale-105 hover:border-[#007AFF33] hover:bg-[#F8FAFF] hover:text-[#007AFF] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 motion-reduce:transition-none ${
+          className={`absolute top-1/2 inline-flex -translate-y-1/2 transform-gpu items-center justify-center rounded-full border border-[#00000014] bg-white text-[#86868B] transition-[background-color,border-color,color,transform] duration-200 ease-out hover:scale-105 hover:border-[#007AFF33] hover:bg-[#F8FAFF] hover:text-[#007AFF] focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 focus-visible:outline-none active:scale-95 motion-reduce:transition-none ${
             isCollapsed ? "-right-3 size-6" : "-right-3.5 size-7"
           }`}
         >
-          {isCollapsed ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronLeft size={16} aria-hidden="true" />}
+          {isCollapsed ? (
+            <ChevronRight size={14} aria-hidden="true" />
+          ) : (
+            <ChevronLeft size={16} aria-hidden="true" />
+          )}
         </button>
       </header>
 
-      <NavigationList activeItem={activeItem} isCollapsed={isCollapsed} variant="desktop" />
+      <NavigationList
+        activeItem={activeItem}
+        desktopVariant={desktopVariant}
+        isCollapsed={isCollapsed}
+        variant="desktop"
+      />
 
       <footer
         className={`relative mt-auto border-t border-black/[0.08] py-4 ${
@@ -340,21 +417,31 @@ const Sidebar = memo(function Sidebar({
         }`}
         aria-labelledby="desktop-admin-account-title"
       >
-        <p id="desktop-admin-account-title" className="sr-only">Signed-in admin account</p>
+        <p id="desktop-admin-account-title" className="sr-only">
+          Signed-in admin account
+        </p>
         {showProfileMenu ? (
           <div
             id={desktopProfileMenuId}
             role="menu"
             aria-label="Admin account actions"
             className={`absolute z-50 origin-bottom transform-gpu rounded-md border border-black/[0.08] bg-white p-1 shadow-[0_8px_30px_rgba(15,23,42,0.12)] ${
-              isCollapsed
-                ? "bottom-4 left-[calc(100%+8px)] w-44"
-                : "right-3 bottom-[96px] left-3"
+              isCollapsed ? "bottom-4 left-[calc(100%+8px)] w-44" : "right-3 bottom-[96px] left-3"
             }`}
           >
+            <Link
+              href="/profile"
+              prefetch={false}
+              className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-semibold text-[#171717] transition hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 focus-visible:outline-none"
+              role="menuitem"
+              onClick={() => setShowProfileMenu(false)}
+            >
+              <UserRound size={14} aria-hidden="true" />
+              View profile
+            </Link>
             <button
               type="button"
-              className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-bold text-[#EF4444] transition hover:bg-[#FEF2F2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EF4444] focus-visible:ring-offset-2"
+              className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-bold text-[#EF4444] transition hover:bg-[#FEF2F2] focus-visible:ring-2 focus-visible:ring-[#EF4444] focus-visible:ring-offset-2 focus-visible:outline-none"
               role="menuitem"
               onClick={handleLogout}
             >
@@ -366,7 +453,7 @@ const Sidebar = memo(function Sidebar({
 
         <button
           type="button"
-          className={`flex w-full items-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 ${
+          className={`flex w-full items-center transition focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 focus-visible:outline-none ${
             isCollapsed
               ? "justify-center rounded-xl border border-transparent p-1.5 hover:border-[#007AFF1F] hover:bg-[#F8FAFF]"
               : "gap-2.5 rounded-md text-left"
@@ -381,8 +468,12 @@ const Sidebar = memo(function Sidebar({
           {isCollapsed ? null : (
             <>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold leading-4.5 text-[#000000] capitalize">{adminName}</p>
-                <p className="truncate text-[10px] font-normal leading-3.75 tracking-[0.12px] text-[#86868B]">{adminEmail}</p>
+                <p className="truncate text-xs leading-4.5 font-semibold text-[#000000] capitalize">
+                  {adminName}
+                </p>
+                <p className="truncate text-[10px] leading-3.75 font-normal tracking-[0.12px] text-[#86868B]">
+                  {adminEmail}
+                </p>
               </div>
               <ChevronDown
                 size={14}
@@ -399,11 +490,13 @@ const Sidebar = memo(function Sidebar({
 
 const NavigationList = memo(function NavigationList({
   activeItem,
+  desktopVariant = "default",
   isCollapsed = false,
   onNavigate,
   variant,
 }: {
   activeItem: NavigationLabel;
+  desktopVariant?: DesktopSidebarVariant;
   isCollapsed?: boolean;
   onNavigate?: () => void;
   variant: "desktop" | "mobile";
@@ -422,7 +515,11 @@ const NavigationList = memo(function NavigationList({
             : "text-[#555555] hover:bg-black/[0.04] hover:text-[#171717]"
         }`
       : `flex items-center text-[13px] font-medium leading-[19.5px] tracking-[-0.8px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 ${
-          isCollapsed ? "mx-auto size-11 justify-center rounded-xl" : "h-9 gap-3 rounded-md px-3"
+          isCollapsed
+            ? "mx-auto size-11 justify-center rounded-xl"
+            : desktopVariant === "figma"
+              ? "h-[35.5px] gap-2.5 rounded-md px-3"
+              : "h-9 gap-3 rounded-md px-3"
         } ${
           active
             ? "bg-[#007AFF] text-white"
@@ -430,8 +527,11 @@ const NavigationList = memo(function NavigationList({
         }`;
 
   return (
-    <nav className={navClassName} aria-label={isMobile ? "Mobile primary navigation" : "Primary navigation"}>
-      <ul className="space-y-1">
+    <nav
+      className={navClassName}
+      aria-label={isMobile ? "Mobile primary navigation" : "Primary navigation"}
+    >
+      <ul className={isMobile || desktopVariant === "default" ? "space-y-1" : "space-y-0.5"}>
         {navigationItems.map((item) => {
           const Icon = item.icon;
           const active = item.label === activeItem;
@@ -451,7 +551,9 @@ const NavigationList = memo(function NavigationList({
                   strokeWidth={isCollapsed ? 1.9 : 2}
                   aria-hidden="true"
                 />
-                <span className={!isMobile && isCollapsed ? "sr-only" : undefined}>{item.label}</span>
+                <span className={!isMobile && isCollapsed ? "sr-only" : undefined}>
+                  {item.label}
+                </span>
                 {active ? <span className="sr-only">current page</span> : null}
               </Link>
             </li>
@@ -502,13 +604,7 @@ function getAdminInitials(user: AdminUser | null) {
   return "AD";
 }
 
-function AdminAvatar({
-  initials,
-  profileImageUrl,
-}: {
-  initials: string;
-  profileImageUrl: string;
-}) {
+function AdminAvatar({ initials, profileImageUrl }: { initials: string; profileImageUrl: string }) {
   const [failedImageUrl, setFailedImageUrl] = useState("");
   const shouldShowImage = Boolean(profileImageUrl) && failedImageUrl !== profileImageUrl;
 
@@ -528,7 +624,10 @@ function AdminAvatar({
   }
 
   return (
-    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#007AFF] text-xs font-bold text-white" aria-hidden="true">
+    <span
+      className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#007AFF] text-xs font-bold text-white"
+      aria-hidden="true"
+    >
       {initials}
     </span>
   );

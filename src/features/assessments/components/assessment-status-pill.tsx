@@ -2,23 +2,31 @@ import type { AssessmentStatusTone } from "@/features/assessments/utils/status";
 
 const statusStyles = {
   gray: {
-    chip: "bg-[#F5F5F5] text-[#8E9AAB]",
-    dot: "bg-[#C1C7D0]",
+    chip: "bg-[#8E9AAB1A] text-[#566170]",
+    dot: "bg-[#8E9AAB]",
+  },
+  grayLight: {
+    chip: "bg-[#AEAEB21A] text-[#626267]",
+    dot: "bg-[#AEAEB2]",
   },
   blueLight: {
-    chip: "bg-[#EEF5FF] text-[#4D7FEA]",
-    dot: "bg-[#6E9FF8]",
+    chip: "bg-[#6E8FC71A] text-[#365F9E]",
+    dot: "bg-[#6E8FC7]",
+  },
+  blueMuted: {
+    chip: "bg-[#4A7CD61A] text-[#285BAE]",
+    dot: "bg-[#4A7CD6]",
   },
   blue: {
-    chip: "bg-[#EAF3FF] text-[#007AFF]",
+    chip: "bg-[#007AFF1A] text-[#005DB8]",
     dot: "bg-[#007AFF]",
   },
   green: {
-    chip: "bg-[#ECFDF5] text-[#10B981]",
+    chip: "bg-[#10B9811A] text-[#087A58]",
     dot: "bg-[#10B981]",
   },
   red: {
-    chip: "bg-[#FEF2F2] text-[#EF4444]",
+    chip: "bg-[#EF44441A] text-[#B4232D]",
     dot: "bg-[#EF4444]",
   },
 } as const satisfies Record<AssessmentStatusTone, { chip: string; dot: string }>;
@@ -34,7 +42,7 @@ export function AssessmentStatusPill({
 
   return (
     <span
-      className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-[5px] text-[11px] leading-[16.5px] font-medium tracking-[0.06px] !text-[#8E9AAB] ${styles.chip}`}
+      className={`inline-flex h-[25px] w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] leading-[16.5px] font-medium tracking-[0.06px] ${styles.chip}`}
     >
       <span className={`size-1.5 rounded-full ${styles.dot}`} />
       {label}

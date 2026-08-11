@@ -1,22 +1,10 @@
 "use client";
 
-import {
-  useCallback,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  ArrowDownToLine,
-  ArrowLeft,
-  Mail,
-} from "lucide-react";
+import { ArrowDownToLine, ArrowLeft, Mail } from "lucide-react";
 
-import {
-  useAdminAssessment,
-  useAdminAssessments,
-} from "@/features/assessments/queries";
+import { useAdminAssessment, useAdminAssessments } from "@/features/assessments/queries";
 import { useDataDictionaryCatalog } from "@/features/data-dictionary/queries";
 import { AdminShell } from "@/components/admin-shell/admin-shell";
 import { SkeletonBlock } from "@/components/ui/skeleton/skeleton-block";
@@ -95,10 +83,7 @@ export function AssessmentsPage() {
   const totalAssessments = data?.totalAssessments ?? assessments.length;
   const errorMessage = error ? getErrorMessage(error) : "";
   const catalogIndustries = industryCatalog?.industries ?? emptyCatalogIndustries;
-  const assessmentListRows = useMemo(
-    () => createAssessmentListRows(assessments),
-    [assessments],
-  );
+  const assessmentListRows = useMemo(() => createAssessmentListRows(assessments), [assessments]);
   const assessmentFilters = useMemo<AssessmentFilters>(
     () => ({
       fromDateFilter,
@@ -108,31 +93,15 @@ export function AssessmentsPage() {
       statusFilter,
       toDateFilter,
     }),
-    [
-      fromDateFilter,
-      industryFilter,
-      minimumScoreFilter,
-      searchQuery,
-      statusFilter,
-      toDateFilter,
-    ],
+    [fromDateFilter, industryFilter, minimumScoreFilter, searchQuery, statusFilter, toDateFilter],
   );
   const industryOptions = useMemo(
     () => getAssessmentIndustryOptions(assessmentListRows, catalogIndustries),
     [assessmentListRows, catalogIndustries],
   );
-  const statusOptions = useMemo(
-    () => getAssessmentStatusOptions(assessments),
-    [assessments],
-  );
+  const statusOptions = useMemo(() => getAssessmentStatusOptions(assessments), [assessments]);
   const filteredAssessments = useMemo(
-    () =>
-      filterAssessmentRows(
-        assessmentListRows,
-        assessmentFilters,
-        sortKey,
-        sortDirection,
-      ),
+    () => filterAssessmentRows(assessmentListRows, assessmentFilters, sortKey, sortDirection),
     [assessmentFilters, assessmentListRows, sortDirection, sortKey],
   );
 
@@ -173,23 +142,22 @@ export function AssessmentsPage() {
     fromDateFilter !== "" ||
     toDateFilter !== "";
   const pagedAssessments = useMemo(
-    () =>
-      assessmentSummaries.slice(
-        (activePage - 1) * pageSize,
-        activePage * pageSize,
-      ),
+    () => assessmentSummaries.slice((activePage - 1) * pageSize, activePage * pageSize),
     [activePage, assessmentSummaries],
   );
 
-  const handleSort = useCallback((nextSortKey: SortKey) => {
-    if (nextSortKey === sortKey) {
-      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
-      return;
-    }
+  const handleSort = useCallback(
+    (nextSortKey: SortKey) => {
+      if (nextSortKey === sortKey) {
+        setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+        return;
+      }
 
-    setSortKey(nextSortKey);
-    setSortDirection("asc");
-  }, [sortKey]);
+      setSortKey(nextSortKey);
+      setSortDirection("asc");
+    },
+    [sortKey],
+  );
 
   const updateFilter = useCallback((setter: (value: string) => void, value: string) => {
     setter(value);
@@ -206,9 +174,12 @@ export function AssessmentsPage() {
     setPage(1);
   }, []);
 
-  const openAssessment = useCallback((assessmentId: string) => {
-    router.push(`/assessments/${encodeURIComponent(assessmentId)}`);
-  }, [router]);
+  const openAssessment = useCallback(
+    (assessmentId: string) => {
+      router.push(`/assessments/${encodeURIComponent(assessmentId)}`);
+    },
+    [router],
+  );
 
   const handleExportAssessments = useCallback(() => {
     exportAssessmentsCsv(filteredAssessments);
@@ -244,17 +215,21 @@ export function AssessmentsPage() {
   );
 
   return (
-    <AdminShell activeItem="Assessments">
-      <div className="flex min-h-[calc(100dvh-32px)] w-full min-w-0 flex-col sm:min-h-[calc(100vh-56px)] lg:h-full lg:min-h-0 lg:overflow-hidden lg:pr-6">
+    <AdminShell
+      activeItem="Assessments"
+      defaultSidebarCollapsed={false}
+      desktopSidebarVariant="figma"
+    >
+      <div className="flex h-[calc(100dvh-32px)] min-h-0 w-full min-w-0 flex-col overflow-hidden sm:h-[calc(100dvh-56px)] lg:h-[calc(100dvh-64px)] lg:pr-6">
         <header className="flex shrink-0 items-start justify-between gap-2 min-[380px]:gap-3 sm:flex-wrap sm:gap-4">
           <div className="min-w-0">
             <h1 className="truncate text-[22px] leading-7 font-semibold tracking-[0.18px] text-[#171717] sm:text-[26px] sm:leading-[39px] sm:tracking-[0.22px]">
               Assessments
             </h1>
-            <p className="text-xs leading-[18px] font-normal tracking-[-0.08px] text-[#86868B] sm:text-[13px] sm:leading-[19.5px]">
+            <p className="h-[22px] pt-1 text-xs leading-[18px] font-normal tracking-[-0.08px] text-[#86868B] sm:h-6 sm:text-[13px] sm:leading-[19.5px]">
               {isLoading
                 ? "Loading submissions..."
-                : `${assessmentSummaries.length} users from ${totalAssessments} total submissions`}
+                : `${assessmentSummaries.length} ${assessmentSummaries.length === 1 ? "user" : "users"} from ${totalAssessments} total ${totalAssessments === 1 ? "submission" : "submissions"}`}
             </p>
           </div>
 
@@ -263,7 +238,7 @@ export function AssessmentsPage() {
               type="button"
               onClick={handleExportAssessments}
               disabled={!filteredAssessments.length}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2 text-xs! font-medium leading-4.5 whitespace-nowrap text-[#555555] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:opacity-50 min-[340px]:px-2.5 min-[380px]:gap-2 min-[380px]:px-3 sm:h-9"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-black/[0.1] bg-white px-2 text-xs! leading-4.5 font-medium whitespace-nowrap text-[#555555] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:opacity-50 min-[340px]:px-2.5 min-[380px]:px-3 sm:h-9 sm:w-[115px] sm:px-0"
             >
               <ArrowDownToLine size={13} className="hidden min-[340px]:block" aria-hidden="true" />
               Export CSV
@@ -564,9 +539,18 @@ function AssessmentOverview({ assessment }: { assessment: AssessmentSummary }) {
           <ValueBlock label="Domain" value={assessment.domain} />
           <ValueBlock label="Industry" value={assessment.industries.join(", ") || "--"} />
           <ValueBlock label="Company size" value={assessment.preferences.companySize || "--"} />
-          <ValueBlock label="Deployment preference" value={assessment.preferences.deploymentPreference || "--"} />
-          <ValueBlock label="Gartner MQ rated only" value={assessment.preferences.magicQuadrant || "--"} />
-          <ValueBlock label="AI-native preference" value={assessment.preferences.aiPreference || "--"} />
+          <ValueBlock
+            label="Deployment preference"
+            value={assessment.preferences.deploymentPreference || "--"}
+          />
+          <ValueBlock
+            label="Gartner MQ rated only"
+            value={assessment.preferences.magicQuadrant || "--"}
+          />
+          <ValueBlock
+            label="AI-native preference"
+            value={assessment.preferences.aiPreference || "--"}
+          />
         </div>
         <div className="mt-5">
           <p className="text-[9px] font-bold tracking-[0.14em] text-[#86868B] uppercase">
@@ -574,7 +558,9 @@ function AssessmentOverview({ assessment }: { assessment: AssessmentSummary }) {
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {assessment.selectedStackTools.length ? (
-              assessment.selectedStackTools.map((tool) => <Tag key={tool} label={tool} tone="blue" />)
+              assessment.selectedStackTools.map((tool) => (
+                <Tag key={tool} label={tool} tone="blue" />
+              ))
             ) : (
               <span className="text-xs font-semibold text-[#86868B]">--</span>
             )}
@@ -585,7 +571,10 @@ function AssessmentOverview({ assessment }: { assessment: AssessmentSummary }) {
       <section className="rounded-md border border-black/[0.08] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] xl:col-span-2">
         <div className="flex items-center justify-between border-b border-black/[0.08] px-5 py-3">
           <p className="text-[9px] font-bold tracking-[0.14em] text-[#86868B] uppercase">Engage</p>
-          <button type="button" className="inline-flex items-center gap-1 text-[11px] font-bold text-[#007AFF]">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 text-[11px] font-bold text-[#007AFF]"
+          >
             <Mail size={12} aria-hidden="true" />
             Compose Email
           </button>
@@ -676,10 +665,19 @@ function AssessmentActivity({ assessment }: { assessment: AssessmentSummary }) {
     <AssessmentDetailPanel title="Activity">
       <div className="divide-y divide-black/[0.08]">
         {items.map((item) => (
-          <div key={item.label} className="grid gap-2 py-4 sm:grid-cols-[190px_minmax(0,1fr)_120px] sm:items-center">
-            <p className="text-[9px] font-bold tracking-[0.14em] text-[#86868B] uppercase">{item.label}</p>
-            <p className="min-w-0 truncate text-xs font-bold text-[#171717]">{item.value || "--"}</p>
-            <p className="text-xs font-semibold text-[#86868B] sm:text-right">{item.meta || "--"}</p>
+          <div
+            key={item.label}
+            className="grid gap-2 py-4 sm:grid-cols-[190px_minmax(0,1fr)_120px] sm:items-center"
+          >
+            <p className="text-[9px] font-bold tracking-[0.14em] text-[#86868B] uppercase">
+              {item.label}
+            </p>
+            <p className="min-w-0 truncate text-xs font-bold text-[#171717]">
+              {item.value || "--"}
+            </p>
+            <p className="text-xs font-semibold text-[#86868B] sm:text-right">
+              {item.meta || "--"}
+            </p>
           </div>
         ))}
       </div>
@@ -691,17 +689,38 @@ function AssessmentDueDiligence({ assessment }: { assessment: AssessmentSummary 
   return (
     <div className="mt-6 grid gap-4 xl:grid-cols-2">
       <AssessmentDetailPanel title="Readiness Checklist">
-        <ChecklistRow label="Organization profile" value={assessment.domain !== "--" ? "Complete" : "Missing"} />
-        <ChecklistRow label="Industry context" value={assessment.industries.length ? "Complete" : "Missing"} />
-        <ChecklistRow label="Process selection" value={assessment.processCount ? "Complete" : "Pending"} />
-        <ChecklistRow label="Technology stack" value={assessment.selectedStackTools.length ? "Complete" : "Not provided"} />
+        <ChecklistRow
+          label="Organization profile"
+          value={assessment.domain !== "--" ? "Complete" : "Missing"}
+        />
+        <ChecklistRow
+          label="Industry context"
+          value={assessment.industries.length ? "Complete" : "Missing"}
+        />
+        <ChecklistRow
+          label="Process selection"
+          value={assessment.processCount ? "Complete" : "Pending"}
+        />
+        <ChecklistRow
+          label="Technology stack"
+          value={assessment.selectedStackTools.length ? "Complete" : "Not provided"}
+        />
       </AssessmentDetailPanel>
       <AssessmentDetailPanel title="Due Diligence Inputs">
         <div className="grid gap-5 sm:grid-cols-2">
           <ValueBlock label="Company size" value={assessment.preferences.companySize || "--"} />
-          <ValueBlock label="Deployment preference" value={assessment.preferences.deploymentPreference || "--"} />
-          <ValueBlock label="Gartner MQ rated only" value={assessment.preferences.magicQuadrant || "--"} />
-          <ValueBlock label="AI-native preference" value={assessment.preferences.aiPreference || "--"} />
+          <ValueBlock
+            label="Deployment preference"
+            value={assessment.preferences.deploymentPreference || "--"}
+          />
+          <ValueBlock
+            label="Gartner MQ rated only"
+            value={assessment.preferences.magicQuadrant || "--"}
+          />
+          <ValueBlock
+            label="AI-native preference"
+            value={assessment.preferences.aiPreference || "--"}
+          />
         </div>
       </AssessmentDetailPanel>
     </div>
@@ -717,22 +736,40 @@ function AssessmentResults({ assessment }: { assessment: AssessmentSummary }) {
         <div className="grid gap-3 sm:grid-cols-2">
           <DetailMetric label="Current DI" value={assessment.score} />
           <DetailMetric label="Potential DI" value={getPotentialDi(assessment.score)} />
-          <DetailMetric label="Total cost / yr" value={formatCompactCurrencyMetric(assessment.cost)} />
-          <DetailMetric label="Est. savings / yr" value={formatCompactCurrencyMetric(assessment.savings)} />
+          <DetailMetric
+            label="Total cost / yr"
+            value={formatCompactCurrencyMetric(assessment.cost)}
+          />
+          <DetailMetric
+            label="Est. savings / yr"
+            value={formatCompactCurrencyMetric(assessment.savings)}
+          />
         </div>
       </AssessmentDetailPanel>
       <AssessmentDetailPanel title="Recommendations & Stack Analysis">
         {topProcesses.length ? (
           <div className="divide-y divide-black/[0.08]">
             {topProcesses.map((process) => (
-              <div key={getProcessKey(process)} className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_110px_110px] sm:items-center">
+              <div
+                key={getProcessKey(process)}
+                className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_110px_110px] sm:items-center"
+              >
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-bold text-[#171717]">{process.name || process.processId || "--"}</p>
-                  <p className="mt-1 truncate text-[10px] font-semibold text-[#86868B]">{process.category || "--"}</p>
+                  <p className="truncate text-xs font-bold text-[#171717]">
+                    {process.name || process.processId || "--"}
+                  </p>
+                  <p className="mt-1 truncate text-[10px] font-semibold text-[#86868B]">
+                    {process.category || "--"}
+                  </p>
                 </div>
                 <p className="text-xs font-bold text-[#007AFF]">{process.tier || "--"}</p>
                 <p className="text-xs font-bold text-[#10B981] sm:text-right">
-                  {formatBaseCurrency(getProcessSavingInBaseCurrency(process, getProcessCostInBaseCurrency(process, assessment.currencyConversionRate)))}
+                  {formatBaseCurrency(
+                    getProcessSavingInBaseCurrency(
+                      process,
+                      getProcessCostInBaseCurrency(process, assessment.currencyConversionRate),
+                    ),
+                  )}
                 </p>
               </div>
             ))}
@@ -752,14 +789,20 @@ function AssessmentStrategy({ assessment }: { assessment: AssessmentSummary }) {
         <div className="grid gap-5 sm:grid-cols-2">
           <ValueBlock label="Primary industry" value={assessment.industry} />
           <ValueBlock label="Domains" value={assessment.domain} />
-          <ValueBlock label="Selected processes" value={formatNullableCount(assessment.processCount)} />
+          <ValueBlock
+            label="Selected processes"
+            value={formatNullableCount(assessment.processCount)}
+          />
           <ValueBlock label="Estimated savings" value={assessment.savings} />
         </div>
       </AssessmentDetailPanel>
       <AssessmentDetailPanel title="RFP Package">
         <ChecklistRow label="Business context" value="Ready" />
         <ChecklistRow label="Process scope" value={assessment.processCount ? "Ready" : "Pending"} />
-        <ChecklistRow label="Stack constraints" value={assessment.selectedStackTools.length ? "Ready" : "Optional"} />
+        <ChecklistRow
+          label="Stack constraints"
+          value={assessment.selectedStackTools.length ? "Ready" : "Optional"}
+        />
         <ChecklistRow label="Owner review" value={assessment.owner || "--"} />
       </AssessmentDetailPanel>
     </div>
@@ -775,7 +818,8 @@ function AssessmentExpert({ assessment }: { assessment: AssessmentSummary }) {
         <ValueBlock label="Pipeline status" value={assessment.status} />
       </div>
       <p className="mt-5 border-t border-black/[0.08] pt-4 text-xs font-semibold text-[#86868B]">
-        Expert booking data is not assigned yet. This tab is ready to display consultant allocation once the booking workflow is connected.
+        Expert booking data is not assigned yet. This tab is ready to display consultant allocation
+        once the booking workflow is connected.
       </p>
     </AssessmentDetailPanel>
   );
@@ -793,13 +837,7 @@ function AssessmentNotes({ assessment }: { assessment: AssessmentSummary }) {
   );
 }
 
-function AssessmentDetailPanel({
-  children,
-  title,
-}: {
-  children: ReactNode;
-  title: string;
-}) {
+function AssessmentDetailPanel({ children, title }: { children: ReactNode; title: string }) {
   return (
     <section className="mt-6 rounded-md border border-black/[0.08] bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] first:mt-0">
       <p className="text-[9px] font-bold tracking-[0.14em] text-[#86868B] uppercase">{title}</p>
@@ -812,7 +850,9 @@ function ChecklistRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-black/[0.08] py-3 last:border-b-0">
       <p className="text-xs font-bold text-[#171717]">{label}</p>
-      <span className="rounded-full bg-[#F5F5F5] px-2.5 py-1 text-[10px] font-bold text-[#86868B]">{value}</span>
+      <span className="rounded-full bg-[#F5F5F5] px-2.5 py-1 text-[10px] font-bold text-[#86868B]">
+        {value}
+      </span>
     </div>
   );
 }
@@ -821,15 +861,7 @@ function EmptyTabMessage({ message }: { message: string }) {
   return <p className="py-6 text-center text-sm font-semibold text-[#86868B]">{message}</p>;
 }
 
-function ValueBlock({
-  label,
-  muted,
-  value,
-}: {
-  label: string;
-  muted?: boolean;
-  value: string;
-}) {
+function ValueBlock({ label, muted, value }: { label: string; muted?: boolean; value: string }) {
   return (
     <div>
       <p className="text-[9px] font-bold tracking-[0.12em] text-[#86868B] uppercase">{label}</p>
@@ -844,7 +876,9 @@ function Tag({ label, tone = "gray" }: { label: string; tone?: "blue" | "gray" }
   return (
     <span
       className={`inline-flex h-6 items-center rounded-full px-2.5 text-[10px] font-semibold ${
-        tone === "blue" ? "bg-[#EAF3FF] text-[#007AFF]" : "border border-black/[0.08] text-[#86868B]"
+        tone === "blue"
+          ? "bg-[#EAF3FF] text-[#007AFF]"
+          : "border border-black/[0.08] text-[#86868B]"
       }`}
     >
       {label}
@@ -865,8 +899,6 @@ function getAssessmentIdFromRouteParam(value: string) {
   return idMatches[idMatches.length - 1];
 }
 
-
-
 function exportAssessmentsCsv(rows: AdminAssessmentRow[]) {
   const headers = ["Company", "Contact", "Industry", "DI Score", "Total Cost", "Savings", "Status"];
   const csvRows = rows.map((row) => [
@@ -878,9 +910,7 @@ function exportAssessmentsCsv(rows: AdminAssessmentRow[]) {
     row.savings,
     row.status,
   ]);
-  const csv = [headers, ...csvRows]
-    .map((row) => row.map(escapeCsvCell).join(","))
-    .join("\r\n");
+  const csv = [headers, ...csvRows].map((row) => row.map(escapeCsvCell).join(",")).join("\r\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

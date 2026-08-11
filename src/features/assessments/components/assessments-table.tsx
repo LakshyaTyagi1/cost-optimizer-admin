@@ -1,20 +1,16 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent,
-  type ReactNode,
-} from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import {
   ArrowDown,
   ArrowUp,
   Building2,
   CalendarDays,
   Car,
+  Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Home,
   Landmark,
@@ -32,12 +28,7 @@ import {
 
 import { AssessmentMobileMetric as MobileMetric } from "@/features/assessments/components/assessment-mobile-metric";
 import { AssessmentStatusPill } from "@/features/assessments/components/assessment-status-pill";
-import type {
-  AssessmentSummary,
-  SortDirection,
-  SortKey,
-} from "@/features/assessments/view-model";
-import { formatDate } from "@/features/assessments/utils/formatters";
+import type { AssessmentSummary, SortDirection, SortKey } from "@/features/assessments/view-model";
 import { getStatusTone } from "@/features/assessments/utils/status";
 
 const tableHeaderTextClass = "text-[10px] leading-[15px] font-semibold text-[#86868B]";
@@ -52,7 +43,7 @@ const tableHeaderTextStyle: CSSProperties = {
 };
 
 const filterShellClassName =
-  "h-11 rounded-md border border-[#DCE8F8] bg-white text-sm font-semibold text-[#171717] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#BBD6FF] focus-within:border-[#007AFF]/50 focus-within:ring-2 focus-within:ring-[#007AFF]/15 sm:h-10";
+  "h-11 rounded-md border border-[#E1E4E8] bg-white text-sm font-semibold text-[#171717] transition-[border-color,box-shadow] hover:border-[#C7CCD4] focus-within:border-[#80B7FF] focus-within:ring-2 focus-within:ring-[#007AFF]/10 sm:h-9";
 
 const industryIconStyles: Record<string, { icon: LucideIcon }> = {
   Automotive: { icon: Car },
@@ -191,25 +182,31 @@ export function AssessmentsTable({
   }
 
   return (
-    <section className="mt-4 max-sm:flex max-sm:flex-1 max-sm:flex-col sm:mt-6 lg:mt-8 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden" aria-label="Assessments table">
-      <div className="@container/assessment-filters mb-3 space-y-2 sm:mb-[13px]">
-        <div className="relative grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(190px,0.55fr)] @min-[640px]/assessment-filters:grid-cols-[minmax(150px,1fr)_minmax(132px,0.8fr)_minmax(132px,0.8fr)_minmax(190px,0.9fr)] @min-[980px]/assessment-filters:grid-cols-[minmax(170px,1.2fr)_minmax(110px,0.75fr)_minmax(110px,0.75fr)_minmax(78px,0.45fr)_minmax(132px,0.75fr)_minmax(132px,0.75fr)_40px]">
+    <section
+      className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden sm:mt-6"
+      aria-label="Assessments table"
+    >
+      <div className="@container/assessment-filters mb-3 space-y-2">
+        <div className="relative grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(190px,0.55fr)] @min-[640px]/assessment-filters:grid-cols-[minmax(150px,1fr)_minmax(132px,0.8fr)_minmax(132px,0.8fr)_minmax(190px,0.9fr)] @min-[980px]/assessment-filters:grid-cols-[minmax(170px,1.2fr)_minmax(110px,0.75fr)_minmax(110px,0.75fr)_minmax(78px,0.45fr)_minmax(132px,0.75fr)_minmax(132px,0.75fr)_36px] @min-[1120px]/assessment-filters:grid-cols-[280px_171.5px_121.5px_120px_130.5px_151.05px_36px] @min-[1120px]/assessment-filters:gap-[10px]">
           <SearchInput
             className="@min-[980px]/assessment-filters:col-span-1"
             value={searchQuery}
             onChange={onSearchQueryChange}
           />
 
-          <div className="hidden min-w-0 @min-[640px]/assessment-filters:block @min-[980px]/assessment-filters:hidden">
+          <div className="hidden min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 @min-[640px]/assessment-filters:col-span-2 @min-[640px]/assessment-filters:grid @min-[980px]/assessment-filters:hidden">
             <DateInput
               ariaLabel="Updated from date"
               className="w-full"
               value={fromDateFilter}
               onChange={onFromDateFilterChange}
             />
-          </div>
-
-          <div className="hidden min-w-0 @min-[640px]/assessment-filters:block @min-[980px]/assessment-filters:hidden">
+            <span
+              className="text-center text-[11px] leading-[16.5px] font-normal tracking-[0.06px] text-[#86868B]"
+              aria-hidden="true"
+            >
+              to
+            </span>
             <DateInput
               ariaLabel="Updated to date"
               className="w-full"
@@ -223,7 +220,7 @@ export function AssessmentsTable({
               ref={moreFiltersButtonRef}
               type="button"
               onClick={() => setShowAdvancedFilters((current) => !current)}
-              className="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-md border border-[#DCE8F8] bg-white px-3 text-sm font-semibold text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] sm:h-10 sm:text-xs"
+              className="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-md border border-[#E1E4E8] bg-white px-3 text-sm font-semibold text-[#555555] transition-[border-color,box-shadow,color] hover:border-[#C7CCD4] hover:text-[#007AFF] focus-visible:border-[#80B7FF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/10 focus-visible:outline-none sm:h-9 sm:text-xs"
               aria-controls="assessment-advanced-filters"
               aria-expanded={showAdvancedFilters}
             >
@@ -247,78 +244,72 @@ export function AssessmentsTable({
                 <ChevronDown size={13} className="shrink-0" aria-hidden="true" />
               )}
             </button>
-            <ResetFiltersButton
-              disabled={!hasActiveFilters}
-              onClick={handleResetFilters}
-            />
+            <ResetFiltersButton disabled={!hasActiveFilters} onClick={handleResetFilters} />
           </div>
 
           <div
             ref={advancedFiltersRef}
             id="assessment-advanced-filters"
-            className={`${showAdvancedFilters ? "grid" : "hidden"} absolute top-[calc(100%+0.5rem)] right-0 z-20 max-h-[min(60vh,24rem)] w-full max-w-[620px] grid-cols-1 gap-2 overflow-y-auto overscroll-contain rounded-md border border-[#DCE8F8] bg-white p-3 shadow-[0_16px_36px_rgba(15,23,42,0.14)] min-[380px]:grid-cols-2 @min-[640px]/assessment-filters:grid-cols-3 @min-[980px]/assessment-filters:static @min-[980px]/assessment-filters:contents`}
+            className={`${showAdvancedFilters ? "grid" : "hidden"} absolute top-[calc(100%+0.5rem)] right-0 z-20 w-full max-w-[620px] grid-cols-1 gap-2 overflow-visible rounded-md border border-[#E1E4E8] bg-white p-3 shadow-[0_16px_36px_rgba(15,23,42,0.14)] min-[380px]:grid-cols-2 @min-[640px]/assessment-filters:grid-cols-3 @min-[980px]/assessment-filters:static @min-[980px]/assessment-filters:contents`}
           >
-            <FilterSelect
+            <FilterDropdown
               ariaLabel="Filter by industry"
               value={industryFilter}
               onChange={onIndustryFilterChange}
               className="w-full"
-            >
-              <option value="all">All industries</option>
-              {industryOptions.map((industry) => (
-                <option key={industry} value={industry}>
-                  {industry}
-                </option>
-              ))}
-            </FilterSelect>
-            <FilterSelect
+              options={[
+                { label: "All industries", value: "all" },
+                ...industryOptions.map((industry) => ({ label: industry, value: industry })),
+              ]}
+            />
+            <FilterDropdown
               ariaLabel="Filter by status"
               value={statusFilter}
               onChange={onStatusFilterChange}
               className="w-full"
-            >
-              <option value="all">All statuses</option>
-              {statusOptions.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </FilterSelect>
+              options={[
+                { label: "All statuses", value: "all" },
+                ...statusOptions.map((status) => ({ label: status, value: status })),
+              ]}
+            />
             <MetricFilterInput
               className="min-[380px]:col-span-2 @min-[640px]/assessment-filters:col-span-1"
               value={minimumScoreFilter}
               onChange={onMinimumScoreFilterChange}
             />
-            <DateInput
-              ariaLabel="Updated from date"
-              className="min-[380px]:col-span-2 @min-[640px]/assessment-filters:hidden @min-[980px]/assessment-filters:col-span-1 @min-[980px]/assessment-filters:flex"
-              value={fromDateFilter}
-              onChange={onFromDateFilterChange}
-            />
-            <DateInput
-              ariaLabel="Updated to date"
-              className="min-[380px]:col-span-2 @min-[640px]/assessment-filters:hidden @min-[980px]/assessment-filters:col-span-1 @min-[980px]/assessment-filters:flex"
-              value={toDateFilter}
-              onChange={onToDateFilterChange}
-            />
+            <div className="grid min-w-0 grid-cols-1 items-center gap-2 min-[380px]:col-span-2 min-[380px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] @min-[640px]/assessment-filters:hidden @min-[980px]/assessment-filters:col-span-2 @min-[980px]/assessment-filters:grid @min-[1120px]/assessment-filters:grid-cols-[130.5px_10.55px_130.5px] @min-[1120px]/assessment-filters:gap-[10px]">
+              <DateInput
+                ariaLabel="Updated from date"
+                className="w-full"
+                value={fromDateFilter}
+                onChange={onFromDateFilterChange}
+              />
+              <span
+                className="text-center text-[11px] leading-[16.5px] font-normal tracking-[0.06px] text-[#86868B]"
+                aria-hidden="true"
+              >
+                to
+              </span>
+              <DateInput
+                ariaLabel="Updated to date"
+                className="w-full"
+                value={toDateFilter}
+                onChange={onToDateFilterChange}
+              />
+            </div>
           </div>
 
-          <div className="hidden @min-[980px]/assessment-filters:block">
-            <ResetFiltersButton
-              disabled={!hasActiveFilters}
-              onClick={handleResetFilters}
-            />
-          </div>
+          {hasActiveFilters ? (
+            <div className="hidden @min-[980px]/assessment-filters:block">
+              <ResetFiltersButton disabled={false} onClick={handleResetFilters} />
+            </div>
+          ) : null}
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-visible bg-transparent sm:min-h-0 sm:overflow-hidden sm:rounded-md sm:border sm:border-black/[0.08] sm:bg-white sm:shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
-        <TabletSortToolbar
-          direction={sortDirection}
-          onSort={onSort}
-          sortKey={sortKey}
-        />
-        <div className="pb-3 sm:pb-0 lg:flex-1 lg:overflow-auto">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent sm:rounded-md sm:border sm:border-black/[0.08] sm:bg-white sm:shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)]">
+        <TabletSortToolbar direction={sortDirection} onSort={onSort} sortKey={sortKey} />
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3 sm:pb-0 lg:overflow-auto">
           <div className="grid grid-cols-1 gap-2.5 p-0 sm:gap-3 sm:p-3 lg:hidden">
             {isLoading ? <AssessmentMobileCardsSkeleton /> : null}
 
@@ -330,29 +321,25 @@ export function AssessmentsTable({
 
             {!isLoading
               ? pagedAssessments.map((assessment) => (
-                <AssessmentMobileCard
-                  key={assessment.id}
-                  assessment={assessment}
-                  isHighlighted={isAssessmentHighlighted(
-                    assessment,
-                    highlightedAssessmentKey,
-                  )}
-                  onOpen={() => onOpenAssessment(assessment)}
-                />
-              ))
+                  <AssessmentMobileCard
+                    key={assessment.id}
+                    assessment={assessment}
+                    isHighlighted={isAssessmentHighlighted(assessment, highlightedAssessmentKey)}
+                    onOpen={() => onOpenAssessment(assessment)}
+                  />
+                ))
               : null}
           </div>
 
-          <table className="hidden w-full min-w-[700px] table-fixed border-collapse lg:table min-[1460px]:min-w-[1170px]">
+          <table className="hidden w-full min-w-[700px] table-fixed border-collapse lg:table">
             <colgroup>
-              <col className="w-[32%] min-[1460px]:w-[294px]" />
-              <col className="hidden min-[1460px]:table-column min-[1460px]:w-[139px]" />
-              <col className="w-[10%] min-[1460px]:w-[105px]" />
-              <col className="w-[14%] min-[1460px]:w-[130px]" />
-              <col className="w-[14%] min-[1460px]:w-[130px]" />
-              <col className="hidden min-[1460px]:table-column min-[1460px]:w-[115px]" />
-              <col className="w-[23%] min-[1460px]:w-[210px]" />
-              <col className="w-[7%] min-[1460px]:w-[47px]" />
+              <col className="w-[32%] min-[1280px]:w-[28.527%]" />
+              <col className="hidden min-[1280px]:table-column min-[1280px]:w-[13.455%]" />
+              <col className="w-[10%] min-[1280px]:w-[10.97%]" />
+              <col className="w-[14%] min-[1280px]:w-[12.212%]" />
+              <col className="w-[14%] min-[1280px]:w-[12.213%]" />
+              <col className="w-[23%] min-[1280px]:w-[14.698%]" />
+              <col className="w-[7%] min-[1280px]:w-[7.925%]" />
             </colgroup>
             <thead className="sticky top-0 z-10">
               <tr className="h-9 border-b border-black/[0.08] bg-[#FAFAFA] text-left">
@@ -362,7 +349,7 @@ export function AssessmentsTable({
                   label="Company"
                   onSort={() => onSort("company")}
                 />
-                <TableHeader label="Industry" className="hidden min-[1460px]:table-cell" />
+                <TableHeader label="Industry" className="hidden min-[1280px]:table-cell" />
                 <SortableHeader
                   active={sortKey === "score"}
                   direction={sortDirection}
@@ -381,9 +368,8 @@ export function AssessmentsTable({
                   label="Savings"
                   onSort={() => onSort("savings")}
                 />
-                <TableHeader label="Last Updated" className="hidden min-[1460px]:table-cell" />
                 <TableHeader label="Status" />
-                <th className="w-12 px-1 align-middle min-[1460px]:px-4" aria-label="Actions" />
+                <th className="w-12 px-0 align-middle" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
@@ -392,7 +378,7 @@ export function AssessmentsTable({
               {!isLoading && pagedAssessments.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={7}
                     className="h-32 px-5 text-center text-sm font-semibold text-[#86868B]"
                   >
                     {errorMessage || "No assessments found."}
@@ -402,35 +388,34 @@ export function AssessmentsTable({
 
               {!isLoading
                 ? pagedAssessments.map((assessment) => (
-                  <AssessmentRow
-                    key={assessment.id}
-                    assessment={assessment}
-                    isHighlighted={isAssessmentHighlighted(
-                      assessment,
-                      highlightedAssessmentKey,
-                    )}
-                    onOpen={() => onOpenAssessment(assessment)}
-                  />
-                ))
+                    <AssessmentRow
+                      key={assessment.id}
+                      assessment={assessment}
+                      isHighlighted={isAssessmentHighlighted(assessment, highlightedAssessmentKey)}
+                      onOpen={() => onOpenAssessment(assessment)}
+                    />
+                  ))
                 : null}
             </tbody>
           </table>
         </div>
 
-        <div className="mt-auto flex min-h-[44px] shrink-0 flex-col items-center justify-center gap-2 border-t border-black/[0.08] px-3 py-3 text-center text-xs leading-[18px] font-normal tracking-[0.06px] text-[#86868B] sm:mt-0 sm:flex-row sm:flex-wrap sm:justify-between sm:gap-3 sm:px-5 sm:py-2 sm:text-left sm:text-[11px] sm:leading-[16.5px]">
-          <span className="min-w-0">
-            {visibleAssessmentCount
-              ? `Showing ${firstRowIndex}-${lastRowIndex} of ${visibleAssessmentCount} users`
-              : "Showing 0 of 0"}
-            {totalAssessments > visibleAssessmentCount
-              ? ` (${totalAssessments} total submissions)`
-              : ""}
-          </span>
-          <PaginationControls
-            page={activePage}
-            pageCount={pageCount}
-            onPageChange={onPageChange}
-          />
+        <div className="mt-auto min-h-[44px] shrink-0 border-t border-black/[0.08] px-3 py-3 text-center text-xs leading-[18px] font-normal tracking-[0.06px] text-[#86868B] sm:mt-0 sm:px-5 sm:py-2 sm:text-left sm:text-[11px] sm:leading-[16.5px] lg:h-[53px] lg:min-h-[53px] lg:border-t-0 lg:py-0">
+          <div className="flex w-full flex-col items-center justify-center gap-2 sm:flex-row sm:flex-wrap sm:justify-between sm:gap-3 lg:h-full lg:flex-nowrap lg:border-t lg:border-black/[0.05] lg:py-0">
+            <span className="min-w-0">
+              {visibleAssessmentCount
+                ? `Showing ${firstRowIndex}–${lastRowIndex} of ${visibleAssessmentCount} ${visibleAssessmentCount === 1 ? "user" : "users"}`
+                : "Showing 0 of 0"}
+              {totalAssessments > visibleAssessmentCount
+                ? ` (${totalAssessments} total ${totalAssessments === 1 ? "submission" : "submissions"})`
+                : ""}
+            </span>
+            <PaginationControls
+              page={activePage}
+              pageCount={pageCount}
+              onPageChange={onPageChange}
+            />
+          </div>
         </div>
       </div>
     </section>
@@ -458,52 +443,44 @@ function AssessmentRow({
 
   return (
     <tr
-      className={`h-[68px] cursor-pointer border-b border-black/[0.05] transition focus:outline-none last:border-b-0 min-[1460px]:h-[58px] ${isHighlighted
+      className={`h-[65px] cursor-pointer border-b border-black/[0.05] transition last:border-b-0 focus:outline-none ${
+        isHighlighted
           ? "assessment-highlight-flash hover:bg-[#FAFAFA] focus:bg-[#FAFAFA]"
           : "hover:bg-[#FAFAFA] focus:bg-[#FAFAFA]"
-        }`}
+      }`}
       onClick={onOpen}
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      <td className="py-3 pr-4 pl-5 min-[1460px]:pr-6 min-[1460px]:pl-[60px]">
-        <p className="max-w-[280px] truncate text-[13px] font-semibold leading-[19.5px] tracking-[-0.08px] text-[#000000]">
+      <td className="py-3 pr-6 pl-[60px]">
+        <p className="max-w-[280px] truncate text-[13px] leading-[19.5px] font-semibold tracking-[-0.08px] text-[#000000]">
           {assessment.company}
         </p>
-        <p className="max-w-[280px] truncate text-[11px] font-normal leading-[16.5px] tracking-[0.06px] text-[#86868B]">
+        <p className="max-w-[280px] truncate text-[11px] leading-[16.5px] font-normal tracking-[0.06px] text-[#86868B]">
           {assessment.contact}
         </p>
-        <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] leading-[15px] font-medium text-[#86868B] min-[1460px]:hidden">
-          <IndustryIcon industry={assessment.industry} />
-          <span className="truncate">{assessment.industry}</span>
-          <span aria-hidden="true">•</span>
-          <span className="shrink-0">{formatDate(assessment.updatedAt)}</span>
-        </div>
       </td>
-      <td className="hidden px-0 py-3 min-[1460px]:table-cell">
-        <div className="flex max-w-[160px] items-center gap-2 text-xs font-normal leading-[18px] text-[#555555]">
+      <td className="hidden px-0 py-3 min-[1280px]:table-cell">
+        <div className="flex max-w-[160px] items-center gap-2 text-xs leading-[18px] font-normal text-[#555555]">
           <IndustryIcon industry={assessment.industry} />
           <span className="truncate">{assessment.industry}</span>
         </div>
       </td>
-      <td className="px-0 py-3 text-xs font-semibold leading-[18px] text-[#007AFF]">
+      <td className="px-0 py-3 text-xs leading-[18px] font-semibold text-[#007AFF]">
         <MetricValue value={assessment.score} mutedValue="--" />
       </td>
-      <td className="px-0 py-3 text-xs font-normal leading-[18px] text-[#171717]">
+      <td className="px-0 py-3 text-xs leading-[18px] font-normal text-[#171717]">
         <MetricValue value={totalCostValue} mutedValue="--" />
       </td>
-      <td className="px-0 py-3 text-xs font-medium leading-[18px] text-[#10B981]">
+      <td className="px-0 py-3 text-xs leading-[18px] font-medium text-[#10B981]">
         <MetricValue value={assessment.savings} mutedValue="--" />
-      </td>
-      <td className="hidden px-0 py-3 text-[11px] font-semibold text-[#555555] min-[1460px]:table-cell">
-        <MetricValue value={formatDate(assessment.updatedAt)} mutedValue="--" />
       </td>
       <td className="px-0 py-3">
         <span className="whitespace-nowrap">
           <AssessmentStatusPill label={assessment.status} tone={statusTone} />
         </span>
       </td>
-      <td className="px-1 py-3 text-right min-[1460px]:px-4">
+      <td className="px-0 py-3 text-left">
         <button
           type="button"
           disabled
@@ -535,25 +512,26 @@ function AssessmentMobileCard({
     <button
       type="button"
       onClick={onOpen}
-      className={`w-full rounded-lg border border-[#E1E7EF] bg-white p-3 text-left shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition hover:border-[#007AFF]/25 hover:bg-[#FAFCFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/25 sm:rounded-md sm:border-black/[0.08] sm:p-4 sm:shadow-[0_1px_3px_rgba(15,23,42,0.05)] ${isHighlighted ? "assessment-highlight-flash" : ""
-        }`}
+      className={`w-full rounded-lg border border-[#E1E7EF] bg-white p-3 text-left shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition hover:border-[#007AFF]/25 hover:bg-[#FAFCFF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/25 focus-visible:outline-none sm:rounded-md sm:border-black/[0.08] sm:p-4 sm:shadow-[0_1px_3px_rgba(15,23,42,0.05)] ${
+        isHighlighted ? "assessment-highlight-flash" : ""
+      }`}
       aria-label={`Open ${assessment.company}`}
     >
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_7rem] items-start gap-x-2 gap-y-0 min-[360px]:grid-cols-[minmax(0,1fr)_9rem] sm:block">
         <div className="contents sm:block">
-          <p className="col-start-1 row-start-1 min-w-0 self-start break-words text-sm leading-5 font-semibold text-[#171717] sm:font-bold">
+          <p className="col-start-1 row-start-1 min-w-0 self-start text-sm leading-5 font-semibold break-words text-[#171717] sm:font-bold">
             {assessment.company}
           </p>
-          <p className="col-start-1 row-start-2 min-w-0 self-start break-words text-xs leading-4 font-medium text-[#8E9AAB] sm:mt-1 sm:font-semibold">
+          <p className="col-start-1 row-start-2 min-w-0 self-start text-xs leading-4 font-medium break-words text-[#8E9AAB] sm:mt-1 sm:font-semibold">
             {assessment.contact}
           </p>
         </div>
 
         <div className="contents sm:hidden">
-          <span className="col-start-2 row-start-1 flex w-full min-w-0 max-w-full shrink-0 self-start justify-end whitespace-normal [&>span]:max-w-full [&>span]:justify-end [&>span]:gap-1 [&>span]:px-2 [&>span]:py-1 [&>span]:text-right [&>span]:text-[10px] [&>span]:leading-[14px] [&>span]:whitespace-normal [&>span>span]:shrink-0">
+          <span className="col-start-2 row-start-1 flex w-full max-w-full min-w-0 shrink-0 justify-end self-start whitespace-normal [&>span]:max-w-full [&>span]:justify-end [&>span]:gap-1 [&>span]:px-2 [&>span]:py-1 [&>span]:text-right [&>span]:text-[10px] [&>span]:leading-[14px] [&>span]:whitespace-normal [&>span>span]:shrink-0">
             <AssessmentStatusPill label={assessment.status} tone={statusTone} />
           </span>
-          <span className="col-start-2 row-start-2 flex w-full min-w-0 self-start items-center justify-end gap-1.5 text-xs leading-4 font-medium text-[#555555]">
+          <span className="col-start-2 row-start-2 flex w-full min-w-0 items-center justify-end gap-1.5 self-start text-xs leading-4 font-medium text-[#555555]">
             <IndustryIcon industry={assessment.industry} />
             <span className="min-w-0 truncate text-right">{assessment.industry}</span>
           </span>
@@ -571,10 +549,32 @@ function AssessmentMobileCard({
       </div>
 
       <div className="mt-3 flex items-stretch gap-1.5 sm:mt-4 sm:grid sm:grid-cols-4 sm:gap-3">
-        <MobileMetric className="flex-[0.75_1_0%]" compact label="DI Score" tone="blue" value={assessment.score} />
-        <MobileMetric className="flex-[1.125_1_0%]" compact label="Total Cost" value={totalCostValue} />
-        <MobileMetric className="flex-[1.125_1_0%]" compact label="Savings" tone="green" value={assessment.savings} />
-        <MobileMetric className="hidden sm:block" compact label="Submissions" value={String(assessment.assessments.length)} />
+        <MobileMetric
+          className="flex-[0.75_1_0%]"
+          compact
+          label="DI Score"
+          tone="blue"
+          value={assessment.score}
+        />
+        <MobileMetric
+          className="flex-[1.125_1_0%]"
+          compact
+          label="Total Cost"
+          value={totalCostValue}
+        />
+        <MobileMetric
+          className="flex-[1.125_1_0%]"
+          compact
+          label="Savings"
+          tone="green"
+          value={assessment.savings}
+        />
+        <MobileMetric
+          className="hidden sm:block"
+          compact
+          label="Submissions"
+          value={String(assessment.assessments.length)}
+        />
       </div>
     </button>
   );
@@ -594,12 +594,13 @@ function AssessmentMobileCardsSkeleton() {
             {Array.from({ length: 4 }).map((__, itemIndex) => (
               <div
                 key={itemIndex}
-                className={`${itemIndex === 3
-                  ? "hidden sm:block"
-                  : itemIndex === 0
-                    ? "flex-[0.75_1_0%]"
-                    : "flex-[1.125_1_0%]"
-                  } h-10 animate-pulse rounded-md bg-black/[0.04] sm:h-12`}
+                className={`${
+                  itemIndex === 3
+                    ? "hidden sm:block"
+                    : itemIndex === 0
+                      ? "flex-[0.75_1_0%]"
+                      : "flex-[1.125_1_0%]"
+                } h-10 animate-pulse rounded-md bg-black/[0.04] sm:h-12`}
               />
             ))}
           </div>
@@ -632,7 +633,7 @@ function TabletSortToolbar({
             aria-label="Sort assessments by"
             value={sortKey}
             onChange={(event) => onSort(event.target.value as SortKey)}
-            className="h-8 min-w-[150px] cursor-pointer appearance-none rounded-md border border-[#DCE8F8] bg-white pr-8 pl-3 text-xs font-semibold text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0"
+            className="h-8 min-w-[150px] cursor-pointer appearance-none rounded-md border border-[#DCE8F8] bg-white pr-8 pl-3 text-xs font-semibold text-[#171717] outline-none focus:!ring-0 focus:!outline-none focus-visible:!ring-0 focus-visible:!outline-none"
           >
             <option value="company">Company</option>
             <option value="score">DI score</option>
@@ -668,12 +669,12 @@ function AssessmentRowsSkeleton() {
   return (
     <>
       {Array.from({ length: 10 }).map((_, index) => (
-        <tr key={index} className="h-[68px] border-b border-black/[0.05] min-[1460px]:h-[58px]">
-          <td className="py-3 pr-4 pl-5 min-[1460px]:pr-6 min-[1460px]:pl-[60px]">
+        <tr key={index} className="h-[65px] border-b border-black/[0.05]">
+          <td className="py-3 pr-6 pl-[60px]">
             <div className="h-4 max-w-[280px] animate-pulse rounded-full bg-black/[0.06]" />
-            <div className="mt-2 h-2.5 max-w-[170px] animate-pulse rounded-full bg-black/[0.05] min-[1460px]:hidden" />
+            <div className="mt-1 h-2.5 max-w-[170px] animate-pulse rounded-full bg-black/[0.05]" />
           </td>
-          <td className="hidden px-0 py-3 min-[1460px]:table-cell">
+          <td className="hidden px-0 py-3 min-[1280px]:table-cell">
             <div className="h-4 max-w-[150px] animate-pulse rounded-full bg-black/[0.06]" />
           </td>
           <td className="px-0 py-3">
@@ -685,14 +686,11 @@ function AssessmentRowsSkeleton() {
           <td className="px-0 py-3">
             <div className="h-4 max-w-[104px] animate-pulse rounded-full bg-black/[0.06]" />
           </td>
-          <td className="hidden px-0 py-3 min-[1460px]:table-cell">
-            <div className="h-4 max-w-[104px] animate-pulse rounded-full bg-black/[0.06]" />
-          </td>
           <td className="px-0 py-3">
             <div className="h-4 max-w-[180px] animate-pulse rounded-full bg-black/[0.06]" />
           </td>
-          <td className="px-1 py-3 min-[1460px]:px-4">
-            <div className="ml-auto h-4 w-3 animate-pulse rounded-full bg-black/[0.04]" />
+          <td className="px-0 py-3">
+            <div className="h-4 w-3 animate-pulse rounded-full bg-black/[0.04]" />
           </td>
         </tr>
       ))}
@@ -710,49 +708,207 @@ function SearchInput({
   value: string;
 }) {
   return (
-    <label className={`flex min-w-0 items-center gap-2 px-3 ${filterShellClassName} ${className}`}>
-      <Search size={13} className="size-[15px] text-[#A1A1AA] sm:size-[13px]" aria-hidden="true" />
+    <label
+      className={`flex min-w-0 items-center gap-2 px-3 sm:gap-[11px] ${filterShellClassName} ${className}`}
+    >
+      <Search size={14} className="size-[15px] text-[#A1A1AA] sm:size-3.5" aria-hidden="true" />
       <input
         aria-label="Search company, contact, or region"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 bg-transparent text-base leading-6 font-normal tracking-[-0.08px] text-[#171717] outline-none placeholder:text-[#17171780] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0 sm:text-[13px] sm:leading-[19.5px]"
-        placeholder="Search assessments"
+        className="min-w-0 flex-1 bg-transparent text-base leading-6 font-normal tracking-[-0.08px] text-[#171717] outline-none placeholder:text-[#17171780] focus:!ring-0 focus:!outline-none focus-visible:!ring-0 focus-visible:!outline-none sm:text-[13px] sm:leading-[19.5px]"
+        placeholder="Search company, contact, region…"
         type="search"
       />
     </label>
   );
 }
 
-function FilterSelect({
+type FilterDropdownOption = {
+  label: string;
+  value: string;
+};
+
+function FilterDropdown({
   ariaLabel,
-  children,
   className = "",
   onChange,
+  options,
   value,
 }: {
   ariaLabel: string;
-  children: ReactNode;
   className?: string;
   onChange: (value: string) => void;
+  options: FilterDropdownOption[];
   value: string;
 }) {
+  const listboxId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const selectedIndex = Math.max(
+    0,
+    options.findIndex((option) => option.value === value),
+  );
+  const [activeIndex, setActiveIndex] = useState(selectedIndex);
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options[selectedIndex];
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: globalThis.PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      optionRefs.current[activeIndex]?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [activeIndex, isOpen]);
+
+  function closeDropdown() {
+    setIsOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  function selectOption(option: FilterDropdownOption) {
+    if (option.value !== value) {
+      onChange(option.value);
+    }
+
+    closeDropdown();
+  }
+
+  function openDropdown(nextActiveIndex = selectedIndex) {
+    setActiveIndex(nextActiveIndex);
+    setIsOpen(true);
+  }
+
+  function handleTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      openDropdown(selectedIndex);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      openDropdown(selectedIndex);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      openDropdown(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      openDropdown(options.length - 1);
+    } else if (event.key === "Escape" && isOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeDropdown();
+    }
+  }
+
+  function handleOptionKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((index + 1) % options.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((index - 1 + options.length) % options.length);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setActiveIndex(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setActiveIndex(options.length - 1);
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectOption(options[index]);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeDropdown();
+    } else if (event.key === "Tab") {
+      setIsOpen(false);
+    }
+  }
+
   return (
-    <label className={`relative block min-w-0 ${filterShellClassName} ${className}`}>
-      <select
+    <div
+      ref={rootRef}
+      className={`relative min-w-0 ${filterShellClassName} ${isOpen ? "border-[#80B7FF]! ring-2 ring-[#007AFF]/10" : ""} ${className}`}
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        role="combobox"
         aria-label={ariaLabel}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-full w-full cursor-pointer appearance-none rounded-md bg-transparent pr-9 pl-3 text-base font-semibold text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0 sm:text-sm"
+        aria-controls={listboxId}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        onClick={() => (isOpen ? closeDropdown() : openDropdown())}
+        onKeyDown={handleTriggerKeyDown}
+        className="flex h-full w-full items-center justify-between gap-2 rounded-[inherit] bg-transparent pr-3 pl-[13px] text-left text-base font-semibold text-[#171717] outline-none sm:text-[13px] sm:leading-[19.5px] sm:font-normal sm:text-[#555555]"
       >
-        {children}
-      </select>
-      <ChevronDown
-        size={14}
-        className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[#007AFF]"
-        aria-hidden="true"
-      />
-    </label>
+        <span className="truncate">{selectedOption?.label || "Select"}</span>
+        <ChevronDown
+          size={14}
+          className={`shrink-0 text-[#007AFF] transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
+          aria-hidden="true"
+        />
+      </button>
+
+      {isOpen ? (
+        <div
+          id={listboxId}
+          role="listbox"
+          aria-label={ariaLabel}
+          className="absolute top-[calc(100%+6px)] left-0 z-50 max-h-[min(20rem,calc(100dvh-16rem))] w-max min-w-[180px] overflow-y-auto rounded-lg border border-[#E1E4E8] bg-white p-1.5 shadow-[0_12px_30px_rgba(15,23,42,0.14)]"
+        >
+          {options.map((option, index) => {
+            const isSelected = option.value === value;
+
+            return (
+              <button
+                key={option.value}
+                ref={(element) => {
+                  optionRefs.current[index] = element;
+                }}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                tabIndex={activeIndex === index ? 0 : -1}
+                onClick={() => selectOption(option)}
+                onFocus={() => setActiveIndex(index)}
+                onKeyDown={(event) => handleOptionKeyDown(event, index)}
+                className={`flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-[13px] leading-[18px] whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:ring-inset ${
+                  isSelected
+                    ? "bg-[#EAF3FF] font-semibold text-[#005DB8] hover:bg-[#DFECFF]"
+                    : "font-medium text-[#333333] hover:bg-[#F5F7FA] focus:bg-[#F5F7FA]"
+                }`}
+              >
+                <span>{option.label}</span>
+                <span className="flex size-4 shrink-0 items-center justify-center">
+                  {isSelected ? <Check size={14} strokeWidth={2.25} aria-hidden="true" /> : null}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -772,7 +928,7 @@ function MetricFilterInput({
         aria-label="Minimum DI score"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 bg-transparent text-base font-semibold text-[#171717] outline-none placeholder:text-[#A1A1AA] focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0 sm:text-sm"
+        className="min-w-0 flex-1 bg-transparent text-base font-semibold text-[#171717] outline-none placeholder:text-[#A1A1AA] focus:!ring-0 focus:!outline-none focus-visible:!ring-0 focus-visible:!outline-none sm:text-[13px] sm:leading-[19.5px] sm:font-normal sm:text-[#555555]"
         inputMode="numeric"
         placeholder="DI min"
       />
@@ -798,26 +954,20 @@ function DateInput({
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 flex-1 cursor-pointer bg-transparent text-base leading-6 font-semibold tracking-[-0.08px] text-[#171717] outline-none focus:!outline-none focus:!ring-0 focus-visible:!outline-none focus-visible:!ring-0 sm:text-[13px] sm:leading-[19.5px]"
+        className="min-w-0 flex-1 cursor-pointer bg-transparent text-base leading-6 font-semibold tracking-[-0.08px] text-[#171717] outline-none focus:!ring-0 focus:!outline-none focus-visible:!ring-0 focus-visible:!outline-none sm:text-[13px] sm:leading-[19.5px] sm:font-normal sm:text-[#555555]"
         type="date"
       />
     </label>
   );
 }
 
-function ResetFiltersButton({
-  disabled,
-  onClick,
-}: {
-  disabled: boolean;
-  onClick: () => void;
-}) {
+function ResetFiltersButton({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex size-11 items-center justify-center rounded-md border border-[#DCE8F8] bg-white text-[#555555] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#007AFF]/30 hover:text-[#007AFF] disabled:cursor-not-allowed disabled:text-[#A1A1AA] disabled:opacity-60 sm:size-10"
+      className="inline-flex size-11 items-center justify-center rounded-md border border-[#E1E4E8] bg-white text-[#555555] transition-[border-color,box-shadow,color] hover:border-[#C7CCD4] hover:text-[#007AFF] focus-visible:border-[#80B7FF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/10 focus-visible:outline-none disabled:cursor-not-allowed disabled:text-[#A1A1AA] disabled:opacity-60 sm:size-9"
       aria-label="Reset assessment filters"
       title="Reset filters"
     >
@@ -837,10 +987,7 @@ function SortableHeader({
   label: string;
   onSort: () => void;
 }) {
-  const headerPadding =
-    label === "Company"
-      ? "py-0 pr-0 pl-5 min-[1460px]:pl-[60px]"
-      : "px-0 py-0";
+  const headerPadding = label === "Company" ? "py-0 pr-0 pl-[60px]" : "px-0 py-0";
 
   return (
     <th className={`${headerPadding} align-middle`}>
@@ -857,13 +1004,7 @@ function SortableHeader({
   );
 }
 
-function TableHeader({
-  className = "",
-  label,
-}: {
-  className?: string;
-  label: string;
-}) {
+function TableHeader({ className = "", label }: { className?: string; label: string }) {
   return (
     <th className={`px-0 py-0 align-middle ${className}`}>
       <span
@@ -885,10 +1026,34 @@ function SortGlyph({ reversed }: { reversed: boolean }) {
       viewBox="0 0 9 9"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <path d="M8.25 6L6.75 7.5L5.25 6" stroke="#86868B" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.75" />
-      <path d="M6.75 7.5V1.5" stroke="#86868B" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.75" />
-      <path d="M1.5 3L3 1.5L4.5 3" stroke="#86868B" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.75" />
-      <path d="M3 1.5V7.5" stroke="#86868B" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.75" />
+      <path
+        d="M8.25 6L6.75 7.5L5.25 6"
+        stroke="#86868B"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="0.75"
+      />
+      <path
+        d="M6.75 7.5V1.5"
+        stroke="#86868B"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="0.75"
+      />
+      <path
+        d="M1.5 3L3 1.5L4.5 3"
+        stroke="#86868B"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="0.75"
+      />
+      <path
+        d="M3 1.5V7.5"
+        stroke="#86868B"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="0.75"
+      />
     </svg>
   );
 }
@@ -958,10 +1123,10 @@ function PaginationButtonSet({
         type="button"
         onClick={() => onPageChange(Math.max(1, page - 1))}
         disabled={page <= 1}
-        className="flex size-9 items-center justify-center rounded-md border border-black/[0.08] text-[#555555] disabled:cursor-not-allowed disabled:text-[#C1C7D0] sm:size-7"
+        className="flex size-9 items-center justify-center rounded-md border border-black/[0.08] text-[#555555] disabled:cursor-not-allowed disabled:opacity-30 sm:size-7"
         aria-label="Previous page"
       >
-        &lt;
+        <ChevronLeft size={13} aria-hidden="true" />
       </button>
       {pages.map((item) => (
         <button
@@ -970,10 +1135,11 @@ function PaginationButtonSet({
           onClick={() => onPageChange(item)}
           aria-current={item === page ? "page" : undefined}
           aria-label={`Page ${item}${item === page ? ", current page" : ""}`}
-          className={`flex size-9 items-center justify-center rounded-md border text-xs font-bold sm:size-7 ${item === page
+          className={`flex size-9 items-center justify-center rounded-md border text-xs font-medium sm:size-7 ${
+            item === page
               ? "border-[#007AFF] bg-[#007AFF] text-white"
               : "border-black/[0.08] bg-white text-[#555555]"
-            }`}
+          }`}
         >
           {item}
         </button>
@@ -982,10 +1148,10 @@ function PaginationButtonSet({
         type="button"
         onClick={() => onPageChange(Math.min(pageCount, page + 1))}
         disabled={page >= pageCount}
-        className="flex size-9 items-center justify-center rounded-md border border-black/[0.08] text-[#555555] disabled:cursor-not-allowed disabled:text-[#C1C7D0] sm:size-7"
+        className="flex size-9 items-center justify-center rounded-md border border-black/[0.08] text-[#555555] disabled:cursor-not-allowed disabled:opacity-30 sm:size-7"
         aria-label="Next page"
       >
-        &gt;
+        <ChevronRight size={13} aria-hidden="true" />
       </button>
     </div>
   );
@@ -993,10 +1159,7 @@ function PaginationButtonSet({
 
 function getVisiblePages(page: number, pageCount: number, maximumVisiblePages: number) {
   const pageOffset = Math.floor(maximumVisiblePages / 2);
-  const start = Math.max(
-    1,
-    Math.min(page - pageOffset, pageCount - maximumVisiblePages + 1),
-  );
+  const start = Math.max(1, Math.min(page - pageOffset, pageCount - maximumVisiblePages + 1));
   const end = Math.min(pageCount, start + maximumVisiblePages - 1);
 
   return Array.from({ length: end - start + 1 }, (_, index) => start + index);
