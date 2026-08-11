@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Building2, Database, FileSpreadsheet, Sparkles } from "lucide-react";
+import { Database, FileSpreadsheet, Sparkles } from "lucide-react";
 
 import {
   fetchDataDictionaryIndustryDomainDefaultGrid,
@@ -11,6 +11,7 @@ import {
   DefaultsProcessListSelect,
   type DefaultsProcessListOption,
 } from "@/features/data-dictionary/components/defaults-process-list-select";
+import { DefaultsIndustrySelect } from "@/features/data-dictionary/components/defaults-industry-select";
 import { DefaultsWorkspaceDialog } from "@/features/data-dictionary/components/defaults-workspace-dialog";
 import { ProcessDescriptionPreview } from "@/features/data-dictionary/components/process-description-preview";
 import type { DictionaryLibrary } from "@/features/data-dictionary/model";
@@ -60,6 +61,19 @@ function getTierLabel(tier: string) {
   return labels[toSlug(tier)] || tier;
 }
 
+function getTierBackgroundClassName(tier: string) {
+  const tierKey = toSlug(tier);
+
+  if (tierKey === "must-have") return "bg-[#F8CBAD]";
+  if (tierKey === "good-to-have") return "bg-[#FFE699]";
+  if (tierKey === "nice-to-have") return "bg-[#BDD7EE]";
+  if (["future", "future-enhancement", "future-enhancements"].includes(tierKey)) {
+    return "bg-[#C6E0B4]";
+  }
+
+  return "";
+}
+
 export function IndustryDomainDefaultsWorkspace({
   initialIndustryDomainId,
   isSeeding,
@@ -67,15 +81,19 @@ export function IndustryDomainDefaultsWorkspace({
   onClose,
   onSeedDefaults,
 }: IndustryDomainDefaultsWorkspaceProps) {
-  const industrySelectRef = useRef<HTMLSelectElement | null>(null);
+  const industrySelectRef = useRef<HTMLButtonElement | null>(null);
   const initialMapping =
     libraries.find(
       (library) => library.id === initialIndustryDomainId && library.isActive !== false,
     ) || libraries.find((library) => library.isActive !== false);
+  const initialIndustryKey = toSlug(
+    initialMapping?.industrySlug || initialMapping?.industryName || "",
+  );
   const [rows, setRows] = useState<IndustryDomainDefaultProcessGridRow[]>([]);
+  const [selectedIndustryKey, setSelectedIndustryKey] = useState(initialIndustryKey);
   const [selectedMappingId, setSelectedMappingId] = useState(initialMapping?.id || "");
   const [tableDomainKey, setTableDomainKey] = useState(
-    initialMapping ? getLibraryIdentity(initialMapping) : "all",
+    initialMapping ? getLibraryIdentity(initialMapping) : "cx",
   );
   const [isLoading, setIsLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState("");
@@ -98,26 +116,29 @@ export function IndustryDomainDefaultsWorkspace({
   const industryChoices = useMemo(() => {
     const choices = new Map<string, string>();
 
+    rows.forEach((row) => {
+      if (row.industryKey && !choices.has(row.industryKey)) {
+        choices.set(row.industryKey, row.industryName || row.industryKey);
+      }
+    });
     activeMappings.forEach((mapping) => {
-      if (!choices.has(mapping.industryId)) {
-        choices.set(mapping.industryId, mapping.industryName);
+      if (mapping.industryKey && !choices.has(mapping.industryKey)) {
+        choices.set(mapping.industryKey, mapping.industryName);
       }
     });
 
-    return Array.from(choices, ([id, name]) => ({ id, name }));
-  }, [activeMappings]);
+    return Array.from(choices, ([key, name]) => ({ key, name }));
+  }, [activeMappings, rows]);
+  const seedDomainChoices = useMemo(
+    () => activeMappings.filter((mapping) => mapping.industryKey === selectedIndustryKey),
+    [activeMappings, selectedIndustryKey],
+  );
   const selectedMapping = useMemo(
     () =>
-      activeMappings.find((mapping) => mapping.id === selectedMappingId) ||
-      activeMappings.find((mapping) => mapping.id === initialIndustryDomainId) ||
-      activeMappings[0],
-    [activeMappings, initialIndustryDomainId, selectedMappingId],
-  );
-  const selectedIndustryId = selectedMapping?.industryId || "";
-  const selectedIndustryKey = selectedMapping?.industryKey || "";
-  const seedDomainChoices = useMemo(
-    () => activeMappings.filter((mapping) => mapping.industryId === selectedIndustryId),
-    [activeMappings, selectedIndustryId],
+      seedDomainChoices.find((mapping) => mapping.id === selectedMappingId) ||
+      seedDomainChoices.find((mapping) => mapping.domainKey === "cx") ||
+      seedDomainChoices[0],
+    [seedDomainChoices, selectedMappingId],
   );
   const effectiveRows = useMemo(
     () => rows.filter((row) => !row.industryKey || row.industryKey === selectedIndustryKey),
@@ -160,39 +181,67 @@ export function IndustryDomainDefaultsWorkspace({
 
   useEffect(() => {
     let isMounted = true;
+    let focusFrameId: number | null = null;
     const frameId = window.requestAnimationFrame(() => {
-      industrySelectRef.current?.focus();
       void fetchDataDictionaryIndustryDomainDefaultGrid()
         .then((grid) => {
           if (!isMounted) return;
-          setRows((grid.rows || []).map(normalizeRow));
+          const normalizedRows = (grid.rows || []).map(normalizeRow);
+          setRows(normalizedRows);
+          setSelectedIndustryKey(
+            (currentIndustryKey) =>
+              currentIndustryKey ||
+              normalizedRows.find((row) => row.industryKey)?.industryKey ||
+              "",
+          );
           setStatusMessage("");
         })
         .catch((error) => {
           if (isMounted) setErrorMessage(getErrorMessage(error));
         })
         .finally(() => {
-          if (isMounted) setIsLoading(false);
+          if (isMounted) {
+            setIsLoading(false);
+            focusFrameId = window.requestAnimationFrame(() => {
+              if (isMounted) {
+                industrySelectRef.current?.focus();
+              }
+            });
+          }
         });
     });
 
     return () => {
       isMounted = false;
       window.cancelAnimationFrame(frameId);
+      if (focusFrameId !== null) {
+        window.cancelAnimationFrame(focusFrameId);
+      }
     };
   }, []);
 
-  function selectIndustry(industryId: string) {
-    const firstDomainMapping = activeMappings.find((mapping) => mapping.industryId === industryId);
-    setSelectedMappingId(firstDomainMapping?.id || "");
-    if (firstDomainMapping?.domainKey) {
-      setTableDomainKey(firstDomainMapping.domainKey);
+  function selectIndustry(industryKey: string) {
+    const industryMappings = activeMappings.filter(
+      (mapping) => mapping.industryKey === industryKey,
+    );
+    const preferredMapping =
+      industryMappings.find((mapping) => mapping.domainKey === "cx") || industryMappings[0];
+
+    setSelectedIndustryKey(industryKey);
+    setSelectedMappingId(preferredMapping?.id || "");
+    if (preferredMapping?.domainKey) {
+      setTableDomainKey(preferredMapping.domainKey);
+    } else if (rows.some((row) => row.industryKey === industryKey && row.domainKey === "cx")) {
+      setTableDomainKey("cx");
     }
   }
 
   function selectDomain(industryDomainId: string) {
     const mapping = activeMappings.find((item) => item.id === industryDomainId);
     setSelectedMappingId(industryDomainId);
+    if (mapping?.industryKey) {
+      setSelectedIndustryKey(mapping.industryKey);
+    }
     if (mapping?.domainKey) {
       setTableDomainKey(mapping.domainKey);
     }
@@ -233,35 +282,14 @@ export function IndustryDomainDefaultsWorkspace({
       onClose={onClose}
       controls={
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(150px,0.8fr)_minmax(180px,1fr)_auto_minmax(190px,0.9fr)] xl:items-end xl:gap-2">
-          <label className="block min-w-0">
-            <span className="mb-1 block text-[10px] font-bold tracking-[0.08em] text-[#68686D] uppercase">
-              Target industry
-            </span>
-            <span className="relative block">
-              <Building2
-                size={14}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#8A8A8F]"
-                aria-hidden="true"
-              />
-              <select
-                ref={industrySelectRef}
-                value={selectedIndustryId}
-                onChange={(event) => selectIndustry(event.target.value)}
-                disabled={isBusy || industryChoices.length === 0}
-                aria-label="Target industry"
-                className="h-10 w-full appearance-none rounded-lg border border-[#C9DBEE] bg-white pr-8 pl-9 text-sm font-semibold text-[#333] transition outline-none focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10 disabled:cursor-wait"
-              >
-                {industryChoices.length === 0 ? (
-                  <option value="">No active industries</option>
-                ) : null}
-                {industryChoices.map((industry) => (
-                  <option key={industry.id} value={industry.id}>
-                    {industry.name}
-                  </option>
-                ))}
-              </select>
-            </span>
-          </label>
+          <DefaultsIndustrySelect
+            ref={industrySelectRef}
+            disabled={isBusy || industryChoices.length === 0}
+            label="Target industry"
+            onChange={selectIndustry}
+            options={industryChoices}
+            value={selectedIndustryKey}
+          />
           <label className="block min-w-0">
             <span className="mb-1 block text-[10px] font-bold tracking-[0.08em] text-[#68686D] uppercase">
               Target domain
@@ -353,11 +381,11 @@ export function IndustryDomainDefaultsWorkspace({
           <caption className="sr-only">Industry × domain default process list</caption>
           <colgroup>
             <col className="w-12" />
+            <col className="w-48" />
             <col className="w-40" />
-            <col className="w-52" />
             <col className="w-60" />
             <col className="w-[310px]" />
-            <col className="w-40" />
+            <col className="w-52" />
             <col className="w-40" />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-[#F5F8FB] shadow-[0_1px_0_rgba(15,23,42,0.10)]">
@@ -365,11 +393,11 @@ export function IndustryDomainDefaultsWorkspace({
               {[
                 "#",
                 "Domain",
-                "Stable Slug",
+                "Tier",
                 "Process Name",
                 "Description",
+                "Stable Slug",
                 "Category",
-                "Tier",
               ].map((heading) => (
                 <th
                   key={heading}
@@ -390,8 +418,29 @@ export function IndustryDomainDefaultsWorkspace({
                 <td className="border-r border-b border-black/[0.06] px-3 text-center text-[11px] font-semibold text-[#8A8A8F]">
                   {rowIndex + 1}
                 </td>
-                <td className="border-r border-b border-black/[0.06] px-3 text-xs font-semibold text-[#333]">
+                <td className="border-r border-b border-black/[0.06] px-3 text-xs font-semibold whitespace-nowrap text-[#333]">
                   {getDomainDisplayTitle(row.domainName || row.domainKey)}
+                </td>
+                <td
+                  className={`truncate border-r border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555] ${getTierBackgroundClassName(row.tier)}`}
+                  title={getTierLabel(row.tier)}
+                >
+                  {getTierLabel(row.tier)}
+                </td>
+                <td className="min-w-0 border-r border-b border-black/[0.06] px-2 text-xs font-semibold text-[#333]">
+                  <ProcessDescriptionPreview
+                    activation="double-click"
+                    description={row.description}
+                    processName={row.name}
+                    triggerText={row.name}
+                  />
+                </td>
+                <td className="min-w-0 border-r border-b border-black/[0.06] px-2 text-xs font-medium text-[#555]">
+                  <ProcessDescriptionPreview
+                    activation="double-click"
+                    description={row.description}
+                    processName={row.name}
+                  />
                 </td>
                 <td
                   className="truncate border-r border-b border-black/[0.06] px-3 font-mono text-[11px] font-semibold text-[#555]"
@@ -400,25 +449,10 @@ export function IndustryDomainDefaultsWorkspace({
                   {row.slug}
                 </td>
                 <td
-                  className="truncate border-r border-b border-black/[0.06] px-3 text-xs font-semibold text-[#333]"
-                  title={row.name}
-                >
-                  {row.name}
-                </td>
-                <td className="min-w-0 border-r border-b border-black/[0.06] px-2 text-xs font-medium text-[#555]">
-                  <ProcessDescriptionPreview description={row.description} processName={row.name} />
-                </td>
-                <td
-                  className="truncate border-r border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555]"
+                  className="truncate border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555]"
                   title={row.category}
                 >
                   {row.category}
-                </td>
-                <td
-                  className="truncate border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555]"
-                  title={getTierLabel(row.tier)}
-                >
-                  {getTierLabel(row.tier)}
                 </td>
               </tr>
             ))}

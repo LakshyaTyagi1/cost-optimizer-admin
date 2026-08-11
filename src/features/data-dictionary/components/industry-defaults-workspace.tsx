@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Building2, FileSpreadsheet, Sparkles } from "lucide-react";
+import { FileSpreadsheet, Sparkles } from "lucide-react";
 
 import {
   fetchDataDictionaryIndustryDefaultGrid,
@@ -11,6 +11,7 @@ import {
   DefaultsProcessListSelect,
   type DefaultsProcessListOption,
 } from "@/features/data-dictionary/components/defaults-process-list-select";
+import { DefaultsIndustrySelect } from "@/features/data-dictionary/components/defaults-industry-select";
 import { DefaultsWorkspaceDialog } from "@/features/data-dictionary/components/defaults-workspace-dialog";
 import { ProcessDescriptionPreview } from "@/features/data-dictionary/components/process-description-preview";
 import type { DictionaryIndustry } from "@/features/data-dictionary/model";
@@ -54,6 +55,19 @@ function getTierLabel(tier: string) {
   return labels[toSlug(tier)] || tier;
 }
 
+function getTierBackgroundClassName(tier: string) {
+  const tierKey = toSlug(tier);
+
+  if (tierKey === "must-have") return "bg-[#F8CBAD]";
+  if (tierKey === "good-to-have") return "bg-[#FFE699]";
+  if (tierKey === "nice-to-have") return "bg-[#BDD7EE]";
+  if (["future", "future-enhancement", "future-enhancements"].includes(tierKey)) {
+    return "bg-[#C6E0B4]";
+  }
+
+  return "";
+}
+
 export function IndustryDefaultsWorkspace({
   industries,
   initialIndustryId,
@@ -61,7 +75,7 @@ export function IndustryDefaultsWorkspace({
   onClose,
   onSeedDefaults,
 }: IndustryDefaultsWorkspaceProps) {
-  const industrySelectRef = useRef<HTMLSelectElement | null>(null);
+  const industrySelectRef = useRef<HTMLButtonElement | null>(null);
   const [rows, setRows] = useState<IndustryDefaultProcessGridRow[]>([]);
   const [selectedIndustryId, setSelectedIndustryId] = useState(initialIndustryId);
   const [tableIndustryKey, setTableIndustryKey] = useState("all");
@@ -82,6 +96,8 @@ export function IndustryDefaultsWorkspace({
     () => new Map(industryChoices.map((industry) => [industry.key, industry.name])),
     [industryChoices],
   );
+  const selectedIndustryKey =
+    industryChoices.find((industry) => industry.id === selectedIndustryId)?.key || "";
   const displayedRows = useMemo(
     () =>
       tableIndustryKey === "all"
@@ -134,13 +150,33 @@ export function IndustryDefaultsWorkspace({
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+    let focusFrameId: number | null = null;
     const frameId = window.requestAnimationFrame(() => {
-      void loadGrid();
-      industrySelectRef.current?.focus();
+      void loadGrid().finally(() => {
+        if (isMounted) {
+          focusFrameId = window.requestAnimationFrame(() => {
+            if (isMounted) {
+              industrySelectRef.current?.focus();
+            }
+          });
+        }
+      });
     });
 
-    return () => window.cancelAnimationFrame(frameId);
+    return () => {
+      isMounted = false;
+      window.cancelAnimationFrame(frameId);
+      if (focusFrameId !== null) {
+        window.cancelAnimationFrame(focusFrameId);
+      }
+    };
   }, [loadGrid]);
+
+  function selectIndustry(industryKey: string) {
+    const industry = industryChoices.find((item) => item.key === industryKey);
+    setSelectedIndustryId(industry?.id || "");
+  }
 
   async function seedDefaults(industryId?: string) {
     if (isBusy) {
@@ -175,31 +211,16 @@ export function IndustryDefaultsWorkspace({
       onClose={onClose}
       controls={
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:gap-2">
-          <label className="block min-w-0 md:w-[320px] xl:w-auto xl:min-w-[260px] xl:flex-1">
-            <span className="mb-1 block text-[10px] font-bold tracking-[0.08em] text-[#68686D] uppercase">
-              Target industry
-            </span>
-            <span className="relative block">
-              <Building2
-                size={14}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#8A8A8F]"
-                aria-hidden="true"
-              />
-              <select
-                ref={industrySelectRef}
-                value={selectedIndustryId}
-                onChange={(event) => setSelectedIndustryId(event.target.value)}
-                disabled={isBusy}
-                className="h-10 w-full appearance-none rounded-lg border border-[#C9DBEE] bg-white pr-8 pl-9 text-sm font-semibold text-[#333] transition outline-none focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/10 disabled:cursor-wait"
-              >
-                {industryChoices.map((industry) => (
-                  <option key={industry.id} value={industry.id}>
-                    {industry.name}
-                  </option>
-                ))}
-              </select>
-            </span>
-          </label>
+          <div className="min-w-0 md:w-[320px] xl:w-auto xl:min-w-[260px] xl:flex-1">
+            <DefaultsIndustrySelect
+              ref={industrySelectRef}
+              disabled={isBusy || industryChoices.length === 0}
+              label="Target industry"
+              onChange={selectIndustry}
+              options={industryChoices}
+              value={selectedIndustryKey}
+            />
+          </div>
           <div className="grid gap-2 sm:grid-cols-2 md:flex md:items-center xl:shrink-0">
             <button
               type="button"
@@ -265,10 +286,10 @@ export function IndustryDefaultsWorkspace({
           <colgroup>
             <col className="w-12" />
             <col className="w-40" />
-            <col className="w-52" />
+            <col className="w-40" />
             <col className="w-60" />
             <col className="w-[310px]" />
-            <col className="w-40" />
+            <col className="w-52" />
             <col className="w-40" />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-[#F5F8FB] shadow-[0_1px_0_rgba(15,23,42,0.10)]">
@@ -276,11 +297,11 @@ export function IndustryDefaultsWorkspace({
               {[
                 "#",
                 "Industry",
-                "Stable Slug",
+                "Tier",
                 "Process Name",
                 "Description",
+                "Stable Slug",
                 "Category",
-                "Tier",
               ].map((heading) => (
                 <th
                   key={heading}
@@ -305,10 +326,10 @@ export function IndustryDefaultsWorkspace({
                   {row.industryName || industryNameByKey.get(row.industryKey) || row.industryKey}
                 </td>
                 <td
-                  className="truncate border-r border-b border-black/[0.06] px-3 font-mono text-[11px] font-semibold text-[#555]"
-                  title={row.slug}
+                  className={`truncate border-r border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555] ${getTierBackgroundClassName(row.tier)}`}
+                  title={getTierLabel(row.tier)}
                 >
-                  {row.slug}
+                  {getTierLabel(row.tier)}
                 </td>
                 <td
                   className="truncate border-r border-b border-black/[0.06] px-3 text-xs font-semibold text-[#333]"
@@ -320,16 +341,16 @@ export function IndustryDefaultsWorkspace({
                   <ProcessDescriptionPreview description={row.description} processName={row.name} />
                 </td>
                 <td
-                  className="truncate border-r border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555]"
-                  title={row.category}
+                  className="truncate border-r border-b border-black/[0.06] px-3 font-mono text-[11px] font-semibold text-[#555]"
+                  title={row.slug}
                 >
-                  {row.category}
+                  {row.slug}
                 </td>
                 <td
                   className="truncate border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555]"
-                  title={getTierLabel(row.tier)}
+                  title={row.category}
                 >
-                  {getTierLabel(row.tier)}
+                  {row.category}
                 </td>
               </tr>
             ))}

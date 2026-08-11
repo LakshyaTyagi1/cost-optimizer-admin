@@ -5,8 +5,10 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { createPortal } from "react-dom";
 
 type ProcessDescriptionPreviewProps = {
+  activation?: "double-click" | "hover";
   description: string;
   processName: string;
+  triggerText?: string;
 };
 
 type FloatingPanelPosition = {
@@ -20,8 +22,10 @@ const viewportInset = 12;
 const panelGap = 9;
 
 export function ProcessDescriptionPreview({
+  activation = "hover",
   description,
   processName,
+  triggerText = description,
 }: ProcessDescriptionPreviewProps) {
   const tooltipId = useId();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -156,8 +160,14 @@ export function ProcessDescriptionPreview({
   );
 
   if (!description) {
-    return <span className="text-[#A1A1AA]">—</span>;
+    return triggerText ? (
+      <span className="block truncate">{triggerText}</span>
+    ) : (
+      <span className="text-[#A1A1AA]">—</span>
+    );
   }
+
+  const opensOnDoubleClick = activation === "double-click";
 
   return (
     <>
@@ -166,10 +176,16 @@ export function ProcessDescriptionPreview({
         type="button"
         aria-describedby={isOpen ? tooltipId : undefined}
         aria-label={`View full description for ${processName}`}
-        onFocus={showDescription}
+        onFocus={opensOnDoubleClick ? undefined : showDescription}
         onBlur={scheduleHideDescription}
-        onMouseEnter={showDescription}
-        onMouseLeave={scheduleHideDescription}
+        onClick={(event) => {
+          if (opensOnDoubleClick && event.detail === 0) {
+            showDescription();
+          }
+        }}
+        onDoubleClick={opensOnDoubleClick ? showDescription : undefined}
+        onMouseEnter={opensOnDoubleClick ? undefined : showDescription}
+        onMouseLeave={opensOnDoubleClick ? undefined : scheduleHideDescription}
         onPointerDown={(event) => {
           if (event.pointerType !== "mouse") {
             showDescription();
@@ -177,7 +193,7 @@ export function ProcessDescriptionPreview({
         }}
         className="block w-full min-w-0 cursor-help rounded-md px-1 py-1 text-left transition-colors hover:bg-[#EDF6FF] focus-visible:bg-[#EDF6FF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/35 focus-visible:outline-none"
       >
-        <span className="block truncate">{description}</span>
+        <span className="block truncate">{triggerText}</span>
       </button>
 
       {isOpen && typeof document !== "undefined"
