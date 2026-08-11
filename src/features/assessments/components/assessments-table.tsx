@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowDown,
   ArrowUp,
@@ -742,17 +751,51 @@ function FilterDropdown({
   options: FilterDropdownOption[];
   value: string;
 }) {
-  const listboxId = useId();
+  const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const selectedIndex = Math.max(
-    0,
-    options.findIndex((option) => option.value === value),
-  );
-  const [activeIndex, setActiveIndex] = useState(selectedIndex);
+  const typeaheadRef = useRef({ lastTypedAt: 0, query: "" });
+  const selectedIndex = options.findIndex((option) => option.value === value);
+  const resolvedSelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+  const [activeIndex, setActiveIndex] = useState(resolvedSelectedIndex);
   const [isOpen, setIsOpen] = useState(false);
-  const selectedOption = options[selectedIndex];
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
+  const selectedOption = selectedIndex >= 0 ? options[selectedIndex] : undefined;
+  const selectedLabel = selectedOption?.label || value || options[0]?.label || "Select";
+
+  const updateMenuPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+
+    if (!trigger) {
+      return;
+    }
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const viewportGutter = 12;
+    const menuGap = 6;
+    const availableWidth = Math.max(0, viewportWidth - viewportGutter * 2);
+    const menuWidth = Math.min(availableWidth, Math.max(triggerRect.width, 180));
+    const maximumLeft = Math.max(viewportGutter, viewportWidth - menuWidth - viewportGutter);
+    const menuLeft = Math.min(Math.max(viewportGutter, triggerRect.left), maximumLeft);
+    const spaceBelow = viewportHeight - triggerRect.bottom - menuGap - viewportGutter;
+    const spaceAbove = triggerRect.top - menuGap - viewportGutter;
+    const shouldOpenAbove = spaceBelow < 180 && spaceAbove > spaceBelow;
+    const availableHeight = Math.max(48, shouldOpenAbove ? spaceAbove : spaceBelow);
+
+    setMenuStyle({
+      position: "fixed",
+      left: menuLeft,
+      width: menuWidth,
+      maxHeight: Math.min(320, availableHeight),
+      ...(shouldOpenAbove
+        ? { bottom: viewportHeight - triggerRect.top + menuGap }
+        : { top: triggerRect.bottom + menuGap }),
+    });
+  }, []);
 
   useEffect(() => {
     if (!isOpen) {
@@ -760,15 +803,24 @@ function FilterDropdown({
     }
 
     function handlePointerDown(event: globalThis.PointerEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) {
         setIsOpen(false);
+        setMenuStyle(null);
       }
     }
 
     document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
 
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [isOpen]);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [isOpen, updateMenuPosition]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -784,7 +836,33 @@ function FilterDropdown({
 
   function closeDropdown() {
     setIsOpen(false);
+    setMenuStyle(null);
     triggerRef.current?.focus();
+  }
+
+  function closeDropdownAndMoveFocus(backward: boolean) {
+    const trigger = triggerRef.current;
+
+    if (!trigger) {
+      setIsOpen(false);
+      setMenuStyle(null);
+      return;
+    }
+
+    const focusableElements = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter(
+      (element) => !menuRef.current?.contains(element) && element.getClientRects().length > 0,
+    );
+    const triggerIndex = focusableElements.indexOf(trigger);
+    const nextElement = focusableElements[triggerIndex + (backward ? -1 : 1)];
+
+    setIsOpen(false);
+    setMenuStyle(null);
+
+    window.requestAnimationFrame(() => nextElement?.focus());
   }
 
   function selectOption(option: FilterDropdownOption) {
@@ -795,18 +873,64 @@ function FilterDropdown({
     closeDropdown();
   }
 
-  function openDropdown(nextActiveIndex = selectedIndex) {
+  function openDropdown(nextActiveIndex = resolvedSelectedIndex) {
+    updateMenuPosition();
     setActiveIndex(nextActiveIndex);
     setIsOpen(true);
+  }
+
+  function handleTypeahead(event: KeyboardEvent<HTMLButtonElement>, fromIndex: number) {
+    if (
+      event.key.length !== 1 ||
+      event.key === " " ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      options.length === 0
+    ) {
+      return false;
+    }
+
+    event.preventDefault();
+
+    const now = event.timeStamp;
+    const typedCharacter = event.key.toLocaleLowerCase();
+    const previousTypeahead = typeaheadRef.current;
+    const nextQuery =
+      now - previousTypeahead.lastTypedAt > 700
+        ? typedCharacter
+        : `${previousTypeahead.query}${typedCharacter}`;
+    const isRepeatedCharacterQuery = [...nextQuery].every(
+      (character) => character === typedCharacter,
+    );
+    const query = isRepeatedCharacterQuery ? typedCharacter : nextQuery;
+
+    typeaheadRef.current = { lastTypedAt: now, query };
+
+    for (let offset = 1; offset <= options.length; offset += 1) {
+      const optionIndex = (fromIndex + offset) % options.length;
+
+      if (options[optionIndex].label.toLocaleLowerCase().startsWith(query)) {
+        if (isOpen) {
+          setActiveIndex(optionIndex);
+        } else {
+          openDropdown(optionIndex);
+        }
+
+        break;
+      }
+    }
+
+    return true;
   }
 
   function handleTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      openDropdown(selectedIndex);
+      openDropdown(resolvedSelectedIndex);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      openDropdown(selectedIndex);
+      openDropdown(resolvedSelectedIndex);
     } else if (event.key === "Home") {
       event.preventDefault();
       openDropdown(0);
@@ -817,10 +941,16 @@ function FilterDropdown({
       event.preventDefault();
       event.stopPropagation();
       closeDropdown();
+    } else {
+      handleTypeahead(event, resolvedSelectedIndex);
     }
   }
 
   function handleOptionKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (handleTypeahead(event, index)) {
+      return;
+    }
+
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setActiveIndex((index + 1) % options.length);
@@ -841,7 +971,8 @@ function FilterDropdown({
       event.stopPropagation();
       closeDropdown();
     } else if (event.key === "Tab") {
-      setIsOpen(false);
+      event.preventDefault();
+      closeDropdownAndMoveFocus(event.shiftKey);
     }
   }
 
@@ -853,16 +984,17 @@ function FilterDropdown({
       <button
         ref={triggerRef}
         type="button"
-        role="combobox"
         aria-label={ariaLabel}
-        aria-controls={listboxId}
+        aria-controls={menuId}
         aria-expanded={isOpen}
-        aria-haspopup="listbox"
+        aria-haspopup="menu"
         onClick={() => (isOpen ? closeDropdown() : openDropdown())}
         onKeyDown={handleTriggerKeyDown}
         className="flex h-full w-full items-center justify-between gap-2 rounded-[inherit] bg-transparent pr-3 pl-[13px] text-left text-base font-semibold text-[#171717] outline-none sm:text-[13px] sm:leading-[19.5px] sm:font-normal sm:text-[#555555]"
       >
-        <span className="truncate">{selectedOption?.label || "Select"}</span>
+        <span className="truncate" title={selectedLabel}>
+          {selectedLabel}
+        </span>
         <ChevronDown
           size={14}
           className={`shrink-0 text-[#007AFF] transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
@@ -870,44 +1002,52 @@ function FilterDropdown({
         />
       </button>
 
-      {isOpen ? (
-        <div
-          id={listboxId}
-          role="listbox"
-          aria-label={ariaLabel}
-          className="absolute top-[calc(100%+6px)] left-0 z-50 max-h-[min(20rem,calc(100dvh-16rem))] w-max min-w-[180px] overflow-y-auto rounded-lg border border-[#E1E4E8] bg-white p-1.5 shadow-[0_12px_30px_rgba(15,23,42,0.14)]"
-        >
-          {options.map((option, index) => {
-            const isSelected = option.value === value;
+      {isOpen && menuStyle && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={menuRef}
+              id={menuId}
+              role="menu"
+              aria-label={ariaLabel}
+              style={menuStyle}
+              className="z-[100] overflow-y-auto rounded-lg border border-[#E1E4E8] bg-white p-1.5 shadow-[0_12px_30px_rgba(15,23,42,0.14)]"
+            >
+              {options.map((option, index) => {
+                const isSelected = option.value === value;
 
-            return (
-              <button
-                key={option.value}
-                ref={(element) => {
-                  optionRefs.current[index] = element;
-                }}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                tabIndex={activeIndex === index ? 0 : -1}
-                onClick={() => selectOption(option)}
-                onFocus={() => setActiveIndex(index)}
-                onKeyDown={(event) => handleOptionKeyDown(event, index)}
-                className={`flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-[13px] leading-[18px] whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:ring-inset ${
-                  isSelected
-                    ? "bg-[#EAF3FF] font-semibold text-[#005DB8] hover:bg-[#DFECFF]"
-                    : "font-medium text-[#333333] hover:bg-[#F5F7FA] focus:bg-[#F5F7FA]"
-                }`}
-              >
-                <span>{option.label}</span>
-                <span className="flex size-4 shrink-0 items-center justify-center">
-                  {isSelected ? <Check size={14} strokeWidth={2.25} aria-hidden="true" /> : null}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+                return (
+                  <button
+                    key={option.value}
+                    ref={(element) => {
+                      optionRefs.current[index] = element;
+                    }}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={isSelected}
+                    tabIndex={activeIndex === index ? 0 : -1}
+                    title={option.label}
+                    onClick={() => selectOption(option)}
+                    onFocus={() => setActiveIndex(index)}
+                    onKeyDown={(event) => handleOptionKeyDown(event, index)}
+                    className={`flex w-full max-w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-[13px] leading-[18px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:ring-inset ${
+                      isSelected
+                        ? "bg-[#EAF3FF] font-semibold text-[#005DB8] hover:bg-[#DFECFF]"
+                        : "font-medium text-[#333333] hover:bg-[#F5F7FA] focus:bg-[#F5F7FA]"
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                    <span className="flex size-4 shrink-0 items-center justify-center">
+                      {isSelected ? (
+                        <Check size={14} strokeWidth={2.25} aria-hidden="true" />
+                      ) : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
