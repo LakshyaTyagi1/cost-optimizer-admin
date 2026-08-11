@@ -52,7 +52,7 @@ const tableHeaderTextStyle: CSSProperties = {
 };
 
 const filterShellClassName =
-  "h-11 rounded-md border border-[#E1E4E8] bg-white text-sm font-semibold text-[#171717] transition-[border-color,box-shadow] hover:border-[#C7CCD4] focus-within:border-[#80B7FF] focus-within:ring-2 focus-within:ring-[#007AFF]/10 sm:h-9";
+  "h-11 rounded-md border border-[#E1E4E8] bg-white text-sm font-semibold text-[#171717] transition-[border-color,box-shadow] hover:border-[#C7CCD4] focus-within:border-[#80B7FF] sm:h-9";
 
 const industryIconStyles: Record<string, { icon: LucideIcon }> = {
   Automotive: { icon: Car },
@@ -229,7 +229,7 @@ export function AssessmentsTable({
               ref={moreFiltersButtonRef}
               type="button"
               onClick={() => setShowAdvancedFilters((current) => !current)}
-              className="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-md border border-[#E1E4E8] bg-white px-3 text-sm font-semibold text-[#555555] transition-[border-color,box-shadow,color] hover:border-[#C7CCD4] hover:text-[#007AFF] focus-visible:border-[#80B7FF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/10 focus-visible:outline-none sm:h-9 sm:text-xs"
+              className="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-md border border-[#E1E4E8] bg-white px-3 text-sm font-semibold text-[#555555] transition-[border-color,box-shadow,color] hover:border-[#C7CCD4] hover:text-[#007AFF] focus-visible:border-[#80B7FF] focus-visible:outline-none sm:h-9 sm:text-xs"
               aria-controls="assessment-advanced-filters"
               aria-expanded={showAdvancedFilters}
             >
@@ -778,7 +778,7 @@ function FilterDropdown({
     const viewportGutter = 12;
     const menuGap = 6;
     const availableWidth = Math.max(0, viewportWidth - viewportGutter * 2);
-    const menuWidth = Math.min(availableWidth, Math.max(triggerRect.width, 180));
+    const menuWidth = Math.min(availableWidth, Math.max(triggerRect.width, 240));
     const maximumLeft = Math.max(viewportGutter, viewportWidth - menuWidth - viewportGutter);
     const menuLeft = Math.min(Math.max(viewportGutter, triggerRect.left), maximumLeft);
     const spaceBelow = viewportHeight - triggerRect.bottom - menuGap - viewportGutter;
@@ -979,7 +979,7 @@ function FilterDropdown({
   return (
     <div
       ref={rootRef}
-      className={`relative min-w-0 ${filterShellClassName} ${isOpen ? "border-[#80B7FF]! ring-2 ring-[#007AFF]/10" : ""} ${className}`}
+      className={`relative min-w-0 ${filterShellClassName} ${isOpen ? "border-[#80B7FF]!" : ""} ${className}`}
     >
       <button
         ref={triggerRef}
@@ -1107,7 +1107,7 @@ function ResetFiltersButton({ disabled, onClick }: { disabled: boolean; onClick:
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex size-11 items-center justify-center rounded-md border border-[#E1E4E8] bg-white text-[#555555] transition-[border-color,box-shadow,color] hover:border-[#C7CCD4] hover:text-[#007AFF] focus-visible:border-[#80B7FF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/10 focus-visible:outline-none disabled:cursor-not-allowed disabled:text-[#A1A1AA] disabled:opacity-60 sm:size-9"
+      className="inline-flex size-11 items-center justify-center rounded-md border border-[#E1E4E8] bg-white text-[#555555] transition-[border-color,box-shadow,color] hover:border-[#C7CCD4] hover:text-[#007AFF] focus-visible:border-[#80B7FF] focus-visible:outline-none disabled:cursor-not-allowed disabled:text-[#A1A1AA] disabled:opacity-60 sm:size-9"
       aria-label="Reset assessment filters"
       title="Reset filters"
     >
