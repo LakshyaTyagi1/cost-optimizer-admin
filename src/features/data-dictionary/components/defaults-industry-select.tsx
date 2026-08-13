@@ -16,9 +16,35 @@ import { createPortal } from "react-dom";
 
 import { DefaultsIndustryIcon } from "@/features/data-dictionary/components/defaults-industry-icon";
 
+export type DefaultsIndustryConfigurationStatus =
+  | "configured"
+  | "partial"
+  | "inactive"
+  | "missing"
+  | "not-added";
+
 export type DefaultsIndustryOption = {
+  addedProcessCount?: number;
+  configurationStatus?: DefaultsIndustryConfigurationStatus;
   key: string;
   name: string;
+  totalProcessCount?: number;
+};
+
+const configurationStatusLabels: Record<DefaultsIndustryConfigurationStatus, string> = {
+  configured: "Configured",
+  inactive: "Inactive",
+  missing: "Industry not added",
+  "not-added": "Processes not added",
+  partial: "Partially added",
+};
+
+const configurationStatusClassNames: Record<DefaultsIndustryConfigurationStatus, string> = {
+  configured: "border-[#B7E4CE] bg-[#F0FDF4] text-[#16794A]",
+  inactive: "border-[#F8D59B] bg-[#FFF9EB] text-[#9A6700]",
+  missing: "border-[#D9E3F0] bg-[#F5F8FB] text-[#68686D]",
+  "not-added": "border-[#D9E3F0] bg-[#F5F8FB] text-[#68686D]",
+  partial: "border-[#BFD9F6] bg-[#EFF6FF] text-[#0063CC]",
 };
 
 type DefaultsIndustrySelectProps = {
@@ -346,6 +372,20 @@ export const DefaultsIndustrySelect = forwardRef<HTMLButtonElement, DefaultsIndu
           <span id={valueId} className="min-w-0 flex-1 truncate text-sm font-semibold text-[#333]">
             {selectedOption?.name || "Choose industry"}
           </span>
+          {selectedOption?.configurationStatus &&
+          selectedOption.configurationStatus !== "not-added" ? (
+            <span
+              className={`inline-flex h-5 shrink-0 items-center rounded-full border px-2 text-[9px] font-bold whitespace-nowrap ${configurationStatusClassNames[selectedOption.configurationStatus]}`}
+            >
+              {configurationStatusLabels[selectedOption.configurationStatus]}
+            </span>
+          ) : null}
+          {typeof selectedOption?.addedProcessCount === "number" &&
+          typeof selectedOption.totalProcessCount === "number" ? (
+            <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-[#F1F5F9] px-2 text-[10px] font-bold text-[#667085]">
+              {selectedOption.addedProcessCount}/{selectedOption.totalProcessCount}
+            </span>
+          ) : null}
           <ChevronDown
             size={14}
             className={`shrink-0 text-[#68686D] transition-transform duration-150 ${isOpen ? "rotate-180 text-[#007AFF]" : ""}`}
@@ -403,6 +443,20 @@ export const DefaultsIndustrySelect = forwardRef<HTMLButtonElement, DefaultsIndu
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold">
                           {option.name}
                         </span>
+                        {option.configurationStatus &&
+                        option.configurationStatus !== "not-added" ? (
+                          <span
+                            className={`inline-flex h-5 shrink-0 items-center rounded-full border px-2 text-[9px] font-bold whitespace-nowrap ${configurationStatusClassNames[option.configurationStatus]}`}
+                          >
+                            {configurationStatusLabels[option.configurationStatus]}
+                          </span>
+                        ) : null}
+                        {typeof option.addedProcessCount === "number" &&
+                        typeof option.totalProcessCount === "number" ? (
+                          <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-[#F1F5F9] px-2 text-[10px] font-bold text-[#667085]">
+                            {option.addedProcessCount}/{option.totalProcessCount}
+                          </span>
+                        ) : null}
                         <span
                           className={`flex size-5 shrink-0 items-center justify-center rounded-full ${
                             isSelected ? "bg-white text-[#007AFF]" : "text-transparent"

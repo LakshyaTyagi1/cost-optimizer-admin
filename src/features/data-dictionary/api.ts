@@ -187,9 +187,11 @@ export type IndustryDefaultProcessGridRow = {
   description: string;
   industryKey: string;
   industryName: string;
+  industryStatus: "active" | "inactive" | "missing";
   isActive: boolean;
   name: string;
   slug: string;
+  status: "added" | "inactive" | "not-added";
   tier: string;
 };
 

@@ -11,7 +11,10 @@ import {
   DefaultsProcessListSelect,
   type DefaultsProcessListOption,
 } from "@/features/data-dictionary/components/defaults-process-list-select";
-import { DefaultsIndustrySelect } from "@/features/data-dictionary/components/defaults-industry-select";
+import {
+  DefaultsIndustrySelect,
+  type DefaultsIndustryConfigurationStatus,
+} from "@/features/data-dictionary/components/defaults-industry-select";
 import { DefaultsWorkspaceDialog } from "@/features/data-dictionary/components/defaults-workspace-dialog";
 import { ProcessDescriptionPreview } from "@/features/data-dictionary/components/process-description-preview";
 import type { DictionaryIndustry } from "@/features/data-dictionary/model";
@@ -36,12 +39,28 @@ function normalizeRow(row: IndustryDefaultProcessGridRow): IndustryDefaultProces
     description: String(row.description || "").trim(),
     industryKey: toSlug(row.industryKey || row.industryName || ""),
     industryName: String(row.industryName || "").trim(),
+    industryStatus: ["active", "inactive", "missing"].includes(row.industryStatus)
+      ? row.industryStatus
+      : "missing",
     isActive: row.isActive !== false,
     name: String(row.name || "").trim(),
     slug: toSlug(row.slug || row.name || ""),
+    status: ["added", "inactive", "not-added"].includes(row.status) ? row.status : "not-added",
     tier: String(row.tier || "").trim(),
   };
 }
+
+const processStatusLabels: Record<IndustryDefaultProcessGridRow["status"], string> = {
+  added: "Added",
+  inactive: "Inactive",
+  "not-added": "Not added",
+};
+
+const processStatusClassNames: Record<IndustryDefaultProcessGridRow["status"], string> = {
+  added: "border-[#B7E4CE] bg-[#F0FDF4] text-[#16794A]",
+  inactive: "border-[#F8D59B] bg-[#FFF9EB] text-[#9A6700]",
+  "not-added": "border-[#D9E3F0] bg-[#F5F8FB] text-[#68686D]",
+};
 
 function getTierLabel(tier: string) {
   const labels: Record<string, string> = {
@@ -83,14 +102,61 @@ export function IndustryDefaultsWorkspace({
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
+  const industryConfigurationByKey = useMemo(() => {
+    const configurationByKey = new Map<
+      string,
+      {
+        addedProcessCount: number;
+        industryStatus: IndustryDefaultProcessGridRow["industryStatus"];
+        totalProcessCount: number;
+      }
+    >();
+
+    rows.forEach((row) => {
+      const current = configurationByKey.get(row.industryKey);
+      configurationByKey.set(row.industryKey, {
+        addedProcessCount: (current?.addedProcessCount || 0) + (row.status === "not-added" ? 0 : 1),
+        industryStatus: current?.industryStatus || row.industryStatus,
+        totalProcessCount: (current?.totalProcessCount || 0) + 1,
+      });
+    });
+
+    return configurationByKey;
+  }, [rows]);
   const industryChoices = useMemo(
     () =>
-      industries.map((industry) => ({
-        id: industry.id,
-        key: getIndustryKey(industry),
-        name: industry.name,
-      })),
-    [industries],
+      industries.map((industry) => {
+        const key = getIndustryKey(industry);
+        const configuration = industryConfigurationByKey.get(key);
+        let configurationStatus: DefaultsIndustryConfigurationStatus | undefined;
+
+        if (configuration?.industryStatus === "missing") {
+          configurationStatus = "missing";
+        } else if (configuration?.industryStatus === "inactive") {
+          configurationStatus = "inactive";
+        } else if (configuration) {
+          configurationStatus =
+            configuration.addedProcessCount === configuration.totalProcessCount
+              ? "configured"
+              : configuration.addedProcessCount > 0
+                ? "partial"
+                : "not-added";
+        }
+
+        return {
+          id: industry.id,
+          key,
+          name: industry.name,
+          ...(configuration
+            ? {
+                addedProcessCount: configuration.addedProcessCount,
+                configurationStatus,
+                totalProcessCount: configuration.totalProcessCount,
+              }
+            : {}),
+        };
+      }),
+    [industries, industryConfigurationByKey],
   );
   const industryNameByKey = useMemo(
     () => new Map(industryChoices.map((industry) => [industry.key, industry.name])),
@@ -106,7 +172,6 @@ export function IndustryDefaultsWorkspace({
     [rows, tableIndustryKey],
   );
   const processListOptions = useMemo<DefaultsProcessListOption[]>(() => {
-    const configuredIndustryKeys = new Set(industryChoices.map((industry) => industry.key));
     const sourceIndustries = new Map<string, { count: number; name: string }>();
 
     rows.forEach((row) => {
@@ -127,21 +192,26 @@ export function IndustryDefaultsWorkspace({
         value: industryKey,
         label: sourceIndustry.name,
         count: sourceIndustry.count,
-        isConfigured: configuredIndustryKeys.has(industryKey),
       })),
     ];
-  }, [industryChoices, rows]);
+  }, [rows]);
+  const displayedConfiguredCount = useMemo(
+    () => displayedRows.filter((row) => row.status === "added").length,
+    [displayedRows],
+  );
   const isBusy = isLoading || isSeeding;
 
-  const loadGrid = useCallback(async () => {
+  const loadGrid = useCallback(async (showLoadedMessage = true) => {
     setIsLoading(true);
     setErrorMessage("");
     try {
       const grid = await fetchDataDictionaryIndustryDefaultGrid();
       setRows((grid.rows || []).map(normalizeRow));
-      setStatusMessage(
-        `${grid.totalCount || grid.rows?.length || 0} industry-specific source rows loaded.`,
-      );
+      if (showLoadedMessage) {
+        setStatusMessage(
+          `${grid.totalCount || grid.rows?.length || 0} industry-specific source rows loaded.`,
+        );
+      }
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -187,6 +257,7 @@ export function IndustryDefaultsWorkspace({
     const wasSeeded = await onSeedDefaults(industryId);
     if (wasSeeded) {
       const industry = industryChoices.find((item) => item.id === industryId);
+      await loadGrid(false);
       setStatusMessage(
         industry
           ? `${industry.name} defaults are now up to date.`
@@ -259,7 +330,7 @@ export function IndustryDefaultsWorkspace({
           <p className="text-xs font-semibold text-[#16794A]">{statusMessage}</p>
         ) : (
           <p className="text-xs font-semibold text-[#68686D]">
-            {displayedRows.length} of {rows.length} industry-specific rows displayed
+            {displayedConfiguredCount} of {displayedRows.length} displayed processes added
           </p>
         )
       }
@@ -281,7 +352,7 @@ export function IndustryDefaultsWorkspace({
           </p>
         </div>
       ) : (
-        <table className="w-full min-w-[1120px] table-fixed border-separate border-spacing-0 text-left">
+        <table className="w-full min-w-[1220px] table-fixed border-separate border-spacing-0 text-left">
           <caption className="sr-only">Industry-specific default process list</caption>
           <colgroup>
             <col className="w-12" />
@@ -291,6 +362,7 @@ export function IndustryDefaultsWorkspace({
             <col className="w-[310px]" />
             <col className="w-52" />
             <col className="w-40" />
+            <col className="w-32" />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-[#F5F8FB] shadow-[0_1px_0_rgba(15,23,42,0.10)]">
             <tr>
@@ -302,6 +374,7 @@ export function IndustryDefaultsWorkspace({
                 "Description",
                 "Stable Slug",
                 "Category",
+                "Status",
               ].map((heading) => (
                 <th
                   key={heading}
@@ -347,10 +420,17 @@ export function IndustryDefaultsWorkspace({
                   {row.slug}
                 </td>
                 <td
-                  className="truncate border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555]"
+                  className="truncate border-r border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555]"
                   title={row.category}
                 >
                   {row.category}
+                </td>
+                <td className="border-b border-black/[0.06] px-3">
+                  <span
+                    className={`inline-flex h-5 items-center rounded-full border px-2 text-[9px] font-bold whitespace-nowrap ${processStatusClassNames[row.status]}`}
+                  >
+                    {processStatusLabels[row.status]}
+                  </span>
                 </td>
               </tr>
             ))}
