@@ -40,6 +40,12 @@ export type AdminAssessmentProcess = {
     };
     efficiencyPercent?: number;
     nonStaffingAnnualCost?: AdminCurrencyAmount;
+    serviceLevel?: {
+      requestVolume?: number;
+      requestVolumeUnit?: "hour" | "day" | "month";
+      turnaroundTime?: number;
+      turnaroundTimeUnit?: "minutes" | "hours" | "days" | "custom";
+    };
     sharedFtePool?: {
       allocationPercent?: number;
       annualSalaryPerFte?: AdminCurrencyAmount;

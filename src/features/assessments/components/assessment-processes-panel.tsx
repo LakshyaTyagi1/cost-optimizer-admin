@@ -399,6 +399,9 @@ function AssessmentProcessPreview({
   const costInputs = process.costInputs;
   const sharedFtePool = costInputs?.sharedFtePool;
   const dedicatedFte = costInputs?.dedicatedFte;
+  const serviceLevel = costInputs?.serviceLevel;
+  const hasServiceLevel =
+    Number.isFinite(serviceLevel?.requestVolume) || Number.isFinite(serviceLevel?.turnaroundTime);
   const totalBaseCurrencyCost = getProcessCostInBaseCurrency(process, currencyConversionRate);
   const auditLabel = getProcessAuditLabel(process);
   const processName = process.name || process.processId || "Selected process";
@@ -477,10 +480,58 @@ function AssessmentProcessPreview({
               <PreviewField label="Technology stack" multiline value={stackLabel} />
             </div>
           </section>
+          {hasServiceLevel ? (
+            <section className="rounded-md border border-black/[0.08] bg-[#FAFAFA] p-4 lg:col-span-2">
+              <p className="text-[10px] font-bold tracking-[0.12em] text-[#86868B] uppercase">
+                Service level
+              </p>
+              <p className="mt-1 text-[10px] font-semibold text-[#A1A1AA]">
+                Reference only; not included in cost calculations.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <PreviewField
+                  label="Request volume"
+                  value={formatRequestVolume(
+                    serviceLevel?.requestVolume,
+                    serviceLevel?.requestVolumeUnit,
+                  )}
+                />
+                <PreviewField
+                  label="Turnaround time"
+                  value={formatTurnaroundTime(
+                    serviceLevel?.turnaroundTime,
+                    serviceLevel?.turnaroundTimeUnit,
+                  )}
+                />
+              </div>
+            </section>
+          ) : null}
         </div>
       </div>
     </div>
   );
+}
+
+function formatRequestVolume(
+  value: number | undefined,
+  unit: "hour" | "day" | "month" | undefined,
+) {
+  if (!Number.isFinite(value)) {
+    return "--";
+  }
+
+  return `${value} / ${unit || "day"}`;
+}
+
+function formatTurnaroundTime(
+  value: number | undefined,
+  unit: "minutes" | "hours" | "days" | "custom" | undefined,
+) {
+  if (!Number.isFinite(value)) {
+    return "--";
+  }
+
+  return `${value} ${unit || "hours"}`;
 }
 
 function PreviewField({
