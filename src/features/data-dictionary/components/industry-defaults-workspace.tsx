@@ -286,6 +286,7 @@ export function IndustryDefaultsWorkspace({
             <DefaultsIndustrySelect
               ref={industrySelectRef}
               disabled={isBusy || industryChoices.length === 0}
+              dropdownMinWidth={400}
               label="Target industry"
               onChange={selectIndustry}
               options={industryChoices}

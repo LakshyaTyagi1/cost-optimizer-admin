@@ -219,12 +219,14 @@ export type IndustryDomainDefaultProcessGridRow = {
   description: string;
   domainKey: string;
   domainName: string;
+  industryDomainId: string;
   industryKey?: string;
   industryName?: string;
   isActive: boolean;
   name: string;
   scope: string;
   slug: string;
+  status: "added" | "inactive" | "not-added";
   tier: string;
 };
 

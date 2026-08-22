@@ -49,6 +49,7 @@ const configurationStatusClassNames: Record<DefaultsIndustryConfigurationStatus,
 
 type DefaultsIndustrySelectProps = {
   disabled?: boolean;
+  dropdownMinWidth?: number;
   label: string;
   onChange: (value: string) => void;
   options: DefaultsIndustryOption[];
@@ -66,7 +67,7 @@ const dropdownGap = 6;
 
 export const DefaultsIndustrySelect = forwardRef<HTMLButtonElement, DefaultsIndustrySelectProps>(
   function DefaultsIndustrySelect(
-    { disabled = false, label, onChange, options, value },
+    { disabled = false, dropdownMinWidth = 220, label, onChange, options, value },
     forwardedRef,
   ) {
     const labelId = useId();
@@ -81,7 +82,7 @@ export const DefaultsIndustrySelect = forwardRef<HTMLButtonElement, DefaultsIndu
     const selectedOption = selectedOptionIndex >= 0 ? options[selectedOptionIndex] : undefined;
     const [isOpen, setIsOpen] = useState(false);
     const [activeIndex, setActiveIndex] = useState(selectedIndex);
-    const [dropdownWidth, setDropdownWidth] = useState(220);
+    const [dropdownWidth, setDropdownWidth] = useState(dropdownMinWidth);
     const [dropdownPosition, setDropdownPosition] = useState<DropdownPosition | null>(null);
 
     const setTriggerRef = useCallback(
@@ -121,14 +122,17 @@ export const DefaultsIndustrySelect = forwardRef<HTMLButtonElement, DefaultsIndu
         if (disabled || options.length === 0) {
           return;
         }
-        const triggerWidth = triggerRef.current?.getBoundingClientRect().width || 220;
+        const triggerWidth = triggerRef.current?.getBoundingClientRect().width || dropdownMinWidth;
         setDropdownWidth(
-          Math.min(Math.max(triggerWidth, 220), window.innerWidth - viewportInset * 2),
+          Math.min(
+            Math.max(triggerWidth, dropdownMinWidth),
+            window.innerWidth - viewportInset * 2,
+          ),
         );
         setActiveIndex(nextActiveIndex);
         setIsOpen(true);
       },
-      [disabled, options.length, selectedIndex],
+      [disabled, dropdownMinWidth, options.length, selectedIndex],
     );
 
     const selectOption = useCallback(
@@ -154,7 +158,7 @@ export const DefaultsIndustrySelect = forwardRef<HTMLButtonElement, DefaultsIndu
       const triggerBounds = trigger.getBoundingClientRect();
       const dropdownBounds = dropdown.getBoundingClientRect();
       const nextDropdownWidth = Math.min(
-        Math.max(triggerBounds.width, 220),
+        Math.max(triggerBounds.width, dropdownMinWidth),
         window.innerWidth - viewportInset * 2,
       );
       const spaceAbove = triggerBounds.top - viewportInset;
@@ -189,7 +193,7 @@ export const DefaultsIndustrySelect = forwardRef<HTMLButtonElement, DefaultsIndu
         }
         return { left, placement, top };
       });
-    }, []);
+    }, [dropdownMinWidth]);
 
     useLayoutEffect(() => {
       if (!isOpen) {

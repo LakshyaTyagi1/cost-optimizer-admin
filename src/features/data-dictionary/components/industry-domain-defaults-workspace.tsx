@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Database, FileSpreadsheet, Sparkles } from "lucide-react";
 
 import {
@@ -38,15 +38,31 @@ function normalizeRow(
     description: String(row.description || "").trim(),
     domainKey: toSlug(row.domainKey || row.domainName || ""),
     domainName: String(row.domainName || "").trim(),
+    industryDomainId: String(row.industryDomainId || "").trim(),
     industryKey: toSlug(row.industryKey || row.industryName || ""),
     industryName: String(row.industryName || "").trim(),
     isActive: row.isActive !== false,
     name: String(row.name || "").trim(),
     scope: String(row.scope || "Domain").trim(),
     slug: toSlug(row.slug || row.name || ""),
+    status: ["added", "inactive", "not-added"].includes(row.status)
+      ? row.status
+      : "not-added",
     tier: String(row.tier || "").trim(),
   };
 }
+
+const processStatusLabels: Record<IndustryDomainDefaultProcessGridRow["status"], string> = {
+  added: "Added",
+  inactive: "Inactive",
+  "not-added": "Not added",
+};
+
+const processStatusClassNames: Record<IndustryDomainDefaultProcessGridRow["status"], string> = {
+  added: "border-[#B7E4CE] bg-[#F0FDF4] text-[#16794A]",
+  inactive: "border-[#F8D59B] bg-[#FFF9EB] text-[#9A6700]",
+  "not-added": "border-[#D9E3F0] bg-[#F5F8FB] text-[#68686D]",
+};
 
 function getTierLabel(tier: string) {
   const labels: Record<string, string> = {
@@ -163,52 +179,79 @@ export function IndustryDomainDefaultsWorkspace({
     [effectiveRows, tableDomainKey],
   );
   const processListOptions = useMemo<DefaultsProcessListOption[]>(() => {
-    const rowCountByDomain = new Map<string, number>();
+    const rowSummaryByDomain = new Map<string, { count: number; isConfigured: boolean }>();
+    let allDomainsConfigured = effectiveRows.length > 0;
+
     effectiveRows.forEach((row) => {
-      rowCountByDomain.set(row.domainKey, (rowCountByDomain.get(row.domainKey) || 0) + 1);
+      const currentSummary = rowSummaryByDomain.get(row.domainKey);
+      const isConfigured = row.status !== "not-added";
+
+      allDomainsConfigured = allDomainsConfigured && isConfigured;
+      rowSummaryByDomain.set(row.domainKey, {
+        count: (currentSummary?.count || 0) + 1,
+        isConfigured: (currentSummary?.isConfigured ?? true) && isConfigured,
+      });
     });
 
     return [
-      { value: "all", label: "All domains", count: effectiveRows.length },
-      ...domainChoices.map((domain) => ({
-        value: domain.key,
-        label: getDomainDisplayTitle(domain.name),
-        count: rowCountByDomain.get(domain.key) || 0,
-      })),
+      {
+        value: "all",
+        label: "All domains",
+        count: effectiveRows.length,
+        isConfigured: allDomainsConfigured,
+      },
+      ...domainChoices.map((domain) => {
+        const summary = rowSummaryByDomain.get(domain.key);
+
+        return {
+          value: domain.key,
+          label: getDomainDisplayTitle(domain.name),
+          count: summary?.count || 0,
+          isConfigured: summary?.isConfigured === true,
+        };
+      }),
     ];
   }, [domainChoices, effectiveRows]);
+  const displayedConfiguredCount = useMemo(
+    () => displayedRows.filter((row) => row.status === "added").length,
+    [displayedRows],
+  );
   const isBusy = isLoading || isSeeding;
+
+  const loadGrid = useCallback(async () => {
+    setIsLoading(true);
+    setErrorMessage("");
+
+    try {
+      const grid = await fetchDataDictionaryIndustryDomainDefaultGrid();
+      const normalizedRows = (grid.rows || []).map(normalizeRow);
+      setRows(normalizedRows);
+      setSelectedIndustryKey(
+        (currentIndustryKey) =>
+          currentIndustryKey || normalizedRows.find((row) => row.industryKey)?.industryKey || "",
+      );
+      return true;
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setErrorMessage, setIsLoading, setRows, setSelectedIndustryKey]);
 
   useEffect(() => {
     let isMounted = true;
     let focusFrameId: number | null = null;
     const frameId = window.requestAnimationFrame(() => {
-      void fetchDataDictionaryIndustryDomainDefaultGrid()
-        .then((grid) => {
-          if (!isMounted) return;
-          const normalizedRows = (grid.rows || []).map(normalizeRow);
-          setRows(normalizedRows);
-          setSelectedIndustryKey(
-            (currentIndustryKey) =>
-              currentIndustryKey ||
-              normalizedRows.find((row) => row.industryKey)?.industryKey ||
-              "",
-          );
-          setStatusMessage("");
-        })
-        .catch((error) => {
-          if (isMounted) setErrorMessage(getErrorMessage(error));
-        })
-        .finally(() => {
-          if (isMounted) {
-            setIsLoading(false);
-            focusFrameId = window.requestAnimationFrame(() => {
-              if (isMounted) {
-                industrySelectRef.current?.focus();
-              }
-            });
-          }
-        });
+      void loadGrid().finally(() => {
+        if (isMounted) {
+          focusFrameId = window.requestAnimationFrame(() => {
+            if (isMounted) {
+              industrySelectRef.current?.focus();
+            }
+          });
+        }
+      });
     });
 
     return () => {
@@ -218,7 +261,7 @@ export function IndustryDomainDefaultsWorkspace({
         window.cancelAnimationFrame(focusFrameId);
       }
     };
-  }, []);
+  }, [loadGrid]);
 
   function selectIndustry(industryKey: string) {
     const industryMappings = activeMappings.filter(
@@ -257,6 +300,10 @@ export function IndustryDomainDefaultsWorkspace({
     const wasSeeded = await onSeedDefaults(industryDomainId);
     if (wasSeeded) {
       const mapping = activeMappings.find((item) => item.id === industryDomainId);
+      const wasReloaded = await loadGrid();
+      if (!wasReloaded) {
+        return;
+      }
       setStatusMessage(
         mapping
           ? `${mapping.industryName} — ${mapping.domainName} defaults are now up to date.`
@@ -355,7 +402,7 @@ export function IndustryDomainDefaultsWorkspace({
           <p className="text-xs font-semibold text-[#16794A]">{statusMessage}</p>
         ) : (
           <p className="text-xs font-semibold text-[#68686D]">
-            {displayedRows.length} of {effectiveRows.length} domain-specific rows displayed
+            {displayedConfiguredCount} of {displayedRows.length} displayed processes added
           </p>
         )
       }
@@ -377,7 +424,7 @@ export function IndustryDomainDefaultsWorkspace({
           </p>
         </div>
       ) : (
-        <table className="w-full min-w-[1120px] table-fixed border-separate border-spacing-0 text-left">
+        <table className="w-full min-w-[1220px] table-fixed border-separate border-spacing-0 text-left">
           <caption className="sr-only">Industry × domain default process list</caption>
           <colgroup>
             <col className="w-12" />
@@ -387,6 +434,7 @@ export function IndustryDomainDefaultsWorkspace({
             <col className="w-[310px]" />
             <col className="w-52" />
             <col className="w-40" />
+            <col className="w-32" />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-[#F5F8FB] shadow-[0_1px_0_rgba(15,23,42,0.10)]">
             <tr>
@@ -398,6 +446,7 @@ export function IndustryDomainDefaultsWorkspace({
                 "Description",
                 "Stable Slug",
                 "Category",
+                "Status",
               ].map((heading) => (
                 <th
                   key={heading}
@@ -449,10 +498,17 @@ export function IndustryDomainDefaultsWorkspace({
                   {row.slug}
                 </td>
                 <td
-                  className="truncate border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555]"
+                  className="truncate border-r border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555]"
                   title={row.category}
                 >
                   {row.category}
+                </td>
+                <td className="border-b border-black/[0.06] px-3">
+                  <span
+                    className={`inline-flex h-5 items-center rounded-full border px-2 text-[9px] font-bold whitespace-nowrap ${processStatusClassNames[row.status]}`}
+                  >
+                    {processStatusLabels[row.status]}
+                  </span>
                 </td>
               </tr>
             ))}

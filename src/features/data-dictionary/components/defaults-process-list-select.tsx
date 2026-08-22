@@ -395,8 +395,8 @@ export function DefaultsProcessListSelect({
                             }`}
                             title={
                               option.isConfigured
-                                ? "Industry is added to the system"
-                                : "Industry is not added to the system"
+                                ? "Default processes are configured"
+                                : "Default processes are not configured"
                             }
                           >
                             {option.isConfigured ? "Configured" : "Not configured"}
