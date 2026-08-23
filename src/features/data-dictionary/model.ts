@@ -3,6 +3,7 @@ export type DictionaryIndustry = {
   defaultProcessCount?: number;
   displayOrder?: number;
   id: string;
+  industryDomainProcessCount?: number;
   isActive?: boolean;
   name: string;
   slug?: string;

@@ -18,6 +18,7 @@ type ApiEntity = {
   defaultProcessCount?: number;
   displayOrder?: number;
   id?: string;
+  industryDomainProcessCount?: number;
   isActive?: boolean;
   name?: string;
   processCounts?: ApiRecordCounts;
@@ -385,9 +386,8 @@ export async function fetchDataDictionaryPageCatalog(signal?: AbortSignal) {
           nonDeletedCount: Math.max(0, Number(payload.processSummary.nonDeletedCount) || 0),
           totalCount: Math.max(
             0,
-            Number(
-              payload.processSummary.totalCount ?? payload.processSummary.nonDeletedCount,
-            ) || 0,
+            Number(payload.processSummary.totalCount ?? payload.processSummary.nonDeletedCount) ||
+              0,
           ),
         }
       : undefined,
@@ -1056,9 +1056,7 @@ function mapCatalog(catalogPayload: ApiCatalogPayload = {}): DataDictionaryCatal
   };
 }
 
-function flattenDataDictionaryCatalog(
-  payload: ApiDataDictionaryPayload,
-): ApiCatalogPayload {
+function flattenDataDictionaryCatalog(payload: ApiDataDictionaryPayload): ApiCatalogPayload {
   const domains: ApiEntity[] = [];
   const libraries: ApiMapping[] = [];
 
@@ -1066,10 +1064,11 @@ function flattenDataDictionaryCatalog(
     const industryId = getId(industry);
     const normalizedIndustry: ApiDataDictionaryIndustry = {
       ...industry,
-      associatedProcessCount:
-        industry.associatedProcessCount ?? industry.processCounts?.nonDeleted,
+      associatedProcessCount: industry.associatedProcessCount ?? industry.processCounts?.nonDeleted,
       defaultProcessCount:
         industry.defaultProcessCount ?? industry.processCounts?.industryDefault?.nonDeleted,
+      industryDomainProcessCount:
+        industry.industryDomainProcessCount ?? industry.processCounts?.industryDomain?.nonDeleted,
     };
 
     (industry.domains ?? []).forEach((domain) => {
@@ -1134,6 +1133,7 @@ function mapIndustry(industry?: ApiEntity): DictionaryIndustry | null {
   const name = toDisplayName(industry?.name || industry?.slug || "");
   const associatedProcessCount = industry?.associatedProcessCount;
   const defaultProcessCount = industry?.defaultProcessCount;
+  const industryDomainProcessCount = industry?.industryDomainProcessCount;
 
   if (!id || !name) {
     return null;
@@ -1150,6 +1150,10 @@ function mapIndustry(industry?: ApiEntity): DictionaryIndustry | null {
         : undefined,
     displayOrder: Number(industry?.displayOrder) || 0,
     id,
+    industryDomainProcessCount:
+      typeof industryDomainProcessCount === "number" && Number.isFinite(industryDomainProcessCount)
+        ? Math.max(0, Math.floor(industryDomainProcessCount))
+        : undefined,
     isActive: industry?.isActive !== false,
     name,
     slug: industry?.slug || toSlug(name),

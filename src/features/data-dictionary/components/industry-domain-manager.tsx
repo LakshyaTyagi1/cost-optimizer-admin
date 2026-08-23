@@ -270,6 +270,40 @@ export function IndustryDomainManager({
     () => getDomainCountByIndustry(industries, domains, libraries),
     [domains, industries, libraries],
   );
+  const industryCountMetricsById = useMemo(() => {
+    const metricsByIndustryId = new Map<
+      string,
+      {
+        domainCount: number;
+        industryDomainProcessCount: number;
+        industrySpecificProcessCount: number;
+      }
+    >();
+
+    industries.forEach((industry) => {
+      const industrySpecificProcessCount = Math.max(0, industry.defaultProcessCount ?? 0);
+      const mappedDomainProcessCount = getMappedDomainsForIndustry(
+        industry.id,
+        domains,
+        libraries,
+      ).reduce((total, domain) => total + domain.processCount, 0);
+      const derivedIndustryDomainProcessCount = Math.max(
+        mappedDomainProcessCount,
+        (industry.associatedProcessCount ?? 0) - industrySpecificProcessCount,
+      );
+
+      metricsByIndustryId.set(industry.id, {
+        domainCount: domainCountByIndustryId.get(industry.id) ?? 0,
+        industryDomainProcessCount: Math.max(
+          0,
+          industry.industryDomainProcessCount ?? derivedIndustryDomainProcessCount,
+        ),
+        industrySpecificProcessCount,
+      });
+    });
+
+    return metricsByIndustryId;
+  }, [domainCountByIndustryId, domains, industries, libraries]);
   const mappedDomains = useMemo(
     () => getMappedDomainsForIndustry(selectedIndustryId, domains, libraries),
     [domains, libraries, selectedIndustryId],
@@ -1071,7 +1105,24 @@ export function IndustryDomainManager({
                   )}
                 </label>
               </div>
-              <div className="relative mt-4 min-h-0 flex-1">
+              <div
+                aria-label="Industry count guide"
+                className="mt-2 flex min-h-4 [scrollbar-width:none] items-center gap-2.5 overflow-x-auto px-0.5 text-[9px] leading-none font-semibold whitespace-nowrap text-[#6E6E73] [&::-webkit-scrollbar]:hidden"
+              >
+                <span className="inline-flex shrink-0 items-center gap-1">
+                  <span className="size-2 rounded-full bg-[#007AFF]" aria-hidden="true" />
+                  Domains
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1">
+                  <span className="size-2 rounded-full bg-[#D97706]" aria-hidden="true" />
+                  Industry-specific
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1">
+                  <span className="size-2 rounded-full bg-[#A855F7]" aria-hidden="true" />
+                  Industry × domain
+                </span>
+              </div>
+              <div className="relative mt-2 min-h-0 flex-1">
                 <div
                   ref={industryListRef}
                   onScroll={() => handleListScroll(industryListRef, setCanScrollIndustriesDown)}
@@ -1079,7 +1130,12 @@ export function IndustryDomainManager({
                 >
                   {filteredOrderedIndustries.map((industry) => {
                     const isSelected = industry.id === selectedIndustryId;
-                    const domainCount = domainCountByIndustryId.get(industry.id) ?? 0;
+                    const countMetrics = industryCountMetricsById.get(industry.id);
+                    const domainCount = countMetrics?.domainCount ?? 0;
+                    const industrySpecificProcessCount =
+                      countMetrics?.industrySpecificProcessCount ?? 0;
+                    const industryDomainProcessCount =
+                      countMetrics?.industryDomainProcessCount ?? 0;
                     const isInactiveIndustry = industry.isActive === false;
                     const processCount = Math.max(
                       0,
@@ -1112,7 +1168,7 @@ export function IndustryDomainManager({
                             ? `${industry.name} is inactive and hidden from users.`
                             : `${industry.name}: ${domainCount} mapped ${
                                 domainCount === 1 ? "domain" : "domains"
-                              }. Select or drag to reorder.`
+                              }, ${industrySpecificProcessCount} industry-specific processes, and ${industryDomainProcessCount} industry × domain processes. Select or drag to reorder.`
                         }
                         className={`grid min-h-10 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border-l-2 px-2 text-left transition ${
                           isSelected && !isInactiveIndustry
@@ -1133,7 +1189,7 @@ export function IndustryDomainManager({
                               ? `${industry.name} is inactive and hidden from users.`
                               : `${industry.name}. ${domainCount} mapped ${
                                   domainCount === 1 ? "domain" : "domains"
-                                }. Press Enter to select. Press Alt Arrow Up or Alt Arrow Down to reorder.`
+                                }, ${industrySpecificProcessCount} industry-specific processes, and ${industryDomainProcessCount} industry × domain processes. Press Enter to select. Press Alt Arrow Up or Alt Arrow Down to reorder.`
                           }
                           className="grid min-w-0 grid-cols-[24px_minmax(0,1fr)_auto_auto] items-center gap-2 text-left"
                         >
@@ -1146,17 +1202,35 @@ export function IndustryDomainManager({
                             className={isInactiveIndustry ? "text-[#D1D5DB]" : "text-[#A1A1AA]"}
                             aria-hidden="true"
                           />
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                              isInactiveIndustry
-                                ? "bg-white text-[#A1A1AA]"
-                                : isSelected
-                                  ? "bg-white text-[#007AFF]"
-                                  : "bg-[#F5F5F7] text-[#86868B]"
-                            }`}
-                          >
-                            {isInactiveIndustry ? "Hidden" : domainCount}
-                          </span>
+                          {isInactiveIndustry ? (
+                            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-[#A1A1AA]">
+                              Hidden
+                            </span>
+                          ) : (
+                            <span
+                              className="flex shrink-0 items-center gap-1"
+                              aria-label={`${domainCount} mapped domains, ${industrySpecificProcessCount} industry-specific processes, ${industryDomainProcessCount} industry by domain processes`}
+                            >
+                              <span
+                                title={`${domainCount} mapped ${domainCount === 1 ? "domain" : "domains"}`}
+                                className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-[#B8D8FF] bg-[#EAF3FF] px-1.5 text-[10px] font-bold text-[#007AFF]"
+                              >
+                                {domainCount}
+                              </span>
+                              <span
+                                title={`${industrySpecificProcessCount} industry-specific ${industrySpecificProcessCount === 1 ? "process" : "processes"}`}
+                                className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-[#F5D48A] bg-[#FFF7E6] px-1.5 text-[10px] font-bold text-[#9A6700]"
+                              >
+                                {industrySpecificProcessCount}
+                              </span>
+                              <span
+                                title={`${industryDomainProcessCount} industry × domain ${industryDomainProcessCount === 1 ? "process" : "processes"}`}
+                                className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-[#E2CBFA] bg-[#F5EDFF] px-1.5 text-[10px] font-bold text-[#7E22CE]"
+                              >
+                                {industryDomainProcessCount}
+                              </span>
+                            </span>
+                          )}
                         </button>
                         {isInactiveIndustry || !cannotDeactivate ? (
                           <button
