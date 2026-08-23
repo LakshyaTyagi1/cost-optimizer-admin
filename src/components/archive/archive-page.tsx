@@ -12,7 +12,8 @@ import {
 } from "@/features/data-dictionary/api";
 import {
   archiveProcessesQueryKey,
-  dataDictionaryQueryKey,
+  dataDictionaryCatalogQueryKey,
+  dataDictionaryProcessesQueryKey,
   useArchivedDataDictionaryProcesses,
 } from "@/features/data-dictionary/queries";
 import { AdminShell } from "@/components/admin-shell/admin-shell";
@@ -68,7 +69,8 @@ export function ArchivePage() {
       await restoreProcessMutation.mutateAsync(process);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: archiveProcessesQueryKey }),
-        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
+        queryClient.invalidateQueries({ queryKey: dataDictionaryCatalogQueryKey }),
+        queryClient.invalidateQueries({ queryKey: dataDictionaryProcessesQueryKey }),
       ]);
     } finally {
       setRestoringProcessId("");
@@ -93,10 +95,7 @@ export function ArchivePage() {
       setDeleteError("");
       setDeletingProcessId(deleteTarget.id);
       await permanentlyDeleteProcessMutation.mutateAsync(deleteTarget);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: archiveProcessesQueryKey }),
-        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: archiveProcessesQueryKey });
       setDeleteTarget(null);
     } catch (error) {
       setDeleteError(getErrorMessage(error, "Unable to permanently delete process"));
@@ -113,10 +112,7 @@ export function ArchivePage() {
     try {
       setDeleteAllError("");
       await permanentlyDeleteAllProcessesMutation.mutateAsync();
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: archiveProcessesQueryKey }),
-        queryClient.invalidateQueries({ queryKey: dataDictionaryQueryKey }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: archiveProcessesQueryKey });
       setIsDeleteAllDialogOpen(false);
     } catch (error) {
       setDeleteAllError(getErrorMessage(error, "Unable to permanently delete archived processes"));

@@ -7,6 +7,7 @@ import {
   fetchDataDictionaryDefaultIndustries,
   type DefaultIndustryRow,
 } from "@/features/data-dictionary/api";
+import { DefaultsCellPreview } from "@/features/data-dictionary/components/defaults-cell-preview";
 import { DefaultsWorkspaceDialog } from "@/features/data-dictionary/components/defaults-workspace-dialog";
 import { getErrorMessage } from "@/features/data-dictionary/utils/error";
 
@@ -225,7 +226,7 @@ export function DefaultIndustriesWorkspace({
                 <th
                   key={heading}
                   scope="col"
-                  className="h-10 border-r border-black/[0.06] px-3 text-[10px] font-bold tracking-[0.06em] text-[#68686D] uppercase last:border-r-0"
+                  className="h-10 border-r border-black/[0.06] px-3 text-[10px] font-bold whitespace-nowrap tracking-[0.06em] text-[#68686D] uppercase last:border-r-0"
                 >
                   {heading}
                 </th>
@@ -241,23 +242,32 @@ export function DefaultIndustriesWorkspace({
                 <td className="border-r border-b border-black/[0.06] px-3 text-xs font-bold text-[#333]">
                   {row.industryName}
                 </td>
-                <td className="border-r border-b border-black/[0.06] px-3 font-mono text-[11px] font-semibold text-[#555]">
-                  {row.industryKey}
+                <td className="min-w-0 border-r border-b border-black/[0.06] px-2 font-mono text-[11px] font-semibold text-[#555]">
+                  <DefaultsCellPreview
+                    activation="double-click"
+                    content={row.industryKey}
+                    label="Full stable slug"
+                    title={row.industryName}
+                  />
                 </td>
                 <td className="border-r border-b border-black/[0.06] px-3 text-xs font-bold text-[#333]">
                   {row.defaultProcessCount}
                 </td>
-                <td
-                  className="truncate border-r border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555]"
-                  title={row.categories.map(formatLabel).join(", ")}
-                >
-                  {row.categories.map(formatLabel).join(", ")}
+                <td className="min-w-0 border-r border-b border-black/[0.06] px-2 text-xs font-semibold text-[#555]">
+                  <DefaultsCellPreview
+                    activation="double-click"
+                    content={row.categories.map(formatLabel).join(", ")}
+                    label="Full categories"
+                    title={row.industryName}
+                  />
                 </td>
-                <td
-                  className="truncate border-r border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555]"
-                  title={row.tiers.map(formatLabel).join(", ")}
-                >
-                  {row.tiers.map(formatLabel).join(", ")}
+                <td className="min-w-0 border-r border-b border-black/[0.06] px-2 text-xs font-semibold text-[#555]">
+                  <DefaultsCellPreview
+                    activation="double-click"
+                    content={row.tiers.map(formatLabel).join(", ")}
+                    label="Full tiers"
+                    title={row.industryName}
+                  />
                 </td>
                 <td className="border-b border-black/[0.06] px-3">
                   <span

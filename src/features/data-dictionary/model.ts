@@ -1,5 +1,6 @@
 export type DictionaryIndustry = {
   associatedProcessCount?: number;
+  defaultProcessCount?: number;
   displayOrder?: number;
   id: string;
   isActive?: boolean;
@@ -20,6 +21,7 @@ export type DictionaryLibrary = {
   displayOrder?: number;
   domainId: string;
   domainName: string;
+  domainSlug?: string;
   id: string;
   industryId: string;
   industryName: string;

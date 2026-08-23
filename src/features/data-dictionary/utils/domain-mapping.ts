@@ -86,7 +86,9 @@ export function reorderItemKeys(
   return nextOrder;
 }
 
-export function isUsableLibrary(library: DictionaryLibrary | null | undefined): library is DictionaryLibrary {
+export function isUsableLibrary(
+  library: DictionaryLibrary | null | undefined,
+): library is DictionaryLibrary {
   return Boolean(library?.industryId && library?.domainId);
 }
 
@@ -95,7 +97,7 @@ export function getLibraryIdentity(library: DictionaryLibrary | null | undefined
     return "";
   }
 
-  return toSlug(library.domainName || "") || library.domainId || "";
+  return library.domainSlug || toSlug(library.domainName || "") || library.domainId || "";
 }
 
 export function getUniqueDomains(domains: DictionaryDomain[]) {
@@ -135,7 +137,9 @@ export function getDomainCountByIndustry(
     libraries
       .filter(
         (library) =>
-          isUsableLibrary(library) && library.industryId === industry.id && library.isActive !== false,
+          isUsableLibrary(library) &&
+          library.industryId === industry.id &&
+          library.isActive !== false,
       )
       .forEach((library) => {
         const domainKey = getLibraryIdentity(library);
@@ -276,14 +280,12 @@ export function getMappedDomainsForIndustry(
   return orderItemsByDisplayOrder(Array.from(mappedDomainByKey.values()));
 }
 
-
 export function toDisplayName(value: string) {
   return value
     .trim()
     .replace(/\s+/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
-
 
 export function toSlug(value: string) {
   return value
@@ -293,4 +295,3 @@ export function toSlug(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
-

@@ -15,11 +15,19 @@ import {
 type ApiEntity = {
   _id?: string;
   associatedProcessCount?: number;
+  defaultProcessCount?: number;
   displayOrder?: number;
   id?: string;
   isActive?: boolean;
   name?: string;
+  processCounts?: ApiRecordCounts;
   slug?: string;
+};
+
+type ApiRecordCounts = {
+  active?: number;
+  inactive?: number;
+  nonDeleted?: number;
 };
 
 type ApiMapping = {
@@ -38,6 +46,7 @@ type ApiMapping = {
 type ApiProcess = {
   _id?: string;
   category?: string;
+  code?: string;
   description?: string;
   domainName?: string;
   domainSlug?: string;
@@ -56,6 +65,15 @@ type ApiProcess = {
   name?: string;
   scope?: "industry-default" | "industry-domain";
   slug?: string;
+  state?:
+    | "active"
+    | "inactive"
+    | "archived"
+    | "deleted"
+    | {
+        isActive?: boolean;
+        isDeleted?: boolean;
+      };
   tier?: string;
 };
 
@@ -87,9 +105,46 @@ type ApiCatalogPayload = {
   options?: ApiProcessOptions;
 };
 
+type ApiDataDictionaryDomain = ApiEntity & {
+  industryDomainId?: string;
+  processCount?: number;
+};
+
+type ApiDataDictionaryIndustry = ApiEntity & {
+  domains?: ApiDataDictionaryDomain[];
+  processCounts?: ApiRecordCounts & {
+    industryDefault?: ApiRecordCounts;
+    industryDomain?: ApiRecordCounts;
+  };
+};
+
+type ApiDataDictionaryPayload = {
+  industries?: ApiDataDictionaryIndustry[];
+  options?: ApiProcessOptions;
+  processes?: ApiProcess[];
+};
+
+type ApiDataDictionaryCatalogPayload = {
+  industries?: ApiDataDictionaryIndustry[];
+  options?: ApiProcessOptions;
+  processSummary?: {
+    activeCount?: number;
+    inactiveCount?: number;
+    nonDeletedCount?: number;
+    totalCount?: number;
+  };
+  revision?: number | string;
+};
+
 type ApiProcessOptions = {
   baseCurrency?: "AED";
   categories?: string[];
+  currency?: {
+    base?: "AED";
+    display?: "USD";
+    displayToBaseRate?: number;
+    supported?: Array<"AED" | "USD">;
+  };
   currencyConversionRate?: number;
   currencies?: Array<"AED" | "USD">;
   displayCurrency?: "USD";
@@ -125,17 +180,26 @@ type DataDictionaryTechStackPayload = {
   vendor: string;
 };
 
+export type DataDictionaryOptions = {
+  categories: ProcessOption[];
+  currencyConversionRate: number;
+  tiers: ProcessOption[];
+};
+
 export type DataDictionaryCatalog = {
   domains: DictionaryDomain[];
   inactiveDomains: DictionaryDomain[];
   industries: DictionaryIndustry[];
   inactiveIndustries: DictionaryIndustry[];
   libraries: DictionaryLibrary[];
-  options: {
-    categories: ProcessOption[];
-    currencyConversionRate: number;
-    tiers: ProcessOption[];
+  options: DataDictionaryOptions;
+  processSummary?: {
+    activeCount: number;
+    inactiveCount: number;
+    nonDeletedCount: number;
+    totalCount: number;
   };
+  revision?: string;
 };
 
 export type DataDictionaryPayload = DataDictionaryCatalog & {
@@ -152,6 +216,22 @@ export type DataDictionaryPagination = {
 export type DataDictionaryTechStackPage = {
   pagination: DataDictionaryPagination;
   tools: TechStackTool[];
+};
+
+export type DataDictionaryProcessPage = {
+  pagination: DataDictionaryPagination;
+  processes: DictionaryProcess[];
+};
+
+export type DataDictionaryProcessPageParams = {
+  catalog: DataDictionaryCatalog;
+  domainKey?: string;
+  industryId?: string;
+  limit: number;
+  page: number;
+  scope?: "industry-default" | "industry-domain";
+  search: string;
+  signal?: AbortSignal;
 };
 
 export type DefaultIndustryProcessImportResult = {
@@ -177,6 +257,35 @@ export type DefaultIndustryGrid = {
 
 export type DefaultIndustryImportResult = {
   createdCount: number;
+  reactivatedCount: number;
+  skippedCount: number;
+  totalCount: number;
+};
+
+export type DefaultDomainRow = {
+  activeIndustryCount: number;
+  defaultProcessCount: number;
+  displayOrder: number;
+  domainAliases: string[];
+  domainKey: string;
+  domainName: string;
+  inactiveIndustryCount: number;
+  missingIndustryCount: number;
+  status: "active" | "partial" | "inactive" | "missing";
+};
+
+export type DefaultDomainGrid = {
+  configuredMappingCount: number;
+  industryCount: number;
+  rows: DefaultDomainRow[];
+  totalCount: number;
+  totalMappingCount: number;
+};
+
+export type DefaultDomainImportResult = {
+  createdCount: number;
+  domainCount: number;
+  industryCount: number;
   reactivatedCount: number;
   skippedCount: number;
   totalCount: number;
@@ -242,15 +351,111 @@ export type IndustryDomainDefaultProcessGrid = {
   totalCount: number;
 };
 
+export type DomainDisplayNameUpdateResult = {
+  domainKey: string;
+  matchedMappingCount: number;
+  name: string;
+  updatedMappingCount: number;
+};
+
 const adminBasePath = "/adm/cos-process-management";
 
 export async function fetchDataDictionary(): Promise<DataDictionaryPayload> {
-  const dictionaryCatalog = await fetchDataDictionaryCatalog();
-  const mappedProcesses = await fetchMappedProcesses(dictionaryCatalog);
+  const payload = await fetchApi<ApiDataDictionaryPayload>(`${adminBasePath}/data-dictionary`);
+  const dictionaryCatalog = mapCatalog(flattenDataDictionaryCatalog(payload));
+  const mappedProcesses = mapProcesses(payload.processes ?? [], dictionaryCatalog);
 
   return {
     ...dictionaryCatalog,
     processes: mappedProcesses,
+  };
+}
+
+export async function fetchDataDictionaryPageCatalog(signal?: AbortSignal) {
+  const payload = await fetchApi<ApiDataDictionaryCatalogPayload>(
+    `${adminBasePath}/data-dictionary/catalog`,
+    { signal },
+  );
+  return {
+    ...mapCatalog(flattenDataDictionaryCatalog(payload)),
+    processSummary: payload.processSummary
+      ? {
+          activeCount: Math.max(0, Number(payload.processSummary.activeCount) || 0),
+          inactiveCount: Math.max(0, Number(payload.processSummary.inactiveCount) || 0),
+          nonDeletedCount: Math.max(0, Number(payload.processSummary.nonDeletedCount) || 0),
+          totalCount: Math.max(
+            0,
+            Number(
+              payload.processSummary.totalCount ?? payload.processSummary.nonDeletedCount,
+            ) || 0,
+          ),
+        }
+      : undefined,
+    revision: payload.revision === undefined ? undefined : String(payload.revision),
+  };
+}
+
+export async function fetchDataDictionaryOptions(signal?: AbortSignal) {
+  const options = await fetchApi<ApiProcessOptions>(`${adminBasePath}/options`, { signal });
+
+  return mapDataDictionaryOptions(options);
+}
+
+export async function fetchDataDictionaryProcessPage({
+  catalog,
+  domainKey,
+  industryId,
+  limit,
+  page,
+  scope,
+  search,
+  signal,
+}: DataDictionaryProcessPageParams): Promise<DataDictionaryProcessPage> {
+  const params: Record<string, string> = {
+    limit: String(limit),
+    page: String(page),
+    state: "active",
+  };
+  const normalizedSearch = search.trim();
+
+  if (normalizedSearch) {
+    params.search = normalizedSearch;
+  }
+  if (industryId) {
+    params.industryId = industryId;
+  }
+  if (domainKey) {
+    params.domainKey = domainKey;
+  }
+  if (scope) {
+    params.scope = scope;
+  }
+
+  const response = await fetchListApi<ApiProcess>(`${adminBasePath}/data-dictionary/processes`, {
+    params,
+    signal,
+  });
+  const pagination = response.pagination ?? {};
+  const lookup = createProcessLookup(catalog);
+  const processes = (response.data ?? [])
+    .map((process) =>
+      mapProcess(
+        process,
+        process.scope === "industry-domain" ? "industry-domain" : "industry-default",
+        catalog,
+        lookup,
+      ),
+    )
+    .filter((process): process is DictionaryProcess => Boolean(process));
+
+  return {
+    pagination: {
+      limit: Number(pagination.limit) || limit,
+      page: Number(pagination.page) || page,
+      totalCount: Number(pagination.totalCount) || 0,
+      totalPages: Number(pagination.totalPages) || 0,
+    },
+    processes,
   };
 }
 
@@ -272,18 +477,66 @@ export async function fetchMappedProcesses(catalog: DataDictionaryCatalog) {
     }),
   ]);
 
-  const mappedProcessRows = [
-    ...industryProcesses.map((process) => mapProcess(process, "industry-default", catalog)),
-    ...domainProcesses.map((process) => mapProcess(process, "industry-domain", catalog)),
-  ]
+  return mapProcesses([...industryProcesses, ...domainProcesses], catalog);
+}
+
+function mapProcesses(processes: ApiProcess[], catalog: DataDictionaryCatalog) {
+  const lookup = createProcessLookup(catalog);
+  const mappedProcessRows = processes
+    .map((process) =>
+      mapProcess(
+        process,
+        process.scope === "industry-domain" ? "industry-domain" : "industry-default",
+        catalog,
+        lookup,
+      ),
+    )
     .filter((process): process is DictionaryProcess => Boolean(process))
     .filter((process) => process.isActive !== false);
 
   return addProcessCodes(mappedProcessRows);
 }
 
+type ProcessLookup = {
+  categoryLabelByValue: Map<string, string>;
+  domainById: Map<string, DictionaryDomain>;
+  industryById: Map<string, DictionaryIndustry>;
+  libraryById: Map<string, DictionaryLibrary>;
+  libraryByIndustryAndDomain: Map<string, DictionaryLibrary>;
+};
+
+function createProcessLookup(catalog: DataDictionaryCatalog): ProcessLookup {
+  const libraryById = new Map<string, DictionaryLibrary>();
+  const libraryByIndustryAndDomain = new Map<string, DictionaryLibrary>();
+
+  catalog.libraries.forEach((library) => {
+    [library.id, library.domainId].filter(Boolean).forEach((id) => {
+      if (!libraryById.has(id)) {
+        libraryById.set(id, library);
+      }
+    });
+    libraryByIndustryAndDomain.set(`${library.industryId}:${library.domainId}`, library);
+  });
+
+  return {
+    categoryLabelByValue: new Map(
+      catalog.options.categories.map((option) => [option.value, option.label]),
+    ),
+    domainById: new Map(catalog.domains.map((domain) => [domain.id, domain])),
+    industryById: new Map(
+      [...catalog.industries, ...catalog.inactiveIndustries].map((industry) => [
+        industry.id,
+        industry,
+      ]),
+    ),
+    libraryById,
+    libraryByIndustryAndDomain,
+  };
+}
+
 export async function fetchArchivedDataDictionaryProcesses() {
   const archiveCatalog = getArchiveProcessCatalog();
+  const archiveLookup = createProcessLookup(archiveCatalog);
   const [archivedIndustryProcesses, archivedDomainProcesses] = await Promise.all([
     fetchAllListApi<ApiProcess>(`${adminBasePath}/industry-processes`, {
       params: { archiveView: "true", includeInactive: "true" },
@@ -294,10 +547,10 @@ export async function fetchArchivedDataDictionaryProcesses() {
   ]);
   const archivedProcessRows = [
     ...archivedIndustryProcesses.map((process) =>
-      mapProcess(process, "industry-default", archiveCatalog),
+      mapProcess(process, "industry-default", archiveCatalog, archiveLookup),
     ),
     ...archivedDomainProcesses.map((process) =>
-      mapProcess(process, "industry-domain", archiveCatalog),
+      mapProcess(process, "industry-domain", archiveCatalog, archiveLookup),
     ),
   ].filter((process): process is DictionaryProcess => Boolean(process));
 
@@ -378,6 +631,20 @@ export async function addDataDictionaryDefaultIndustries(payload: { industryKey?
   });
 }
 
+export async function fetchDataDictionaryDefaultDomains() {
+  return fetchApi<DefaultDomainGrid>(`${adminBasePath}/domains/defaults`);
+}
+
+export async function addDataDictionaryDefaultDomains(payload: {
+  domainKey?: string;
+  industryId?: string;
+}) {
+  return fetchApi<DefaultDomainImportResult>(`${adminBasePath}/domains/defaults`, {
+    body: JSON.stringify(payload),
+    method: "POST",
+  });
+}
+
 export async function deleteDataDictionaryIndustry(payload: {
   force?: boolean;
   industryId: string;
@@ -390,13 +657,30 @@ export async function deleteDataDictionaryIndustry(payload: {
   return mapIndustry(industry);
 }
 
-export async function createDataDictionaryDomain(payload: { industryId: string; name: string }) {
+export async function createDataDictionaryDomain(payload: {
+  industryId: string;
+  name: string;
+  slug?: string;
+}) {
   const domain = await fetchApi<ApiEntity>(`${adminBasePath}/domains`, {
     body: JSON.stringify(payload),
     method: "POST",
   });
 
   return mapDomain(domain, [payload.industryId]);
+}
+
+export async function updateDataDictionaryDomainDisplayName(payload: {
+  domainKey: string;
+  name: string;
+}) {
+  return fetchApi<DomainDisplayNameUpdateResult>(
+    `${adminBasePath}/domains/by-key/${encodeURIComponent(payload.domainKey)}/display-name`,
+    {
+      body: JSON.stringify({ name: payload.name.trim() }),
+      method: "PATCH",
+    },
+  );
 }
 
 export async function permanentlyDeleteDataDictionaryDomain(domain: DictionaryDomain) {
@@ -768,14 +1052,62 @@ function mapCatalog(catalogPayload: ApiCatalogPayload = {}): DataDictionaryCatal
     industries: sortByDisplayOrder(industries),
     inactiveIndustries: sortByDisplayOrder(inactiveIndustries),
     libraries: sortByDisplayOrder(libraries),
-    options: {
-      categories: mapProcessOptions(catalogPayload.options?.categories),
-      currencyConversionRate: getCurrencyConversionRate(
-        catalogPayload.options?.displayToBaseCurrencyRate ??
-          catalogPayload.options?.currencyConversionRate,
-      ),
-      tiers: mapProcessOptions(catalogPayload.options?.tiers, getStaticTierOptions()),
-    },
+    options: mapDataDictionaryOptions(catalogPayload.options),
+  };
+}
+
+function flattenDataDictionaryCatalog(
+  payload: ApiDataDictionaryPayload,
+): ApiCatalogPayload {
+  const domains: ApiEntity[] = [];
+  const libraries: ApiMapping[] = [];
+
+  const industries = (payload.industries ?? []).map((industry) => {
+    const industryId = getId(industry);
+    const normalizedIndustry: ApiDataDictionaryIndustry = {
+      ...industry,
+      associatedProcessCount:
+        industry.associatedProcessCount ?? industry.processCounts?.nonDeleted,
+      defaultProcessCount:
+        industry.defaultProcessCount ?? industry.processCounts?.industryDefault?.nonDeleted,
+    };
+
+    (industry.domains ?? []).forEach((domain) => {
+      const domainId = domain.industryDomainId || getId(domain);
+
+      if (!industryId || !domainId) {
+        return;
+      }
+
+      const domainEntity: ApiEntity = {
+        ...domain,
+        id: domainId,
+        processCounts: domain.processCounts,
+      };
+
+      domains.push(domainEntity);
+      libraries.push({
+        displayOrder: domain.displayOrder,
+        domainId: domainEntity,
+        domainName: domain.name,
+        domainSlug: domain.slug,
+        id: domainId,
+        industryId: normalizedIndustry,
+        industryName: normalizedIndustry.name,
+        industrySlug: normalizedIndustry.slug,
+        isActive: domain.isActive,
+        processCount: domain.processCount ?? domain.processCounts?.nonDeleted,
+      });
+    });
+
+    return normalizedIndustry;
+  });
+
+  return {
+    domains,
+    industries,
+    libraries,
+    options: payload.options,
   };
 }
 
@@ -785,10 +1117,23 @@ function getCurrencyConversionRate(conversionRateValue: unknown) {
   return Number.isFinite(rate) && rate > 0 ? rate : 3.6725;
 }
 
+function mapDataDictionaryOptions(options?: ApiProcessOptions): DataDictionaryOptions {
+  return {
+    categories: mapProcessOptions(options?.categories),
+    currencyConversionRate: getCurrencyConversionRate(
+      options?.currency?.displayToBaseRate ??
+        options?.displayToBaseCurrencyRate ??
+        options?.currencyConversionRate,
+    ),
+    tiers: mapProcessOptions(options?.tiers, getStaticTierOptions()),
+  };
+}
+
 function mapIndustry(industry?: ApiEntity): DictionaryIndustry | null {
   const id = getId(industry);
   const name = toDisplayName(industry?.name || industry?.slug || "");
   const associatedProcessCount = industry?.associatedProcessCount;
+  const defaultProcessCount = industry?.defaultProcessCount;
 
   if (!id || !name) {
     return null;
@@ -798,6 +1143,10 @@ function mapIndustry(industry?: ApiEntity): DictionaryIndustry | null {
     associatedProcessCount:
       typeof associatedProcessCount === "number" && Number.isFinite(associatedProcessCount)
         ? Math.max(0, Math.floor(associatedProcessCount))
+        : undefined,
+    defaultProcessCount:
+      typeof defaultProcessCount === "number" && Number.isFinite(defaultProcessCount)
+        ? Math.max(0, Math.floor(defaultProcessCount))
         : undefined,
     displayOrder: Number(industry?.displayOrder) || 0,
     id,
@@ -847,6 +1196,10 @@ function mapLibrary(
       toDomainLabel(domain) ||
       fallbackNames.domainName ||
       "Mapped Domain",
+    domainSlug:
+      mapping?.domainSlug ||
+      domain?.slug ||
+      toSlug(mapping?.domainName || fallbackNames.domainName || ""),
     industryId,
     industryName:
       toDisplayName(mapping?.industryName || "") ||
@@ -866,22 +1219,18 @@ function mapProcess(
   process: ApiProcess,
   fallbackScope: "industry-default" | "industry-domain",
   catalog: DataDictionaryCatalog,
+  lookup: ProcessLookup,
 ): DictionaryProcess | null {
   const id = getId(process);
   const name = toDisplayName(process.name || process.slug || "");
   const scope = process.scope || fallbackScope;
   const industryId = process.industryId || "";
   const domainId = process.industryDomainId || "";
-  const domainLibrary = catalog.libraries.find(
-    (item) =>
-      item.id === domainId ||
-      item.domainId === domainId ||
-      Boolean(industryId && item.industryId === industryId && item.domainId === domainId),
-  );
-  const domain = catalog.domains.find((item) => item.id === (domainLibrary?.domainId || domainId));
-  const industry = [...catalog.industries, ...catalog.inactiveIndustries].find(
-    (item) => item.id === (industryId || domainLibrary?.industryId),
-  );
+  const domainLibrary =
+    lookup.libraryById.get(domainId) ||
+    lookup.libraryByIndustryAndDomain.get(`${industryId}:${domainId}`);
+  const domain = lookup.domainById.get(domainLibrary?.domainId || domainId);
+  const industry = lookup.industryById.get(industryId || domainLibrary?.industryId || "");
   const processIndustryName = toDisplayName(process.industryName || process.industrySlug || "");
   const processDomainName = toDisplayName(process.domainName || process.domainSlug || "");
 
@@ -891,11 +1240,14 @@ function mapProcess(
 
   const costAmount = Number(process.estimatedAnnualCost?.amount) || 0;
   const costCurrency = process.estimatedAnnualCost?.currency || "AED";
+  const processState = getApiProcessState(process);
 
   return {
-    category: getOptionLabel(catalog.options.categories, process.category || ""),
+    category:
+      lookup.categoryLabelByValue.get(toSlug(process.category || "")) ||
+      getOptionLabel(catalog.options.categories, process.category || ""),
     categoryValue: toSlug(process.category || ""),
-    code: "",
+    code: String(process.code || "").trim(),
     cost: formatCost(process.estimatedAnnualCost),
     costAmount,
     costCurrency,
@@ -911,8 +1263,8 @@ function mapProcess(
     hours: formatHours(process.hoursPerYear),
     id,
     industryIds: industry?.id ? [industry.id] : industryId ? [industryId] : [],
-    isActive: process.isActive !== false,
-    isDeleted: process.isDeleted === true,
+    isActive: processState.isActive,
+    isDeleted: processState.isDeleted,
     name,
     scope,
     source: scope === "industry-domain" ? "Industry x Domain" : "Industry Default",
@@ -920,6 +1272,29 @@ function mapProcess(
     tierValue: process.tier || "",
     industryLabel:
       industry?.name || domainLibrary?.industryName || processIndustryName || undefined,
+  };
+}
+
+function getApiProcessState(process: ApiProcess) {
+  if (typeof process.state === "object" && process.state) {
+    return {
+      isActive: process.state.isActive ?? process.isActive !== false,
+      isDeleted: process.state.isDeleted ?? process.isDeleted === true,
+    };
+  }
+
+  if (typeof process.state === "string") {
+    const state = process.state.toLowerCase();
+
+    return {
+      isActive: state === "active",
+      isDeleted: state === "archived" || state === "deleted",
+    };
+  }
+
+  return {
+    isActive: process.isActive !== false,
+    isDeleted: process.isDeleted === true,
   };
 }
 

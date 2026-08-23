@@ -39,8 +39,9 @@ import type {
   DictionaryDomain,
   DictionaryIndustry,
   DictionaryLibrary,
-  DictionaryProcess,
 } from "@/features/data-dictionary/model";
+import type { DomainDisplayNameUpdateResult } from "@/features/data-dictionary/api";
+import type { DomainDisplayNameModalProps } from "@/features/data-dictionary/components/domain-display-name-modal";
 import {
   getDomainCountByIndustry,
   getDomainDisplayTitle,
@@ -58,6 +59,7 @@ import {
 } from "@/features/data-dictionary/utils/domain-mapping";
 import { getErrorMessage } from "@/features/data-dictionary/utils/error";
 import type { DefaultIndustriesWorkspaceProps } from "@/features/data-dictionary/components/default-industries-workspace";
+import type { DefaultDomainsWorkspaceProps } from "@/features/data-dictionary/components/default-domains-workspace";
 
 const dataDictionaryToastDismissMs = 8000;
 
@@ -69,11 +71,25 @@ const mappingColumnStyle = {
 const mappingGridClassName =
   "grid min-h-[320px] items-start gap-4 xl:grid-cols-[350px_minmax(0,1fr)_320px]";
 const mappingPanelClassName =
-  "relative h-[320px] min-h-[320px] overflow-hidden rounded-md border border-black/[0.06] bg-white p-4";
+  "relative flex h-[320px] min-h-[320px] flex-col overflow-hidden rounded-md border border-black/[0.06] bg-white p-4";
 const DefaultIndustriesWorkspace = dynamic<DefaultIndustriesWorkspaceProps>(
   () =>
     import("@/features/data-dictionary/components/default-industries-workspace").then(
       (module) => module.DefaultIndustriesWorkspace,
+    ),
+  { ssr: false },
+);
+const DefaultDomainsWorkspace = dynamic<DefaultDomainsWorkspaceProps>(
+  () =>
+    import("@/features/data-dictionary/components/default-domains-workspace").then(
+      (module) => module.DefaultDomainsWorkspace,
+    ),
+  { ssr: false },
+);
+const DomainDisplayNameModal = dynamic<DomainDisplayNameModalProps>(
+  () =>
+    import("@/features/data-dictionary/components/domain-display-name-modal").then(
+      (module) => module.DomainDisplayNameModal,
     ),
   { ssr: false },
 );
@@ -90,12 +106,13 @@ export function IndustryDomainManager({
   isDeletingDomain,
   isPermanentlyDeletingDomain,
   isDeletingIndustry,
+  isDefaultDomainsSaving,
   isDefaultIndustriesSaving,
   isIndustrySaving,
   isMappingDomain,
+  isRenamingDomain,
   libraries,
   mappingIndustryId,
-  processes,
   setDomainIndustryId,
   setDomainName,
   setIndustryName,
@@ -107,9 +124,11 @@ export function IndustryDomainManager({
   onDeleteDomain,
   onPermanentlyDeleteDomain,
   onDeleteIndustry,
+  onSeedDefaultDomains,
   onSeedDefaultIndustries,
   onMapDomain,
   onMapDomainToIndustry,
+  onRenameDomain,
   onReorderDomains,
   onReorderIndustries,
 }: {
@@ -124,12 +143,13 @@ export function IndustryDomainManager({
   isDeletingDomain: boolean;
   isPermanentlyDeletingDomain: boolean;
   isDeletingIndustry: boolean;
+  isDefaultDomainsSaving: boolean;
   isDefaultIndustriesSaving: boolean;
   isIndustrySaving: boolean;
   isMappingDomain: boolean;
+  isRenamingDomain: boolean;
   libraries: DictionaryLibrary[];
   mappingIndustryId: string;
-  processes: DictionaryProcess[];
   setDomainIndustryId: (value: string) => void;
   setDomainName: (value: string) => void;
   setIndustryName: (value: string) => void;
@@ -141,9 +161,14 @@ export function IndustryDomainManager({
   onDeleteDomain: (domainId: string) => Promise<void>;
   onPermanentlyDeleteDomain: (domain: DictionaryDomain) => Promise<void>;
   onDeleteIndustry: (industryId: string, force?: boolean) => Promise<void>;
+  onSeedDefaultDomains: (domainKey?: string) => Promise<boolean>;
   onSeedDefaultIndustries: (industryKey?: string) => Promise<boolean>;
   onMapDomain: (domainId: string) => Promise<void>;
   onMapDomainToIndustry: (industryId: string, domainId: string) => Promise<void>;
+  onRenameDomain: (
+    domain: DictionaryDomain,
+    name: string,
+  ) => Promise<DomainDisplayNameUpdateResult>;
   onReorderDomains: (industryId: string, domainIds: string[]) => Promise<void>;
   onReorderIndustries: (industryIds: string[]) => Promise<void>;
 }) {
@@ -162,7 +187,9 @@ export function IndustryDomainManager({
   const [inactiveDomainDeleteTarget, setInactiveDomainDeleteTarget] =
     useState<MappedDictionaryDomain | null>(null);
   const [mappingView, setMappingView] = useState<"manage" | "table">("manage");
+  const [isDefaultDomainsDialogOpen, setIsDefaultDomainsDialogOpen] = useState(false);
   const [isDefaultIndustriesDialogOpen, setIsDefaultIndustriesDialogOpen] = useState(false);
+  const [domainRenameTarget, setDomainRenameTarget] = useState<DictionaryDomain | null>(null);
   const [reorderToasts, setReorderToasts] = useState<ReorderToastState[]>([]);
   const [canScrollDomainLibraryDown, setCanScrollDomainLibraryDown] = useState(false);
   const [canScrollIndustriesDown, setCanScrollIndustriesDown] = useState(false);
@@ -173,6 +200,8 @@ export function IndustryDomainManager({
   const inactiveDomainDeleteDialogRef = useRef<HTMLDivElement | null>(null);
   const inactiveDomainDeleteCancelRef = useRef<HTMLButtonElement | null>(null);
   const inactiveDomainDeleteTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const domainRenameTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const shouldRestoreDomainRenameFocusRef = useRef(false);
   const inactiveDomainDeleteInFlightRef = useRef(false);
   const reorderToastIdRef = useRef(0);
   const reorderToastTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -186,6 +215,21 @@ export function IndustryDomainManager({
       inactiveDomainDeleteCancelRef.current?.focus();
     }
   }, [inactiveDomainDeleteTarget]);
+
+  useEffect(() => {
+    if (domainRenameTarget || isRenamingDomain || !shouldRestoreDomainRenameFocusRef.current) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      shouldRestoreDomainRenameFocusRef.current = false;
+      if (domainRenameTriggerRef.current?.isConnected) {
+        domainRenameTriggerRef.current.focus();
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [domainRenameTarget, isRenamingDomain]);
   const selectedIndustryId = industries.some((industry) => industry.id === mappingIndustryId)
     ? mappingIndustryId
     : industries[0]?.id || "";
@@ -300,9 +344,9 @@ export function IndustryDomainManager({
         ? "Already mapped"
         : exactInactiveMappedDomainMatch
           ? "Inactive"
-        : exactGlobalDomainMatch
-          ? "Enter to map"
-          : "Enter to create";
+          : exactGlobalDomainMatch
+            ? "Enter to map"
+            : "Enter to create";
   const isIndustryFieldBusy = isIndustrySaving;
   const isDomainFieldBusy = isDomainSaving || isMappingDomain;
 
@@ -411,6 +455,36 @@ export function IndustryDomainManager({
     } catch (error) {
       showReorderToast(getErrorMessage(error), "error");
     }
+  }
+
+  async function renameDomain(name: string) {
+    if (!domainRenameTarget) {
+      return;
+    }
+
+    try {
+      const result = await onRenameDomain(domainRenameTarget, name);
+      closeDomainRenameDialog();
+      showReorderToast(
+        `${result.name} is now shown across ${result.matchedMappingCount} ${
+          result.matchedMappingCount === 1 ? "mapping" : "mappings"
+        }`,
+        "success",
+      );
+    } catch (error) {
+      showReorderToast(getErrorMessage(error), "error");
+    }
+  }
+
+  function openDomainRenameDialog(domain: DictionaryDomain, trigger: HTMLButtonElement) {
+    domainRenameTriggerRef.current = trigger;
+    shouldRestoreDomainRenameFocusRef.current = false;
+    setDomainRenameTarget(domain);
+  }
+
+  function closeDomainRenameDialog() {
+    shouldRestoreDomainRenameFocusRef.current = true;
+    setDomainRenameTarget(null);
   }
 
   async function createIndustryFromSearch() {
@@ -540,14 +614,16 @@ export function IndustryDomainManager({
     }
 
     const industryMappedDomains = getMappedDomainsForIndustry(industryId, domains, libraries);
-    const industryProcesses = processes.filter((process) =>
-      process.industryIds.includes(industryId),
+    const mappedDomainProcessCount = industryMappedDomains.reduce(
+      (total, domain) => total + domain.processCount,
+      0,
     );
-    const processCount = getAssociatedProcessCount(industry, industryProcesses.length);
-    const defaultProcessCount = industryProcesses.filter(
-      (process) => process.scope === "industry-default",
-    ).length;
-    const domainProcessCount = industryProcesses.length - defaultProcessCount;
+    const defaultProcessCount = Math.max(0, industry.defaultProcessCount || 0);
+    const processCount = Math.max(
+      industry.associatedProcessCount || 0,
+      defaultProcessCount + mappedDomainProcessCount,
+    );
+    const domainProcessCount = Math.max(0, processCount - defaultProcessCount);
 
     return {
       defaultProcessCount,
@@ -875,61 +951,77 @@ export function IndustryDomainManager({
 
   return (
     <section className="mt-5 min-w-0 overflow-hidden rounded-md border border-black/8 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
-      <div className="flex min-h-[54px] flex-wrap items-center justify-between gap-4 border-b border-black/[0.08] px-5">
-        <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
+      <div className="flex min-h-[54px] flex-col items-stretch gap-3 border-b border-black/[0.08] px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between lg:py-0">
+        <p className="shrink-0 text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
           Industry and domain mapping
         </p>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:w-auto lg:justify-end">
           <button
             type="button"
             onClick={() => setIsDefaultIndustriesDialogOpen(true)}
             disabled={isCatalogLoading || isDefaultIndustriesSaving}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#B8D8FF] bg-[#F4FAFF] px-3 text-[11px] font-bold text-[#007AFF] transition hover:border-[#007AFF] hover:bg-[#EAF4FF] disabled:cursor-wait disabled:opacity-50"
+            className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-[#B8D8FF] bg-[#F4FAFF] px-3 text-[11px] font-bold whitespace-nowrap text-[#007AFF] transition hover:border-[#007AFF] hover:bg-[#EAF4FF] disabled:cursor-wait disabled:opacity-50 sm:w-auto"
           >
             <Sparkles size={12} aria-hidden="true" />
             Add default industries
           </button>
-        <div
-          aria-label="Industry and domain mapping view"
-          className="inline-flex h-8 items-center rounded-md border border-black/[0.08] bg-[#F5F5F7] p-0.5"
-          role="group"
-        >
           <button
             type="button"
-            onClick={() => setMappingView("manage")}
-            aria-pressed={mappingView === "manage"}
-            title="Manage industries and mapped domains"
-            className={`inline-flex h-7 items-center gap-1.5 rounded-[5px] px-3 text-[11px] font-bold transition ${
-              mappingView === "manage"
-                ? "bg-white text-[#007AFF] shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
-                : "text-[#86868B] hover:text-[#171717]"
-            }`}
+            onClick={() => setIsDefaultDomainsDialogOpen(true)}
+            disabled={isCatalogLoading || isDefaultDomainsSaving}
+            className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-[#B8D8FF] bg-[#F4FAFF] px-3 text-[11px] font-bold whitespace-nowrap text-[#007AFF] transition hover:border-[#007AFF] hover:bg-[#EAF4FF] disabled:cursor-wait disabled:opacity-50 sm:w-auto"
           >
-            <LayoutGrid size={12} aria-hidden="true" />
-            Manage
+            <Sparkles size={12} aria-hidden="true" />
+            Add default domains
           </button>
-          <button
-            type="button"
-            onClick={() => setMappingView("table")}
-            aria-pressed={mappingView === "table"}
-            title="View industry and domain relationships as a table"
-            className={`inline-flex h-7 items-center gap-1.5 rounded-[5px] px-3 text-[11px] font-bold transition ${
-              mappingView === "table"
-                ? "bg-white text-[#007AFF] shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
-                : "text-[#86868B] hover:text-[#171717]"
-            }`}
+          <div
+            aria-label="Industry and domain mapping view"
+            className="grid h-8 w-full grid-cols-2 items-center rounded-md border border-black/[0.08] bg-[#F5F5F7] p-0.5 sm:inline-flex sm:w-auto"
+            role="group"
           >
-            <Table2 size={12} aria-hidden="true" />
-            Relations
-          </button>
+            <button
+              type="button"
+              onClick={() => setMappingView("manage")}
+              aria-pressed={mappingView === "manage"}
+              title="Manage industries and mapped domains"
+              className={`inline-flex h-7 items-center gap-1.5 rounded-[5px] px-3 text-[11px] font-bold transition ${
+                mappingView === "manage"
+                  ? "bg-white text-[#007AFF] shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
+                  : "text-[#86868B] hover:text-[#171717]"
+              }`}
+            >
+              <LayoutGrid size={12} aria-hidden="true" />
+              Manage
+            </button>
+            <button
+              type="button"
+              onClick={() => setMappingView("table")}
+              aria-pressed={mappingView === "table"}
+              title="View industry and domain relationships as a table"
+              className={`inline-flex h-7 items-center gap-1.5 rounded-[5px] px-3 text-[11px] font-bold transition ${
+                mappingView === "table"
+                  ? "bg-white text-[#007AFF] shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
+                  : "text-[#86868B] hover:text-[#171717]"
+              }`}
+            >
+              <Table2 size={12} aria-hidden="true" />
+              Relations
+            </button>
+          </div>
         </div>
-      </div>
       </div>
       {isDefaultIndustriesDialogOpen ? (
         <DefaultIndustriesWorkspace
           isSeeding={isDefaultIndustriesSaving}
           onClose={() => setIsDefaultIndustriesDialogOpen(false)}
           onSeedDefaults={onSeedDefaultIndustries}
+        />
+      ) : null}
+      {isDefaultDomainsDialogOpen ? (
+        <DefaultDomainsWorkspace
+          isSeeding={isDefaultDomainsSaving}
+          onClose={() => setIsDefaultDomainsDialogOpen(false)}
+          onSeedDefaults={onSeedDefaultDomains}
         />
       ) : null}
       <div className="px-5 py-5">
@@ -940,391 +1032,402 @@ export function IndustryDomainManager({
             domains={uniqueDomains}
             industries={orderedIndustries}
             isMappingDomain={isMappingDomain}
+            isRenamingDomain={isRenamingDomain}
             libraries={libraries}
             onMapDomain={mapDomainToIndustry}
+            onRenameDomain={openDomainRenameDialog}
           />
         ) : (
           <div className={mappingGridClassName}>
             <section className={mappingPanelClassName} style={mappingColumnStyle}>
-            <div className="min-h-8 border-b border-black/[0.06]">
-              <div className="flex min-h-5 items-center justify-between gap-3">
-                <p className="min-w-0 text-[11px] leading-4 font-bold tracking-[0.08em] text-[#86868B] uppercase">
-                  Industries
-                </p>
-                <p className="shrink-0 text-xs leading-4 font-semibold text-[#A1A1AA]">
-                  {activeIndustryCount} active / {totalIndustryCount} total
-                </p>
+              <div className="min-h-8 border-b border-black/[0.06]">
+                <div className="flex min-h-5 items-center justify-between gap-3">
+                  <p className="min-w-0 text-[11px] leading-4 font-bold tracking-[0.08em] text-[#86868B] uppercase">
+                    Industries
+                  </p>
+                  <p className="shrink-0 text-xs leading-4 font-semibold text-[#A1A1AA]">
+                    {activeIndustryCount} active / {totalIndustryCount} total
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="mt-2 h-9">
-              <label className="flex h-9 min-w-0 items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-within:border-[#007AFF]">
-                <Search size={14} className="shrink-0 text-[#A1A1AA]" aria-hidden="true" />
-                <input
-                  value={industryName}
-                  onChange={(event) => setIndustryName(event.target.value)}
-                  onKeyDown={handleIndustrySearchKeyDown}
-                  disabled={isIndustrySaving}
+              <div className="mt-2 h-9">
+                <label className="flex h-9 min-w-0 items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-within:border-[#007AFF]">
+                  <Search size={14} className="shrink-0 text-[#A1A1AA]" aria-hidden="true" />
+                  <input
+                    value={industryName}
+                    onChange={(event) => setIndustryName(event.target.value)}
+                    onKeyDown={handleIndustrySearchKeyDown}
+                    disabled={isIndustrySaving}
                     className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[#555555] outline-none placeholder:text-[#A1A1AA] focus:!ring-0 focus:!outline-none focus-visible:!ring-0 focus-visible:!outline-none disabled:cursor-wait"
-                  placeholder="Search industry or type new name"
-                  title="Search industries, select an existing match, or press Enter to create a new industry"
-                />
-                {isIndustryFieldBusy ? (
-                  <FieldSpinner label="Saving industry" />
-                ) : (
-                  <span className="shrink-0 rounded-[4px] bg-[#F5F5F7] px-1.5 py-0.5 text-[10px] font-bold text-[#86868B]">
-                    {industryFieldHint}
-                  </span>
-                )}
-              </label>
-            </div>
-            <div className="relative mt-4">
-              <div
-                ref={industryListRef}
-                onScroll={() => handleListScroll(industryListRef, setCanScrollIndustriesDown)}
-                className="scrollbar-hidden max-h-[216px] space-y-1 overflow-y-auto pr-1"
-              >
-                {filteredOrderedIndustries.map((industry) => {
-                  const isSelected = industry.id === selectedIndustryId;
-                  const domainCount = domainCountByIndustryId.get(industry.id) ?? 0;
-                  const isInactiveIndustry = industry.isActive === false;
-                    const visibleProcessCount = processes.filter((process) =>
-                      process.industryIds.includes(industry.id),
-                    ).length;
-                    const processCount = getAssociatedProcessCount(
-                      industry,
-                      visibleProcessCount,
+                    placeholder="Search industry or type new name"
+                    title="Search industries, select an existing match, or press Enter to create a new industry"
+                  />
+                  {isIndustryFieldBusy ? (
+                    <FieldSpinner label="Saving industry" />
+                  ) : (
+                    <span className="shrink-0 rounded-[4px] bg-[#F5F5F7] px-1.5 py-0.5 text-[10px] font-bold text-[#86868B]">
+                      {industryFieldHint}
+                    </span>
+                  )}
+                </label>
+              </div>
+              <div className="relative mt-4 min-h-0 flex-1">
+                <div
+                  ref={industryListRef}
+                  onScroll={() => handleListScroll(industryListRef, setCanScrollIndustriesDown)}
+                  className="scrollbar-hidden h-full space-y-1 overflow-y-auto pr-1"
+                >
+                  {filteredOrderedIndustries.map((industry) => {
+                    const isSelected = industry.id === selectedIndustryId;
+                    const domainCount = domainCountByIndustryId.get(industry.id) ?? 0;
+                    const isInactiveIndustry = industry.isActive === false;
+                    const processCount = Math.max(
+                      0,
+                      industry.associatedProcessCount || industry.defaultProcessCount || 0,
                     );
                     const cannotDeactivate = !isInactiveIndustry && processCount > 0;
 
-                  return (
-                    <div
-                      key={industry.id}
-                      draggable={!isInactiveIndustry}
-                      onDragEnd={() => setDraggedIndustryId("")}
-                      onDragOver={allowDrop}
-                      onDragStart={(event) => {
-                        if (isInactiveIndustry) {
-                          return;
-                        }
+                    return (
+                      <div
+                        key={industry.id}
+                        draggable={!isInactiveIndustry}
+                        onDragEnd={() => setDraggedIndustryId("")}
+                        onDragOver={allowDrop}
+                        onDragStart={(event) => {
+                          if (isInactiveIndustry) {
+                            return;
+                          }
 
-                        setDraggedIndustryId(industry.id);
-                        event.dataTransfer.effectAllowed = "move";
-                      }}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        if (!isInactiveIndustry) {
-                          moveIndustry(industry.id);
-                        }
-                      }}
-                      title={
-                        isInactiveIndustry
-                          ? `${industry.name} is inactive and hidden from users.`
-                          : `${industry.name}: ${domainCount} mapped ${
-                              domainCount === 1 ? "domain" : "domains"
-                            }. Select or drag to reorder.`
-                      }
-                      className={`grid min-h-10 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border-l-2 px-2 text-left transition ${
-                        isSelected && !isInactiveIndustry
-                          ? "border-[#007AFF] bg-[#EAF3FF] text-[#171717]"
-                          : isInactiveIndustry
-                            ? "border-transparent bg-[#FAFAFA] text-[#A1A1AA]"
-                            : "cursor-grab border-transparent text-[#555555] hover:bg-[#FAFAFA] active:cursor-grabbing"
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onKeyDown={(event) => handleIndustryKeyDown(event, industry.id)}
-                        onClick={() => selectIndustry(industry.id)}
-                        disabled={isInactiveIndustry}
-                        aria-current={isSelected && !isInactiveIndustry ? "true" : undefined}
-                        aria-label={
+                          setDraggedIndustryId(industry.id);
+                          event.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          if (!isInactiveIndustry) {
+                            moveIndustry(industry.id);
+                          }
+                        }}
+                        title={
                           isInactiveIndustry
                             ? `${industry.name} is inactive and hidden from users.`
-                            : `${industry.name}. ${domainCount} mapped ${
+                            : `${industry.name}: ${domainCount} mapped ${
                                 domainCount === 1 ? "domain" : "domains"
-                              }. Press Enter to select. Press Alt Arrow Up or Alt Arrow Down to reorder.`
+                              }. Select or drag to reorder.`
                         }
-                        className="grid min-w-0 grid-cols-[24px_minmax(0,1fr)_auto_auto] items-center gap-2 text-left"
+                        className={`grid min-h-10 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border-l-2 px-2 text-left transition ${
+                          isSelected && !isInactiveIndustry
+                            ? "border-[#007AFF] bg-[#EAF3FF] text-[#171717]"
+                            : isInactiveIndustry
+                              ? "border-transparent bg-[#FAFAFA] text-[#A1A1AA]"
+                              : "cursor-grab border-transparent text-[#555555] hover:bg-[#FAFAFA] active:cursor-grabbing"
+                        }`}
                       >
-                        <span className="flex size-6 items-center justify-center rounded-full bg-[#F0F0F0] text-[#86868B]">
-                          <Building2 size={13} aria-hidden="true" />
-                        </span>
-                        <span className="truncate text-xs font-bold">{industry.name}</span>
-                        <GripVertical
-                          size={14}
-                          className={isInactiveIndustry ? "text-[#D1D5DB]" : "text-[#A1A1AA]"}
-                          aria-hidden="true"
-                        />
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                            isInactiveIndustry
-                              ? "bg-white text-[#A1A1AA]"
-                              : isSelected
-                                ? "bg-white text-[#007AFF]"
-                                : "bg-[#F5F5F7] text-[#86868B]"
-                          }`}
-                        >
-                          {isInactiveIndustry ? "Hidden" : domainCount}
-                        </span>
-                      </button>
-                      {isInactiveIndustry || !cannotDeactivate ? (
                         <button
                           type="button"
-                          onClick={() =>
-                            isInactiveIndustry
-                              ? void activateIndustry(industry)
-                              : requestDeleteIndustry(industry.id)
-                          }
-                          disabled={isDeletingMapping || isIndustrySaving}
-                          className={`flex size-7 items-center justify-center rounded-md transition disabled:cursor-not-allowed disabled:text-[#C7C7CC] ${
-                            isInactiveIndustry
-                              ? "text-[#007AFF] hover:bg-[#EAF3FF]"
-                              : "text-[#A1A1AA] hover:bg-[#FFF7F7] hover:text-[#EF4444]"
-                          }`}
+                          onKeyDown={(event) => handleIndustryKeyDown(event, industry.id)}
+                          onClick={() => selectIndustry(industry.id)}
+                          disabled={isInactiveIndustry}
+                          aria-current={isSelected && !isInactiveIndustry ? "true" : undefined}
                           aria-label={
                             isInactiveIndustry
-                              ? `Activate ${industry.name} industry`
-                              : `Deactivate ${industry.name} industry`
+                              ? `${industry.name} is inactive and hidden from users.`
+                              : `${industry.name}. ${domainCount} mapped ${
+                                  domainCount === 1 ? "domain" : "domains"
+                                }. Press Enter to select. Press Alt Arrow Up or Alt Arrow Down to reorder.`
                           }
-                          title={
-                            isInactiveIndustry
-                              ? `Activate ${industry.name} industry`
-                              : `Deactivate ${industry.name} industry`
-                          }
+                          className="grid min-w-0 grid-cols-[24px_minmax(0,1fr)_auto_auto] items-center gap-2 text-left"
                         >
-                          {isInactiveIndustry ? (
-                            <RotateCcw size={14} aria-hidden="true" />
-                          ) : (
-                            <EyeOff size={14} aria-hidden="true" />
-                          )}
+                          <span className="flex size-6 items-center justify-center rounded-full bg-[#F0F0F0] text-[#86868B]">
+                            <Building2 size={13} aria-hidden="true" />
+                          </span>
+                          <span className="truncate text-xs font-bold">{industry.name}</span>
+                          <GripVertical
+                            size={14}
+                            className={isInactiveIndustry ? "text-[#D1D5DB]" : "text-[#A1A1AA]"}
+                            aria-hidden="true"
+                          />
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              isInactiveIndustry
+                                ? "bg-white text-[#A1A1AA]"
+                                : isSelected
+                                  ? "bg-white text-[#007AFF]"
+                                  : "bg-[#F5F5F7] text-[#86868B]"
+                            }`}
+                          >
+                            {isInactiveIndustry ? "Hidden" : domainCount}
+                          </span>
                         </button>
-                      ) : null}
-                    </div>
-                  );
-                })}
-                {filteredOrderedIndustries.length === 0 ? (
-                  <EmptyState
-                    className="mt-0"
-                    label={
-                      industryName.trim()
-                        ? "No industries match. Press Enter to create this industry."
-                        : "No industries yet. Search and press Enter to create the first industry."
-                    }
+                        {isInactiveIndustry || !cannotDeactivate ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              isInactiveIndustry
+                                ? void activateIndustry(industry)
+                                : requestDeleteIndustry(industry.id)
+                            }
+                            disabled={isDeletingMapping || isIndustrySaving}
+                            className={`flex size-7 items-center justify-center rounded-md transition disabled:cursor-not-allowed disabled:text-[#C7C7CC] ${
+                              isInactiveIndustry
+                                ? "text-[#007AFF] hover:bg-[#EAF3FF]"
+                                : "text-[#A1A1AA] hover:bg-[#FFF7F7] hover:text-[#EF4444]"
+                            }`}
+                            aria-label={
+                              isInactiveIndustry
+                                ? `Activate ${industry.name} industry`
+                                : `Deactivate ${industry.name} industry`
+                            }
+                            title={
+                              isInactiveIndustry
+                                ? `Activate ${industry.name} industry`
+                                : `Deactivate ${industry.name} industry`
+                            }
+                          >
+                            {isInactiveIndustry ? (
+                              <RotateCcw size={14} aria-hidden="true" />
+                            ) : (
+                              <EyeOff size={14} aria-hidden="true" />
+                            )}
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                  {filteredOrderedIndustries.length === 0 ? (
+                    <EmptyState
+                      className="h-full"
+                      label={
+                        industryName.trim()
+                          ? "No industries match. Press Enter to create this industry."
+                          : "No industries yet. Search and press Enter to create the first industry."
+                      }
+                    />
+                  ) : null}
+                </div>
+                {canScrollIndustriesDown ? (
+                  <ScrollDownButton
+                    label="Scroll industries down"
+                    onClick={() => scrollListDown(industryListRef)}
                   />
                 ) : null}
               </div>
-              {canScrollIndustriesDown ? (
-                <ScrollDownButton
-                  label="Scroll industries down"
-                  onClick={() => scrollListDown(industryListRef)}
-                />
-              ) : null}
-            </div>
-          </section>
+            </section>
 
             <section className={mappingPanelClassName} style={mappingColumnStyle}>
-            <div className="min-h-8 border-b border-black/[0.06]">
-              <div className="flex min-h-5 items-center justify-between gap-3">
-                <p className="min-w-0 text-[11px] leading-4 font-bold tracking-[0.08em] text-[#86868B] uppercase">
-                  Mapped Domains
-                </p>
-                <p className="shrink-0 truncate text-xs leading-4 font-semibold text-[#A1A1AA]">
+              <div className="min-h-8 border-b border-black/[0.06]">
+                <div className="flex min-h-5 items-center justify-between gap-3">
+                  <p className="min-w-0 text-[11px] leading-4 font-bold tracking-[0.08em] text-[#86868B] uppercase">
+                    Mapped Domains
+                  </p>
+                  <p className="shrink-0 truncate text-xs leading-4 font-semibold text-[#A1A1AA]">
                     {selectedIndustryName} ·{" "}
                     {inactiveMappedDomains.length > 0
-                    ? `${mappedDomains.length} active / ${displayedMappedDomains.length} total`
-                    : `${mappedDomains.length} mapped`}
-                </p>
+                      ? `${mappedDomains.length} active / ${displayedMappedDomains.length} total`
+                      : `${mappedDomains.length} mapped`}
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="mt-2 h-9">
-              <label className="flex h-9 min-w-0 items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-within:border-[#007AFF]">
-                <Search size={14} className="shrink-0 text-[#A1A1AA]" aria-hidden="true" />
-                <input
-                  value={domainName}
-                  onChange={(event) => {
-                    setDomainIndustryId(selectedIndustryId);
-                    setDomainName(event.target.value);
-                  }}
-                  onKeyDown={handleDomainSearchKeyDown}
-                  disabled={!selectedIndustryId || isDomainSaving || isMappingDomain}
+              <div className="mt-2 h-9">
+                <label className="flex h-9 min-w-0 items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-within:border-[#007AFF]">
+                  <Search size={14} className="shrink-0 text-[#A1A1AA]" aria-hidden="true" />
+                  <input
+                    value={domainName}
+                    onChange={(event) => {
+                      setDomainIndustryId(selectedIndustryId);
+                      setDomainName(event.target.value);
+                    }}
+                    onKeyDown={handleDomainSearchKeyDown}
+                    disabled={!selectedIndustryId || isDomainSaving || isMappingDomain}
                     className="min-w-0 flex-1 bg-transparent text-xs font-bold text-[#555555] outline-none placeholder:text-[#A1A1AA] focus:!ring-0 focus:!outline-none focus-visible:!ring-0 focus-visible:!outline-none disabled:cursor-not-allowed disabled:text-[#A1A1AA]"
                     placeholder={
                       selectedIndustryId
                         ? "Search domain or type new name"
                         : "Select an industry first"
                     }
-                  title={
-                    selectedIndustryId
-                      ? `Search mapped domains, map an existing global domain, or press Enter to create under ${selectedIndustryName}`
-                      : "Select an industry before adding a domain"
-                  }
-                />
-                {isDomainFieldBusy ? (
-                  <FieldSpinner label="Saving domain" />
-                ) : (
-                  <span className="shrink-0 rounded-[4px] bg-[#F5F5F7] px-1.5 py-0.5 text-[10px] font-bold text-[#86868B]">
-                    {domainFieldHint}
-                  </span>
-                )}
-              </label>
-            </div>
-            {filteredOrderedMappedDomains.length > 0 ? (
-              <div className="relative mt-4">
-                <div
-                  ref={mappedDomainListRef}
-                  aria-describedby="mapped-domain-keyboard-help"
-                  aria-label={`${selectedIndustryName} mapped domains`}
-                  onScroll={() =>
-                    handleListScroll(mappedDomainListRef, setCanScrollMappedDomainsDown)
-                  }
-                  className="scrollbar-hidden max-h-[196px] overflow-y-auto overscroll-contain pr-1"
-                  role="list"
-                >
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <p id="mapped-domain-keyboard-help" className="sr-only">
+                    title={
+                      selectedIndustryId
+                        ? `Search mapped domains, map an existing global domain, or press Enter to create under ${selectedIndustryName}`
+                        : "Select an industry before adding a domain"
+                    }
+                  />
+                  {isDomainFieldBusy ? (
+                    <FieldSpinner label="Saving domain" />
+                  ) : (
+                    <span className="shrink-0 rounded-[4px] bg-[#F5F5F7] px-1.5 py-0.5 text-[10px] font-bold text-[#86868B]">
+                      {domainFieldHint}
+                    </span>
+                  )}
+                </label>
+              </div>
+              {filteredOrderedMappedDomains.length > 0 ? (
+                <div className="relative mt-4 min-h-0 flex-1">
+                  <div
+                    ref={mappedDomainListRef}
+                    aria-describedby="mapped-domain-keyboard-help"
+                    aria-label={`${selectedIndustryName} mapped domains`}
+                    onScroll={() =>
+                      handleListScroll(mappedDomainListRef, setCanScrollMappedDomainsDown)
+                    }
+                    className="scrollbar-hidden h-full overflow-y-auto overscroll-contain pr-1"
+                    role="list"
+                  >
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <p id="mapped-domain-keyboard-help" className="sr-only">
                         Press Alt Arrow Left or Alt Arrow Up to move a domain earlier. Press Alt
                         Arrow Right or Alt Arrow Down to move a domain later.
-                    </p>
-                    {filteredOrderedMappedDomains.map((domain) => (
-                      <MappedDomainCard
-                        key={domain.id}
-                        domain={domain}
-                        industryName={selectedIndustryName}
-                        isActivating={isDomainSaving}
-                        isDeleting={isDeletingDomain}
-                        isDragging={draggedDomainKey === domain.id}
-                        onDelete={() => void deleteMappedDomain(domain)}
-                        onPermanentDelete={(trigger) =>
-                          requestPermanentDomainDelete(domain, trigger)
-                        }
-                        onActivate={() => void activateDomain(domain)}
-                        onDragEnd={() => setDraggedDomainKey("")}
-                        onDragOver={allowDrop}
-                        onDragStart={(event) => {
-                          setDraggedDomainKey(domain.id);
-                          event.dataTransfer.effectAllowed = "move";
-                        }}
-                        onKeyDown={(event) => handleMappedDomainKeyDown(event, domain.id)}
-                        onDrop={(event) => {
-                          event.preventDefault();
-                          moveMappedDomain(domain.id);
-                        }}
-                      />
-                    ))}
+                      </p>
+                      {filteredOrderedMappedDomains.map((domain) => (
+                        <MappedDomainCard
+                          key={domain.id}
+                          domain={domain}
+                          industryName={selectedIndustryName}
+                          isActivating={isDomainSaving}
+                          isDeleting={isDeletingDomain}
+                          isDragging={draggedDomainKey === domain.id}
+                          isRenaming={isRenamingDomain}
+                          onDelete={() => void deleteMappedDomain(domain)}
+                          onPermanentDelete={(trigger) =>
+                            requestPermanentDomainDelete(domain, trigger)
+                          }
+                          onActivate={() => void activateDomain(domain)}
+                          onDragEnd={() => setDraggedDomainKey("")}
+                          onDragOver={allowDrop}
+                          onDragStart={(event) => {
+                            setDraggedDomainKey(domain.id);
+                            event.dataTransfer.effectAllowed = "move";
+                          }}
+                          onKeyDown={(event) => handleMappedDomainKeyDown(event, domain.id)}
+                          onRename={(trigger) => openDomainRenameDialog(domain, trigger)}
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            moveMappedDomain(domain.id);
+                          }}
+                        />
+                      ))}
+                    </div>
                   </div>
+                  {canScrollMappedDomainsDown ? (
+                    <ScrollDownButton
+                      label="Scroll mapped domains down"
+                      onClick={() => scrollListDown(mappedDomainListRef)}
+                    />
+                  ) : null}
                 </div>
-                {canScrollMappedDomainsDown ? (
-                  <ScrollDownButton
-                    label="Scroll mapped domains down"
-                    onClick={() => scrollListDown(mappedDomainListRef)}
-                  />
-                ) : null}
-              </div>
-            ) : (
-              <EmptyState
-                label={
-                  domainName.trim()
-                    ? "No mapped domains match. Press Enter to create or map this domain."
-                    : "No domains mapped yet. Search and press Enter to create one, or map from the global library."
-                }
-              />
-            )}
-          </section>
+              ) : (
+                <EmptyState
+                  className="mt-4 flex-1"
+                  label={
+                    domainName.trim()
+                      ? "No mapped domains match. Press Enter to create or map this domain."
+                      : "No domains mapped yet. Search and press Enter to create one, or map from the global library."
+                  }
+                />
+              )}
+            </section>
 
             <section className={mappingPanelClassName} style={mappingColumnStyle}>
               <ColumnHeader
                 label="Domain Library"
                 meta={`${uniqueDomains.length} unique libraries`}
-          >
-              <span
-                className="rounded-full bg-[#F5F5F7] px-2 py-1 text-[10px] font-bold text-[#86868B]"
-                title="Duplicate domain names are grouped into one library item"
               >
-                Deduped
-              </span>
-            </ColumnHeader>
-            <SearchInput
-              value={domainSearch}
-              onChange={setDomainSearch}
-              placeholder="Search domains..."
-              title="Search global domains by name"
-              className="mt-4 w-full"
-            />
-            <div className="relative mt-4">
-              <div
-                ref={domainLibraryListRef}
-                onScroll={() =>
-                  handleListScroll(domainLibraryListRef, setCanScrollDomainLibraryDown)
-                }
-                className="scrollbar-hidden max-h-[172px] space-y-2 overflow-y-auto overscroll-contain pr-1"
-              >
-                {filteredGlobalDomains.map((domain) => {
-                  const domainKey = getDomainIdentity(domain);
-                  const isMapped = mappedDomainKeys.has(domainKey);
+                <span
+                  className="rounded-full bg-[#F5F5F7] px-2 py-1 text-[10px] font-bold text-[#86868B]"
+                  title="Duplicate domain names are grouped into one library item"
+                >
+                  Deduped
+                </span>
+              </ColumnHeader>
+              <SearchInput
+                value={domainSearch}
+                onChange={setDomainSearch}
+                placeholder="Search domains..."
+                title="Search global domains by name"
+                className="mt-4 w-full"
+              />
+              <div className="relative mt-4 min-h-0 flex-1">
+                <div
+                  ref={domainLibraryListRef}
+                  onScroll={() =>
+                    handleListScroll(domainLibraryListRef, setCanScrollDomainLibraryDown)
+                  }
+                  className="scrollbar-hidden h-full space-y-2 overflow-y-auto overscroll-contain pr-1"
+                >
+                  {filteredGlobalDomains.map((domain) => {
+                    const domainKey = getDomainIdentity(domain);
+                    const isMapped = mappedDomainKeys.has(domainKey);
 
-                  return (
-                    <div
-                      key={domain.id}
-                      title={`${getDomainDisplayTitle(domain.name)} is used in ${
-                        industryUsageByDomainKey.get(domainKey) ?? 0
-                      } ${(industryUsageByDomainKey.get(domainKey) ?? 0) === 1 ? "industry" : "industries"}`}
-                      className="grid min-h-10 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-black/[0.06] bg-[#FAFAFA] px-2"
-                    >
-                      <span className="flex size-6 items-center justify-center rounded-full bg-white text-[#86868B]">
-                        <Database size={13} aria-hidden="true" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-xs font-bold text-[#555555]">
-                          {domain.name}
-                        </span>
-                        <span className="block truncate text-[11px] font-semibold text-[#A1A1AA]">
-                          Used in {industryUsageByDomainKey.get(domainKey) ?? 0}{" "}
-                          {(industryUsageByDomainKey.get(domainKey) ?? 0) === 1
-                            ? "industry"
-                            : "industries"}
-                        </span>
-                      </span>
-                      {isMapped ? (
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full bg-[#EAF3FF] px-2 py-1 text-[10px] font-bold text-[#007AFF]"
-                          title={`${getDomainDisplayTitle(domain.name)} is already mapped to ${selectedIndustryName}`}
-                        >
-                          <Check size={11} aria-hidden="true" />
-                          Mapped
-                        </span>
-                      ) : (
+                    return (
+                      <div
+                        key={domain.id}
+                        title={`${getDomainDisplayTitle(domain.name)} is used in ${
+                          industryUsageByDomainKey.get(domainKey) ?? 0
+                        } ${(industryUsageByDomainKey.get(domainKey) ?? 0) === 1 ? "industry" : "industries"}`}
+                        className="grid min-h-10 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-black/[0.06] bg-[#FAFAFA] px-2"
+                      >
                         <button
                           type="button"
-                          onClick={() => mapDomain(domain.id)}
-                          disabled={!selectedIndustryId || isMappingDomain}
-                          className="inline-flex h-7 items-center gap-1 rounded-md bg-white px-2 text-[10px] font-bold text-[#007AFF] disabled:cursor-not-allowed disabled:text-[#A1A1AA]"
-                          title={
-                            selectedIndustryId
-                              ? `Map ${getDomainDisplayTitle(domain.name)} to ${selectedIndustryName}`
-                              : "Select an industry before mapping a domain"
-                          }
+                          onClick={(event) => openDomainRenameDialog(domain, event.currentTarget)}
+                          disabled={isRenamingDomain}
+                          className="col-span-2 grid min-w-0 grid-cols-[24px_minmax(0,1fr)] items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 disabled:cursor-wait"
+                          aria-label={`Rename ${getDomainDisplayTitle(domain.name)} display name`}
+                          title={`Rename ${getDomainDisplayTitle(domain.name)} display name`}
                         >
-                          <Plus size={11} aria-hidden="true" />
-                          Map
+                          <span className="flex size-6 items-center justify-center rounded-full bg-white text-[#86868B]">
+                            <Database size={13} aria-hidden="true" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-xs font-bold text-[#555555]">
+                              {domain.name}
+                            </span>
+                            <span className="block truncate text-[11px] font-semibold text-[#A1A1AA]">
+                              Used in {industryUsageByDomainKey.get(domainKey) ?? 0}{" "}
+                              {(industryUsageByDomainKey.get(domainKey) ?? 0) === 1
+                                ? "industry"
+                                : "industries"}
+                            </span>
+                          </span>
                         </button>
-                      )}
-                    </div>
-                  );
-                })}
-                {filteredGlobalDomains.length === 0 ? (
-                  <EmptyState label="No domains match this search." />
+                        {isMapped ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-[#EAF3FF] px-2 py-1 text-[10px] font-bold text-[#007AFF]"
+                            title={`${getDomainDisplayTitle(domain.name)} is already mapped to ${selectedIndustryName}`}
+                          >
+                            <Check size={11} aria-hidden="true" />
+                            Mapped
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => mapDomain(domain.id)}
+                            disabled={!selectedIndustryId || isMappingDomain}
+                            className="inline-flex h-7 items-center gap-1 rounded-md bg-white px-2 text-[10px] font-bold text-[#007AFF] disabled:cursor-not-allowed disabled:text-[#A1A1AA]"
+                            title={
+                              selectedIndustryId
+                                ? `Map ${getDomainDisplayTitle(domain.name)} to ${selectedIndustryName}`
+                                : "Select an industry before mapping a domain"
+                            }
+                          >
+                            <Plus size={11} aria-hidden="true" />
+                            Map
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {filteredGlobalDomains.length === 0 ? (
+                    <EmptyState className="h-full" label="No domains match this search." />
+                  ) : null}
+                </div>
+                {canScrollDomainLibraryDown ? (
+                  <ScrollDownButton
+                    label="Scroll domain library down"
+                    onClick={() => scrollListDown(domainLibraryListRef)}
+                  />
                 ) : null}
               </div>
-              {canScrollDomainLibraryDown ? (
-                <ScrollDownButton
-                  label="Scroll domain library down"
-                  onClick={() => scrollListDown(domainLibraryListRef)}
-                />
-              ) : null}
-            </div>
-          </section>
-        </div>
-      )}
+            </section>
+          </div>
+        )}
       </div>
       {industryDeleteImpact ? (
         <div
@@ -1476,18 +1579,17 @@ export function IndustryDomainManager({
           </div>
         </div>
       ) : null}
+      {domainRenameTarget ? (
+        <DomainDisplayNameModal
+          domain={domainRenameTarget}
+          isSaving={isRenamingDomain}
+          onClose={closeDomainRenameDialog}
+          onSave={renameDomain}
+        />
+      ) : null}
       <ReorderToastStack onDismiss={dismissReorderToast} toasts={reorderToasts} />
     </section>
   );
-}
-
-function getAssociatedProcessCount(
-  industry: DictionaryIndustry,
-  visibleProcessCount: number,
-) {
-  return typeof industry.associatedProcessCount === "number"
-    ? Math.max(industry.associatedProcessCount, visibleProcessCount)
-    : visibleProcessCount;
 }
 
 function DeleteImpactMetric({ label, value }: { label: string; value: number }) {
@@ -1516,6 +1618,7 @@ function MappedDomainCard({
   isActivating,
   isDeleting,
   isDragging,
+  isRenaming,
   onDelete,
   onPermanentDelete,
   onActivate,
@@ -1523,6 +1626,7 @@ function MappedDomainCard({
   onDragOver,
   onDragStart,
   onKeyDown,
+  onRename,
   onDrop,
 }: {
   domain: MappedDictionaryDomain;
@@ -1530,6 +1634,7 @@ function MappedDomainCard({
   isActivating: boolean;
   isDeleting: boolean;
   isDragging: boolean;
+  isRenaming: boolean;
   onDelete: () => void;
   onPermanentDelete: (trigger: HTMLButtonElement) => void;
   onActivate: () => void;
@@ -1537,6 +1642,7 @@ function MappedDomainCard({
   onDragOver: (event: DragEvent<HTMLElement>) => void;
   onDragStart: (event: DragEvent<HTMLElement>) => void;
   onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+  onRename: (trigger: HTMLButtonElement) => void;
   onDrop: (event: DragEvent<HTMLElement>) => void;
 }) {
   const domainTitle = getDomainDisplayTitle(domain.name);
@@ -1545,7 +1651,7 @@ function MappedDomainCard({
 
   return (
     <article
-      draggable={!isInactive}
+      draggable={!isInactive && !isRenaming}
       aria-label={
         isInactive
           ? `${domainTitle} is inactive and hidden from users. Activate it for ${industryName}.`
@@ -1569,7 +1675,15 @@ function MappedDomainCard({
           : "cursor-grab bg-[#FAFAFA] hover:border-[#B8D8FF] hover:bg-[#F8FBFF] active:cursor-grabbing"
       } ${isDragging ? "opacity-60" : ""}`}
     >
-      <div className="min-w-0">
+      <button
+        type="button"
+        onClick={(event) => onRename(event.currentTarget)}
+        onKeyDown={(event) => event.stopPropagation()}
+        disabled={isRenaming}
+        className="min-w-0 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 disabled:cursor-wait"
+        aria-label={`Rename ${domainTitle} display name`}
+        title={`Rename ${domainTitle} display name`}
+      >
         <p
           className={`truncate text-sm leading-5 font-bold ${isInactive ? "text-[#86868B]" : "text-[#171717]"}`}
         >
@@ -1578,14 +1692,14 @@ function MappedDomainCard({
         <p className="text-xs leading-4 font-semibold text-[#86868B]">
           {isInactive ? "Hidden from users" : `${domain.processCount} processes`}
         </p>
-      </div>
+      </button>
       <div className="flex h-full shrink-0 items-center gap-1.5 text-[#A1A1AA]">
         {isInactive ? (
           <>
             <button
               type="button"
               onClick={onActivate}
-              disabled={isActivating || isDeleting}
+              disabled={isActivating || isDeleting || isRenaming}
               title={`Activate ${domainTitle} for ${industryName}`}
               className="inline-flex h-7 items-center gap-1 rounded-md bg-white px-2 text-[10px] font-bold text-[#007AFF] transition hover:bg-[#EAF3FF] disabled:cursor-wait disabled:text-[#A1A1AA]"
               aria-label={`Activate ${domainTitle} for ${industryName}`}
@@ -1596,7 +1710,7 @@ function MappedDomainCard({
             <button
               type="button"
               onClick={(event) => onPermanentDelete(event.currentTarget)}
-              disabled={isActivating || isDeleting}
+              disabled={isActivating || isDeleting || isRenaming}
               title={`Permanently delete ${domainTitle} from ${industryName}`}
               className="flex size-7 items-center justify-center rounded-md bg-white text-[#EF4444] transition hover:bg-[#FEECEC] disabled:cursor-not-allowed disabled:text-[#C7C7CC]"
               aria-label={`Permanently delete ${domainTitle} from ${industryName}`}
@@ -1612,7 +1726,7 @@ function MappedDomainCard({
             <button
               type="button"
               onClick={onDelete}
-              disabled={isDeleting}
+              disabled={isDeleting || isRenaming}
               title={`Remove ${domainTitle} from ${industryName}`}
               className="flex size-4 items-center justify-center rounded-md text-[#A1A1AA] transition hover:text-[#EF4444] disabled:cursor-not-allowed disabled:text-[#C7C7CC]"
               aria-label={`Remove ${domainTitle} from ${industryName}`}
@@ -1685,14 +1799,18 @@ function IndustryDomainRelationTable({
   domains,
   industries,
   isMappingDomain,
+  isRenamingDomain,
   libraries,
   onMapDomain,
+  onRenameDomain,
 }: {
   domains: DictionaryDomain[];
   industries: DictionaryIndustry[];
   isMappingDomain: boolean;
+  isRenamingDomain: boolean;
   libraries: DictionaryLibrary[];
   onMapDomain: (industryId: string, domainId: string) => Promise<void>;
+  onRenameDomain: (domain: DictionaryDomain, trigger: HTMLButtonElement) => void;
 }) {
   const [mappingCellKey, setMappingCellKey] = useState("");
   const mappedDomainsByIndustryId = useMemo(() => {
@@ -1753,7 +1871,15 @@ function IndustryDomainRelationTable({
                   title={`Domain column: ${getDomainDisplayTitle(domain.name)}`}
                   className="min-w-[150px] border border-black/[0.1] bg-[#FAFAFA] px-3 py-3 text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase sm:min-w-[190px] sm:px-4"
                 >
-                  {getDomainDisplayTitle(domain.name)}
+                  <button
+                    type="button"
+                    onClick={(event) => onRenameDomain(domain, event.currentTarget)}
+                    disabled={isRenamingDomain}
+                    className="rounded-sm text-left transition outline-none hover:text-[#007AFF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 disabled:cursor-wait"
+                    aria-label={`Rename ${getDomainDisplayTitle(domain.name)} display name`}
+                  >
+                    {getDomainDisplayTitle(domain.name)}
+                  </button>
                 </th>
               ))}
             </tr>
@@ -1792,14 +1918,18 @@ function IndustryDomainRelationTable({
                       >
                         {mappedDomain ? (
                           <div>
-                            <span
+                            <button
+                              type="button"
+                              onClick={(event) => onRenameDomain(mappedDomain, event.currentTarget)}
+                              disabled={isRenamingDomain}
                               className="inline-flex max-w-full items-center rounded-full bg-[#EAF3FF] px-2.5 py-1 text-[11px] font-bold text-[#007AFF]"
                               title={`${getDomainDisplayTitle(mappedDomain.name)} is mapped to ${industry.name}`}
+                              aria-label={`Rename ${getDomainDisplayTitle(mappedDomain.name)} display name`}
                             >
                               <span className="truncate">
                                 {getDomainDisplayTitle(mappedDomain.name)}
                               </span>
-                            </span>
+                            </button>
                             <p className="mt-1 text-xs font-semibold text-[#86868B]">
                               {mappedDomain.processCount} processes
                             </p>

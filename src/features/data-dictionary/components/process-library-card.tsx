@@ -39,7 +39,7 @@ import type { IndustryDefaultsWorkspaceProps } from "@/features/data-dictionary/
 import type { IndustryDomainDefaultsWorkspaceProps } from "@/features/data-dictionary/components/industry-domain-defaults-workspace";
 
 const industryDefaultDomainFilter = "industry-default";
-const processLibraryPageSize = 10;
+const processLibraryPageSize = 12;
 
 const NewProcessModal = dynamic<NewProcessModalProps>(
   () =>
@@ -85,9 +85,11 @@ export function ProcessLibraryCard({
   processForm,
   processActionId,
   processIndustryFilter,
+  processLibraryCount,
   processPage,
+  processTotalCount,
+  processTotalPages,
   processSearch,
-  processes,
   libraries,
   savedDisplayToBaseCurrencyRate,
   setExpandedProcessId,
@@ -126,9 +128,11 @@ export function ProcessLibraryCard({
   processForm: ProcessFormState;
   processActionId: string;
   processIndustryFilter: string;
+  processLibraryCount: number;
   processPage: number;
+  processTotalCount: number;
+  processTotalPages: number;
   processSearch: string;
-  processes: DictionaryProcess[];
   libraries: DictionaryLibrary[];
   savedDisplayToBaseCurrencyRate: number;
   setExpandedProcessId: (value: string) => void;
@@ -152,16 +156,12 @@ export function ProcessLibraryCard({
 }) {
   const [isDefaultIndustryDialogOpen, setIsDefaultIndustryDialogOpen] = useState(false);
   const [isDefaultIndustryDomainDialogOpen, setIsDefaultIndustryDomainDialogOpen] = useState(false);
-  const totalProcessPages = Math.ceil(filteredProcesses.length / processLibraryPageSize);
-  const safeProcessPage = Math.min(Math.max(processPage, 1), Math.max(totalProcessPages, 1));
+  const safeProcessPage = Math.min(Math.max(processPage, 1), Math.max(processTotalPages, 1));
   const processStartIndex = (safeProcessPage - 1) * processLibraryPageSize;
-  const visibleProcesses = useMemo(
-    () => filteredProcesses.slice(processStartIndex, processStartIndex + processLibraryPageSize),
-    [filteredProcesses, processStartIndex],
-  );
+  const visibleProcesses = filteredProcesses;
   const processPaginationPages = useMemo(
-    () => getPaginationPages(totalProcessPages, safeProcessPage),
-    [safeProcessPage, totalProcessPages],
+    () => getPaginationPages(processTotalPages, safeProcessPage),
+    [processTotalPages, safeProcessPage],
   );
   const domainFilterOptions = useMemo(() => getUniqueDomains(domains), [domains]);
   const preferredIndustryDomainId = useMemo(() => {
@@ -205,7 +205,7 @@ export function ProcessLibraryCard({
     <section className="mt-5 min-w-0 overflow-hidden rounded-md border border-black/8 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
       <div className="flex min-h-[54px] flex-wrap items-center justify-between gap-4 border-b border-black/[0.08] px-5">
         <p className="text-[11px] font-bold tracking-[0.08em] text-[#86868B] uppercase">
-          Process Library ({processes.length})
+          Process Library ({processLibraryCount})
         </p>
         <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
           <button
@@ -377,7 +377,7 @@ export function ProcessLibraryCard({
             onSaveCurrencyRate={onSaveCurrencyRate}
           />
         ) : null}
-        <div className="mt-4 min-h-[584px] max-w-full border-t border-black/[0.05] bg-white transition-[min-height] duration-200 ease-out">
+        <div className="mt-4 h-[640px] max-w-full overflow-y-auto border-t border-black/[0.05] bg-white">
           <div className="md:hidden">
             {isCatalogLoading ? <ProcessMobileRowsSkeleton /> : null}
             {!isCatalogLoading && filteredProcesses.length === 0 ? (
@@ -431,11 +431,11 @@ export function ProcessLibraryCard({
         <PaginationSummary
           currentPage={safeProcessPage}
           label={
-            filteredProcesses.length
+            processTotalCount
               ? `Showing ${processStartIndex + 1}-${Math.min(
-                  processStartIndex + processLibraryPageSize,
-                  filteredProcesses.length,
-                )} of ${filteredProcesses.length}`
+                  processStartIndex + visibleProcesses.length,
+                  processTotalCount,
+                )} of ${processTotalCount}`
               : "Showing 0 of 0"
           }
           onPageChange={setProcessPage}

@@ -15,6 +15,7 @@ import {
   DefaultsIndustrySelect,
   type DefaultsIndustryConfigurationStatus,
 } from "@/features/data-dictionary/components/defaults-industry-select";
+import { DefaultsCellPreview } from "@/features/data-dictionary/components/defaults-cell-preview";
 import { DefaultsWorkspaceDialog } from "@/features/data-dictionary/components/defaults-workspace-dialog";
 import { ProcessDescriptionPreview } from "@/features/data-dictionary/components/process-description-preview";
 import type { DictionaryIndustry } from "@/features/data-dictionary/model";
@@ -380,7 +381,7 @@ export function IndustryDefaultsWorkspace({
                 <th
                   key={heading}
                   scope="col"
-                  className="h-10 border-r border-black/[0.06] px-3 text-[10px] font-bold tracking-[0.06em] text-[#68686D] uppercase last:border-r-0"
+                  className="h-10 border-r border-black/[0.06] px-3 text-[10px] font-bold whitespace-nowrap tracking-[0.06em] text-[#68686D] uppercase last:border-r-0"
                 >
                   {heading}
                 </th>
@@ -405,20 +406,28 @@ export function IndustryDefaultsWorkspace({
                 >
                   {getTierLabel(row.tier)}
                 </td>
-                <td
-                  className="truncate border-r border-b border-black/[0.06] px-3 text-xs font-semibold text-[#333]"
-                  title={row.name}
-                >
-                  {row.name}
+                <td className="min-w-0 border-r border-b border-black/[0.06] px-2 text-xs font-semibold text-[#333]">
+                  <ProcessDescriptionPreview
+                    activation="double-click"
+                    description={row.description}
+                    processName={row.name}
+                    triggerText={row.name}
+                  />
                 </td>
                 <td className="min-w-0 border-r border-b border-black/[0.06] px-2 text-xs font-medium text-[#555]">
-                  <ProcessDescriptionPreview description={row.description} processName={row.name} />
+                  <ProcessDescriptionPreview
+                    activation="double-click"
+                    description={row.description}
+                    processName={row.name}
+                  />
                 </td>
-                <td
-                  className="truncate border-r border-b border-black/[0.06] px-3 font-mono text-[11px] font-semibold text-[#555]"
-                  title={row.slug}
-                >
-                  {row.slug}
+                <td className="min-w-0 border-r border-b border-black/[0.06] px-2 font-mono text-[11px] font-semibold text-[#555]">
+                  <DefaultsCellPreview
+                    activation="double-click"
+                    content={row.slug}
+                    label="Full stable slug"
+                    title={row.name}
+                  />
                 </td>
                 <td
                   className="truncate border-r border-b border-black/[0.06] px-3 text-xs font-semibold text-[#555]"
