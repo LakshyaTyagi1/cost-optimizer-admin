@@ -42,10 +42,12 @@ export function getCurrencyAmountInBaseCurrency(
 export function getProcessFteLabel(process: AdminAssessmentProcess) {
   const sharedFtePool = process.costInputs?.sharedFtePool;
   const dedicatedFte = process.costInputs?.dedicatedFte;
+  const managerialFte = process.costInputs?.managerialFte;
   const sharedFtes = Number(sharedFtePool?.count) || 0;
   const allocationPercent = Number(sharedFtePool?.allocationPercent) || 0;
   const dedicatedFtes = Number(dedicatedFte?.count) || 0;
-  const totalFtes = sharedFtes * (allocationPercent / 100) + dedicatedFtes;
+  const managerialFtes = Number(managerialFte?.count) || 0;
+  const totalFtes = sharedFtes * (allocationPercent / 100) + dedicatedFtes + managerialFtes;
 
   if (totalFtes > 0) {
     return formatNumberInput(totalFtes);

@@ -38,6 +38,10 @@ export type AdminAssessmentProcess = {
       annualSalaryPerFte?: AdminCurrencyAmount;
       count?: number;
     };
+    managerialFte?: {
+      annualSalaryPerFte?: AdminCurrencyAmount;
+      count?: number;
+    };
     efficiencyPercent?: number;
     nonStaffingAnnualCost?: AdminCurrencyAmount;
     serviceLevel?: {

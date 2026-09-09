@@ -399,6 +399,7 @@ function AssessmentProcessPreview({
   const costInputs = process.costInputs;
   const sharedFtePool = costInputs?.sharedFtePool;
   const dedicatedFte = costInputs?.dedicatedFte;
+  const managerialFte = costInputs?.managerialFte;
   const serviceLevel = costInputs?.serviceLevel;
   const hasServiceLevel =
     Number.isFinite(serviceLevel?.requestVolume) || Number.isFinite(serviceLevel?.turnaroundTime);
@@ -467,6 +468,17 @@ function AssessmentProcessPreview({
               <PreviewField
                 label="Dedicated salary / FTE"
                 value={formatCurrencyAmountInBaseCurrency(dedicatedFte?.annualSalaryPerFte, currencyConversionRate)}
+              />
+              <PreviewField
+                label="Managerial FTEs"
+                value={formatNumberInput(managerialFte?.count) || "--"}
+              />
+              <PreviewField
+                label="Managerial salary / FTE"
+                value={formatCurrencyAmountInBaseCurrency(
+                  managerialFte?.annualSalaryPerFte,
+                  currencyConversionRate,
+                )}
               />
               <PreviewField label="Est. hours / year" value={formatNumberInput(process.hoursPerYear) || "--"} />
             </div>
