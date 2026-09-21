@@ -1138,11 +1138,6 @@ export function DataDictionaryPage() {
             onReorderDomains={handleReorderDomains}
             onReorderIndustries={handleReorderIndustries}
           />
-          <TechnologyProductMappingCard
-            enabled={isIndustryDomainReady && !isCatalogLoading}
-            industries={industries}
-            libraries={libraries}
-          />
         </LazyViewportSection>
         <LazyViewportSection minHeight={758} onVisible={handleProcessLibraryVisible}>
           <ProcessLibraryCard
@@ -1190,6 +1185,11 @@ export function DataDictionaryPage() {
             onToggleProcessStatus={handleToggleProcessStatus}
           />
         </LazyViewportSection>
+        <TechnologyProductMappingCard
+          enabled={isIndustryDomainReady && !isCatalogLoading}
+          industries={industries}
+          libraries={libraries}
+        />
         {processDeleteTarget ? (
           <DeleteProcessConfirmationModal
             isDeleting={
