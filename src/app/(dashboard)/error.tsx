@@ -55,7 +55,7 @@ export default function DashboardError({
       >
         <div
           role="alert"
-          className="w-full max-w-[620px] overflow-hidden rounded-xl border border-black/[0.08] bg-white shadow-[0_18px_60px_rgba(15,23,42,0.08)]"
+          className="w-full max-w-[620px] overflow-hidden rounded-xl border border-black/[0.08] bg-white"
         >
           <div className="px-4 pt-7 pb-6 text-center min-[380px]:px-5 sm:px-10 sm:pt-9 sm:pb-8">
             <div className="relative mx-auto h-[86px] w-[118px]" aria-hidden="true">

@@ -7,6 +7,7 @@ import {
   fetchDataDictionaryOptions,
   fetchDataDictionaryPageCatalog,
   fetchDataDictionaryProcessPage,
+  previewTechnologyProductMapping,
   fetchTechnologyProductDomainMapping,
   fetchTechnologyProductIndustryMapping,
   fetchMappedTechStackPage,
@@ -19,6 +20,7 @@ import {
   type DataDictionaryTechStackPage,
   type TechnologyProductDomainMapping,
   type TechnologyProductIndustryMapping,
+  type TechnologyProductMappingPreview,
   type ZoftwarehubTaxonomyOption,
 } from "@/features/data-dictionary/api";
 import type { DictionaryProcess } from "@/features/data-dictionary/model";
@@ -55,6 +57,10 @@ export type TechnologyProductIndustryMappingQuery = UseQueryResult<
 >;
 export type TechnologyProductDomainMappingQuery = UseQueryResult<
   TechnologyProductDomainMapping,
+  Error
+>;
+export type TechnologyProductMappingPreviewQuery = UseQueryResult<
+  TechnologyProductMappingPreview,
   Error
 >;
 export type ZoftwarehubTaxonomyQuery = UseQueryResult<ZoftwarehubTaxonomyOption[], Error>;
@@ -219,6 +225,35 @@ export function useTechnologyProductDomainMapping({
     queryFn: () => fetchTechnologyProductDomainMapping(domainId),
     enabled: enabled && Boolean(domainId),
     staleTime: dataDictionaryCacheTime,
+  });
+}
+
+export function useTechnologyProductMappingPreview({
+  enabled,
+  parentIndustryId,
+  subCategoryIds,
+}: {
+  enabled: boolean;
+  parentIndustryId: string;
+  subCategoryIds: string[];
+}): TechnologyProductMappingPreviewQuery {
+  const normalizedSubCategoryIds = Array.from(new Set(subCategoryIds)).sort();
+
+  return useQuery<TechnologyProductMappingPreview, Error>({
+    queryKey: [
+      ...technologyProductMappingQueryKey,
+      "preview",
+      parentIndustryId,
+      normalizedSubCategoryIds,
+    ],
+    queryFn: () =>
+      previewTechnologyProductMapping({
+        parentIndustryIds: [parentIndustryId],
+        subCategoryIds: normalizedSubCategoryIds,
+      }),
+    enabled: enabled && Boolean(parentIndustryId) && normalizedSubCategoryIds.length > 0,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
   });
 }
 

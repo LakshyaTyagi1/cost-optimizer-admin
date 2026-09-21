@@ -23,6 +23,7 @@ type ApiEntity = {
   name?: string;
   processCounts?: ApiRecordCounts;
   slug?: string;
+  zoftwarehubParentIndustryIds?: Array<ApiEntity | string>;
 };
 
 type ApiRecordCounts = {
@@ -233,6 +234,17 @@ export type TechnologyProductDomainMapping = {
   industryDomainId: string;
   industryId: string;
   subCategories: ZoftwarehubTaxonomyOption[];
+};
+
+export type TechnologyProductMappingPreview = {
+  featureCount: number;
+  productCount: number;
+  sampleProducts: Array<{
+    company: string;
+    id: string;
+    logoUrl: string;
+    name: string;
+  }>;
 };
 
 export type DataDictionaryProcessPage = {
@@ -675,6 +687,19 @@ export async function updateTechnologyProductIndustryMapping(payload: {
     ...mapping,
     parentIndustries: mapZoftwarehubTaxonomyOptions(mapping.parentIndustries),
   };
+}
+
+export async function previewTechnologyProductMapping(payload: {
+  parentIndustryIds: string[];
+  subCategoryIds: string[];
+}) {
+  return fetchApi<TechnologyProductMappingPreview>(
+    `${adminBasePath}/technology-product-mapping/preview`,
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+  );
 }
 
 export async function fetchTechnologyProductDomainMapping(domainId: string) {
@@ -1229,6 +1254,9 @@ function mapIndustry(industry?: ApiEntity): DictionaryIndustry | null {
   const associatedProcessCount = industry?.associatedProcessCount;
   const defaultProcessCount = industry?.defaultProcessCount;
   const industryDomainProcessCount = industry?.industryDomainProcessCount;
+  const zoftwarehubParentIndustryIds = (industry?.zoftwarehubParentIndustryIds ?? [])
+    .map((parentIndustry) => getId(parentIndustry))
+    .filter(Boolean);
 
   if (!id || !name) {
     return null;
@@ -1252,6 +1280,7 @@ function mapIndustry(industry?: ApiEntity): DictionaryIndustry | null {
     isActive: industry?.isActive !== false,
     name,
     slug: industry?.slug || toSlug(name),
+    zoftwarehubParentIndustryIds,
   };
 }
 

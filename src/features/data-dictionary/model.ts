@@ -7,6 +7,7 @@ export type DictionaryIndustry = {
   isActive?: boolean;
   name: string;
   slug?: string;
+  zoftwarehubParentIndustryIds?: string[];
 };
 
 export type DictionaryDomain = {
