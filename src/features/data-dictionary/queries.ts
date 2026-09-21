@@ -7,12 +7,19 @@ import {
   fetchDataDictionaryOptions,
   fetchDataDictionaryPageCatalog,
   fetchDataDictionaryProcessPage,
+  fetchTechnologyProductDomainMapping,
+  fetchTechnologyProductIndustryMapping,
   fetchMappedTechStackPage,
+  fetchZoftwarehubParentIndustries,
+  fetchZoftwarehubSubCategories,
   type DataDictionaryCatalog,
   type DataDictionaryOptions,
   type DataDictionaryPayload,
   type DataDictionaryProcessPage,
   type DataDictionaryTechStackPage,
+  type TechnologyProductDomainMapping,
+  type TechnologyProductIndustryMapping,
+  type ZoftwarehubTaxonomyOption,
 } from "@/features/data-dictionary/api";
 import type { DictionaryProcess } from "@/features/data-dictionary/model";
 
@@ -27,6 +34,11 @@ export const dataDictionaryProcessesQueryKey = ["data-dictionary", "processes"] 
 export const dataDictionaryOptionsQueryKey = ["data-dictionary", "options"] as const;
 export const archiveProcessesQueryKey = ["data-dictionary", "archive", "processes"] as const;
 export const techStackQueryKey = ["data-dictionary", "tech-stack"] as const;
+export const technologyProductMappingQueryKey = [
+  "data-dictionary",
+  "technology-product-mapping",
+] as const;
+export const zoftwarehubTaxonomyQueryKey = ["data-dictionary", "zoftwarehub-taxonomy"] as const;
 
 const dataDictionaryCacheTime = 5 * 60_000;
 const dataDictionaryGcTime = 30 * 60_000;
@@ -37,6 +49,15 @@ export type DataDictionaryOptionsQuery = UseQueryResult<DataDictionaryOptions, E
 export type DataDictionaryProcessPageQuery = UseQueryResult<DataDictionaryProcessPage, Error>;
 export type ArchivedDataDictionaryProcessesQuery = UseQueryResult<DictionaryProcess[], Error>;
 export type DataDictionaryTechStackPageQuery = UseQueryResult<DataDictionaryTechStackPage, Error>;
+export type TechnologyProductIndustryMappingQuery = UseQueryResult<
+  TechnologyProductIndustryMapping,
+  Error
+>;
+export type TechnologyProductDomainMappingQuery = UseQueryResult<
+  TechnologyProductDomainMapping,
+  Error
+>;
+export type ZoftwarehubTaxonomyQuery = UseQueryResult<ZoftwarehubTaxonomyOption[], Error>;
 
 export function useDataDictionary(): DataDictionaryQuery {
   return useQuery<DataDictionaryPayload, Error>({
@@ -167,6 +188,62 @@ export function useMappedTechStackPage({
     gcTime: dataDictionaryGcTime,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
+    staleTime: dataDictionaryCacheTime,
+  });
+}
+
+export function useTechnologyProductIndustryMapping({
+  enabled,
+  industryId,
+}: {
+  enabled: boolean;
+  industryId: string;
+}): TechnologyProductIndustryMappingQuery {
+  return useQuery<TechnologyProductIndustryMapping, Error>({
+    queryKey: [...technologyProductMappingQueryKey, "industry", industryId],
+    queryFn: () => fetchTechnologyProductIndustryMapping(industryId),
+    enabled: enabled && Boolean(industryId),
+    staleTime: dataDictionaryCacheTime,
+  });
+}
+
+export function useTechnologyProductDomainMapping({
+  domainId,
+  enabled,
+}: {
+  domainId: string;
+  enabled: boolean;
+}): TechnologyProductDomainMappingQuery {
+  return useQuery<TechnologyProductDomainMapping, Error>({
+    queryKey: [...technologyProductMappingQueryKey, "domain", domainId],
+    queryFn: () => fetchTechnologyProductDomainMapping(domainId),
+    enabled: enabled && Boolean(domainId),
+    staleTime: dataDictionaryCacheTime,
+  });
+}
+
+export function useZoftwarehubParentIndustries({
+  enabled,
+}: {
+  enabled: boolean;
+}): ZoftwarehubTaxonomyQuery {
+  return useQuery<ZoftwarehubTaxonomyOption[], Error>({
+    queryKey: [...zoftwarehubTaxonomyQueryKey, "parent-industries"],
+    queryFn: fetchZoftwarehubParentIndustries,
+    enabled,
+    staleTime: dataDictionaryCacheTime,
+  });
+}
+
+export function useZoftwarehubSubCategories({
+  enabled,
+}: {
+  enabled: boolean;
+}): ZoftwarehubTaxonomyQuery {
+  return useQuery<ZoftwarehubTaxonomyOption[], Error>({
+    queryKey: [...zoftwarehubTaxonomyQueryKey, "sub-categories"],
+    queryFn: fetchZoftwarehubSubCategories,
+    enabled,
     staleTime: dataDictionaryCacheTime,
   });
 }

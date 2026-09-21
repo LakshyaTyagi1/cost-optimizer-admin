@@ -219,6 +219,22 @@ export type DataDictionaryTechStackPage = {
   tools: TechStackTool[];
 };
 
+export type ZoftwarehubTaxonomyOption = {
+  id: string;
+  name: string;
+};
+
+export type TechnologyProductIndustryMapping = {
+  industryId: string;
+  parentIndustries: ZoftwarehubTaxonomyOption[];
+};
+
+export type TechnologyProductDomainMapping = {
+  industryDomainId: string;
+  industryId: string;
+  subCategories: ZoftwarehubTaxonomyOption[];
+};
+
 export type DataDictionaryProcessPage = {
   pagination: DataDictionaryPagination;
   processes: DictionaryProcess[];
@@ -618,6 +634,76 @@ export async function createDataDictionaryIndustry(payload: { name: string }) {
   });
 
   return mapIndustry(industry);
+}
+
+export async function fetchZoftwarehubParentIndustries() {
+  const industries = await fetchApi<ApiEntity[]>("/adm/cat/get-parent-industries");
+
+  return mapZoftwarehubTaxonomyOptions(industries);
+}
+
+export async function fetchZoftwarehubSubCategories() {
+  const subCategories = await fetchApi<ApiEntity[]>("/adm/cat/get-subcat-list");
+
+  return mapZoftwarehubTaxonomyOptions(subCategories);
+}
+
+export async function fetchTechnologyProductIndustryMapping(industryId: string) {
+  const mapping = await fetchApi<TechnologyProductIndustryMapping>(
+    `${adminBasePath}/industries/${industryId}/technology-product-mapping`,
+  );
+
+  return {
+    ...mapping,
+    parentIndustries: mapZoftwarehubTaxonomyOptions(mapping.parentIndustries),
+  };
+}
+
+export async function updateTechnologyProductIndustryMapping(payload: {
+  industryId: string;
+  parentIndustryIds: string[];
+}) {
+  const mapping = await fetchApi<TechnologyProductIndustryMapping>(
+    `${adminBasePath}/industries/${payload.industryId}/technology-product-mapping`,
+    {
+      body: JSON.stringify({ parentIndustryIds: payload.parentIndustryIds }),
+      method: "PUT",
+    },
+  );
+
+  return {
+    ...mapping,
+    parentIndustries: mapZoftwarehubTaxonomyOptions(mapping.parentIndustries),
+  };
+}
+
+export async function fetchTechnologyProductDomainMapping(domainId: string) {
+  const mapping = await fetchApi<TechnologyProductDomainMapping>(
+    `${adminBasePath}/domains/${domainId}/technology-product-mapping`,
+  );
+
+  return {
+    ...mapping,
+    subCategories: mapZoftwarehubTaxonomyOptions(mapping.subCategories),
+  };
+}
+
+export async function updateTechnologyProductDomainMapping(payload: {
+  domainId: string;
+  subCategoryIds: string[];
+}) {
+  const mapping = await fetchApi<TechnologyProductDomainMapping>(
+    `${adminBasePath}/domains/${payload.domainId}/technology-product-mapping`,
+    {
+      body: JSON.stringify({ subCategoryIds: payload.subCategoryIds }),
+      method: "PUT",
+    },
+  );
+
+  return {
+    ...mapping,
+    subCategories: mapZoftwarehubTaxonomyOptions(mapping.subCategories),
+  };
 }
 
 export async function fetchDataDictionaryDefaultIndustries() {
@@ -1054,6 +1140,15 @@ function mapCatalog(catalogPayload: ApiCatalogPayload = {}): DataDictionaryCatal
     libraries: sortByDisplayOrder(libraries),
     options: mapDataDictionaryOptions(catalogPayload.options),
   };
+}
+
+function mapZoftwarehubTaxonomyOptions(items: Array<ApiEntity | ZoftwarehubTaxonomyOption> = []) {
+  return items
+    .map((item) => ({
+      id: getId(item),
+      name: item.name?.trim() || "",
+    }))
+    .filter((item) => Boolean(item.id && item.name));
 }
 
 function flattenDataDictionaryCatalog(payload: ApiDataDictionaryPayload): ApiCatalogPayload {

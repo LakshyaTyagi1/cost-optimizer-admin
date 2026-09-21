@@ -70,6 +70,7 @@ import { assessmentsQueryKey } from "@/features/assessments/queries";
 
 import { BenchmarkCard } from "@/features/data-dictionary/components/benchmark-card";
 import { IndustryDomainManager } from "@/features/data-dictionary/components/industry-domain-manager";
+import { TechnologyProductMappingCard } from "@/features/data-dictionary/components/technology-product-mapping-card";
 import { LazyViewportSection } from "@/features/data-dictionary/components/lazy-viewport-section";
 import { ProcessLibraryCard } from "@/features/data-dictionary/components/process-library-card";
 import { DataDictionaryPageHeader } from "@/features/data-dictionary/components/page-header";
@@ -1509,6 +1510,11 @@ export function DataDictionaryPage() {
             onRenameDomain={handleRenameDomain}
             onReorderDomains={handleReorderDomains}
             onReorderIndustries={handleReorderIndustries}
+          />
+          <TechnologyProductMappingCard
+            enabled={isIndustryDomainReady && !isCatalogLoading}
+            industries={industries}
+            libraries={libraries}
           />
         </LazyViewportSection>
         <LazyViewportSection minHeight={758} onVisible={handleProcessLibraryVisible}>
