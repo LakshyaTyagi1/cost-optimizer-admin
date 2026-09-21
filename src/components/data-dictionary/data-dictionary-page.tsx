@@ -1,7 +1,6 @@
 "use client";
 
-import type { FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 
@@ -14,42 +13,27 @@ import {
   type DictionaryIndustry,
   type DictionaryLibrary,
   type DictionaryProcess,
-  type TechStackTool,
 } from "@/features/data-dictionary/model";
-import type {
-  ActivateAllToolsConfirmationModalProps,
-  ArchiveAllToolsConfirmationModalProps,
-  DeleteAllToolsConfirmationModalProps,
-  DeleteProcessConfirmationModalProps,
-  DeleteToolConfirmationModalProps,
-} from "./confirmation-modals";
+import type { DeleteProcessConfirmationModalProps } from "./confirmation-modals";
 import type { ProcessFormState } from "./new-process-modal";
-import type { ToolFormState } from "./tech-stack-tool-modal";
 import {
-  activateAllDataDictionaryTechStack,
   addDataDictionaryDefaultDomains,
   addDataDictionaryDefaultIndustries,
   addDataDictionaryDefaultIndustryDomainProcesses,
   addDataDictionaryDefaultIndustryProcesses,
-  archiveAllDataDictionaryTechStack,
   createDataDictionaryDomain,
   createDataDictionaryDomainProcess,
   createDataDictionaryIndustry,
   createDataDictionaryIndustryProcess,
   createDataDictionaryProcessLibrary,
-  createDataDictionaryTechStack,
   deleteDataDictionaryProcess,
   deleteDataDictionaryIndustry,
   deleteDataDictionaryProcessLibrary,
   permanentlyDeleteDataDictionaryDomain,
-  deleteAllDataDictionaryTechStack,
-  deleteDataDictionaryTechStack,
   reorderDataDictionaryDomains,
   reorderDataDictionaryIndustries,
   updateDataDictionaryCurrencyConversionRate,
   updateDataDictionaryDomainDisplayName,
-  updateDataDictionaryTechStack,
-  updateDataDictionaryTechStackStatus,
   updateDataDictionaryProcess,
   updateDataDictionaryProcessStatus,
   type DataDictionaryProcessPage,
@@ -59,11 +43,9 @@ import {
   dataDictionaryCatalogQueryKey,
   dataDictionaryOptionsQueryKey,
   dataDictionaryProcessesQueryKey,
-  techStackQueryKey,
   useDataDictionaryOptions,
   useDataDictionaryPageCatalog,
   useDataDictionaryProcessPage,
-  useMappedTechStackPage,
 } from "@/features/data-dictionary/queries";
 import { dashboardQueryKey } from "@/features/dashboard/queries";
 import { assessmentsQueryKey } from "@/features/assessments/queries";
@@ -78,7 +60,6 @@ import {
   ReorderToastStack,
   type ReorderToastState,
 } from "@/features/data-dictionary/components/reorder-toast-stack";
-import { TechnologyStackCard } from "@/features/data-dictionary/components/technology-stack-card";
 import {
   AutomationLevelsCard,
   ProcessTiersCard,
@@ -102,38 +83,17 @@ import { getErrorMessage } from "@/features/data-dictionary/utils/error";
 import {
   createEmptyProcessForm,
   createProcessFormFromProcess,
-  createToolBenchmarkPricingPayload,
-  createToolFormFromTool,
-  emptyToolForm,
 } from "@/features/data-dictionary/utils/form-state";
 
 const dataDictionaryToastDismissMs = 8000;
 const initialExpandedProcessId = "__initial_process__";
 const processLibraryPageSize = 12;
-const technologyStackLibraryPageSize = 20;
 const emptyIndustries: DictionaryIndustry[] = [];
 const emptyDomains: DictionaryDomain[] = [];
 const emptyLibraries: DictionaryLibrary[] = [];
 const emptyProcesses: DictionaryProcess[] = [];
-const emptyTechStack: TechStackTool[] = [];
 const DeleteProcessConfirmationModal = dynamic<DeleteProcessConfirmationModalProps>(
   () => import("./confirmation-modals").then((module) => module.DeleteProcessConfirmationModal),
-  { ssr: false },
-);
-const DeleteToolConfirmationModal = dynamic<DeleteToolConfirmationModalProps>(
-  () => import("./confirmation-modals").then((module) => module.DeleteToolConfirmationModal),
-  { ssr: false },
-);
-const DeleteAllToolsConfirmationModal = dynamic<DeleteAllToolsConfirmationModalProps>(
-  () => import("./confirmation-modals").then((module) => module.DeleteAllToolsConfirmationModal),
-  { ssr: false },
-);
-const ArchiveAllToolsConfirmationModal = dynamic<ArchiveAllToolsConfirmationModalProps>(
-  () => import("./confirmation-modals").then((module) => module.ArchiveAllToolsConfirmationModal),
-  { ssr: false },
-);
-const ActivateAllToolsConfirmationModal = dynamic<ActivateAllToolsConfirmationModalProps>(
-  () => import("./confirmation-modals").then((module) => module.ActivateAllToolsConfirmationModal),
   { ssr: false },
 );
 
@@ -144,13 +104,10 @@ export function DataDictionaryPage() {
   const [domainIndustryId, setDomainIndustryId] = useState("");
   const [mappingIndustryId, setMappingIndustryId] = useState("");
   const [isProcessFormOpen, setIsProcessFormOpen] = useState(false);
-  const [isToolFormOpen, setIsToolFormOpen] = useState(false);
   const [processSearch, setProcessSearch] = useState("");
   const [processDomainFilter, setProcessDomainFilter] = useState("all");
   const [processIndustryFilter, setProcessIndustryFilter] = useState("all");
   const [processPage, setProcessPage] = useState(1);
-  const [toolSearch, setToolSearch] = useState("");
-  const [toolPage, setToolPage] = useState(1);
   const [processForm, setProcessForm] = useState<ProcessFormState>(() =>
     createEmptyProcessForm([]),
   );
@@ -160,16 +117,8 @@ export function DataDictionaryPage() {
   const [currencyRateInput, setCurrencyRateInput] = useState<string | null>(null);
   const [savedDisplayToBaseCurrencyRateOverride, setSavedDisplayToBaseCurrencyRateOverride] =
     useState<number | null>(null);
-  const [toolForm, setToolForm] = useState<ToolFormState>(emptyToolForm);
-  const [toolActionId, setToolActionId] = useState("");
-  const [editingTool, setEditingTool] = useState<TechStackTool | null>(null);
-  const [toolDeleteTarget, setToolDeleteTarget] = useState<TechStackTool | null>(null);
-  const [isActivateAllToolsOpen, setIsActivateAllToolsOpen] = useState(false);
-  const [isArchiveAllToolsOpen, setIsArchiveAllToolsOpen] = useState(false);
-  const [isDeleteAllToolsOpen, setIsDeleteAllToolsOpen] = useState(false);
   const [isIndustryDomainReady, setIsIndustryDomainReady] = useState(false);
   const [isProcessLibraryReady, setIsProcessLibraryReady] = useState(false);
-  const [isTechnologyStackReady, setIsTechnologyStackReady] = useState(false);
   const [debouncedProcessSearch, setDebouncedProcessSearch] = useState("");
   const [techStackToasts, setTechStackToasts] = useState<ReorderToastState[]>([]);
   const [expandedProcessId, setExpandedProcessId] = useState(initialExpandedProcessId);
@@ -240,16 +189,6 @@ export function DataDictionaryPage() {
     scope: processScope,
     search: debouncedProcessSearch,
   });
-  const {
-    data: techStackData,
-    error: techStackQueryError,
-    isLoading: isTechStackLoading,
-  } = useMappedTechStackPage({
-    enabled: isTechnologyStackReady,
-    limit: technologyStackLibraryPageSize,
-    page: toolPage,
-    search: toolSearch,
-  });
   const createIndustryMutation = useMutation({
     mutationFn: createDataDictionaryIndustry,
   });
@@ -310,38 +249,12 @@ export function DataDictionaryPage() {
   const deleteProcessMutation = useMutation({
     mutationFn: deleteDataDictionaryProcess,
   });
-  const createTechStackMutation = useMutation({
-    mutationFn: createDataDictionaryTechStack,
-  });
-  const updateTechStackMutation = useMutation({
-    mutationFn: updateDataDictionaryTechStack,
-  });
-  const updateTechStackStatusMutation = useMutation({
-    mutationFn: updateDataDictionaryTechStackStatus,
-  });
-  const deleteTechStackMutation = useMutation({
-    mutationFn: deleteDataDictionaryTechStack,
-  });
-  const activateAllTechStackMutation = useMutation({
-    mutationFn: activateAllDataDictionaryTechStack,
-  });
-  const archiveAllTechStackMutation = useMutation({
-    mutationFn: archiveAllDataDictionaryTechStack,
-  });
-  const deleteAllTechStackMutation = useMutation({
-    mutationFn: deleteAllDataDictionaryTechStack,
-  });
   const processes = processPageData?.processes ?? emptyProcesses;
   const processTotalCount = processPageData?.pagination.totalCount ?? 0;
   const processTotalPages = processPageData?.pagination.totalPages ?? 0;
   const processLibraryCount = catalogData?.processSummary?.activeCount ?? processTotalCount;
-  const tools = techStackData?.tools ?? emptyTechStack;
-  const toolTotalCount = techStackData?.pagination.totalCount ?? 0;
   const categoryOptions = useMemo(
-    () =>
-      processOptions?.categories.length
-        ? processOptions.categories
-        : processCategories,
+    () => (processOptions?.categories.length ? processOptions.categories : processCategories),
     [processOptions],
   );
   const tierOptions = useMemo(
@@ -358,21 +271,17 @@ export function DataDictionaryPage() {
     createIndustryProcessMutation.isPending ||
     createDomainProcessMutation.isPending ||
     updateProcessMutation.isPending;
-  const isToolSaving = createTechStackMutation.isPending || updateTechStackMutation.isPending;
   const dictionaryErrorMessage =
     dictionaryError ||
     (catalogQueryError ? getErrorMessage(catalogQueryError) : "") ||
     (processOptionsQueryError ? getErrorMessage(processOptionsQueryError) : "") ||
-    (processQueryError ? getErrorMessage(processQueryError) : "") ||
-    (techStackQueryError ? getErrorMessage(techStackQueryError) : "");
+    (processQueryError ? getErrorMessage(processQueryError) : "");
   const savedDisplayToBaseCurrencyRate =
     savedDisplayToBaseCurrencyRateOverride ??
     processOptions?.currencyConversionRate ??
     defaultDisplayToBaseCurrencyRate;
   const currencyRateValue =
     currencyRateInput ?? formatConversionRateInput(savedDisplayToBaseCurrencyRate);
-
-  const filteredTools = tools;
 
   useEffect(() => {
     const toastTimeouts = techStackToastTimeoutsRef.current;
@@ -1064,29 +973,29 @@ export function DataDictionaryPage() {
       queryClient.setQueriesData<DataDictionaryProcessPage>(
         { queryKey: dataDictionaryProcessesQueryKey },
         (currentData) => {
-        if (!currentData) {
-          return currentData;
-        }
+          if (!currentData) {
+            return currentData;
+          }
 
-        const containsProcess = currentData.processes.some((item) => item.id === process.id);
-        const nextTotalCount =
-          !nextIsActive && containsProcess
-            ? Math.max(0, currentData.pagination.totalCount - 1)
-            : currentData.pagination.totalCount;
+          const containsProcess = currentData.processes.some((item) => item.id === process.id);
+          const nextTotalCount =
+            !nextIsActive && containsProcess
+              ? Math.max(0, currentData.pagination.totalCount - 1)
+              : currentData.pagination.totalCount;
 
-        return {
-          ...currentData,
-          pagination: {
-            ...currentData.pagination,
-            totalCount: nextTotalCount,
-            totalPages: Math.ceil(nextTotalCount / currentData.pagination.limit),
-          },
-          processes: nextIsActive
-            ? currentData.processes.map((item) =>
-                item.id === process.id ? { ...item, isActive: true } : item,
-              )
-            : currentData.processes.filter((item) => item.id !== process.id),
-        };
+          return {
+            ...currentData,
+            pagination: {
+              ...currentData.pagination,
+              totalCount: nextTotalCount,
+              totalPages: Math.ceil(nextTotalCount / currentData.pagination.limit),
+            },
+            processes: nextIsActive
+              ? currentData.processes.map((item) =>
+                  item.id === process.id ? { ...item, isActive: true } : item,
+                )
+              : currentData.processes.filter((item) => item.id !== process.id),
+          };
         },
       );
       if (!nextIsActive && processes.length === 1 && processPage > 1) {
@@ -1141,280 +1050,6 @@ export function DataDictionaryPage() {
     }
   }
 
-  async function handleAddTool(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const name = toDisplayName(toolForm.name);
-    const vendor = toDisplayName(toolForm.vendor);
-    const category = toDisplayName(toolForm.category);
-    const description = toolForm.description.trim();
-    const isUpdatingTool = Boolean(editingTool);
-    if (!name || !vendor || !category) return;
-
-    try {
-      setDictionaryError("");
-      const benchmarkPricing = createToolBenchmarkPricingPayload(toolForm);
-
-      if (editingTool) {
-        setToolActionId(editingTool.id);
-        await updateTechStackMutation.mutateAsync({
-          tool: editingTool,
-          values: {
-            benchmarkPricing,
-            category,
-            description,
-            name,
-            vendor,
-          },
-        });
-        setEditingTool(null);
-        setToolActionId("");
-      } else {
-        await createTechStackMutation.mutateAsync({
-          benchmarkPricing,
-          category,
-          description,
-          name,
-          vendor,
-        });
-      }
-
-      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
-      setToolForm(emptyToolForm);
-      setIsToolFormOpen(false);
-      showTechStackToast(
-        isUpdatingTool
-          ? `${name} updated in Technology Stack Library`
-          : `${name} added to Technology Stack Library`,
-        "success",
-      );
-    } catch (error) {
-      const message = getErrorMessage(error);
-      setDictionaryError(message);
-      showTechStackToast(message, "error");
-      setToolActionId("");
-    }
-  }
-
-  const handleOpenNewToolForm = useCallback(() => {
-    setEditingTool(null);
-    setToolForm(emptyToolForm);
-    setIsToolFormOpen(true);
-  }, []);
-
-  const handleCloseToolForm = useCallback(() => {
-    setEditingTool(null);
-    setToolForm(emptyToolForm);
-    setIsToolFormOpen(false);
-  }, []);
-
-  function handleEditTool(tool: TechStackTool) {
-    setEditingTool(tool);
-    setToolForm(createToolFormFromTool(tool));
-    setIsToolFormOpen(true);
-  }
-
-  async function handleToggleToolStatus(tool: TechStackTool) {
-    if (updateTechStackStatusMutation.isPending) {
-      return;
-    }
-
-    const nextIsActive = tool.isActive === false;
-
-    try {
-      setDictionaryError("");
-      setToolActionId(tool.id);
-      await updateTechStackStatusMutation.mutateAsync({
-        isActive: nextIsActive,
-        tool,
-      });
-      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
-      if (!nextIsActive && editingTool?.id === tool.id) {
-        handleCloseToolForm();
-      }
-      showTechStackToast(
-        `${tool.name} ${nextIsActive ? "activated" : "deactivated"} in Technology Stack Library`,
-        "success",
-      );
-    } catch (error) {
-      const message = getErrorMessage(error);
-      setDictionaryError(message);
-      showTechStackToast(message, "error");
-    } finally {
-      setToolActionId("");
-    }
-  }
-
-  function handleDeleteTool(tool: TechStackTool) {
-    setToolDeleteTarget(tool);
-  }
-
-  async function confirmDeleteTool() {
-    const tool = toolDeleteTarget;
-
-    if (!tool || deleteTechStackMutation.isPending) {
-      return;
-    }
-
-    try {
-      setDictionaryError("");
-      setToolActionId(tool.id);
-      await deleteTechStackMutation.mutateAsync(tool.id);
-      if (tools.length === 1 && toolPage > 1) {
-        setToolPage(toolPage - 1);
-      }
-      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
-      setToolDeleteTarget(null);
-      if (editingTool?.id === tool.id) {
-        handleCloseToolForm();
-      }
-      showTechStackToast(`${tool.name} deleted from Technology Stack Library`, "success");
-    } catch (error) {
-      const message = getErrorMessage(error);
-      setDictionaryError(message);
-      showTechStackToast(message, "error");
-    } finally {
-      setToolActionId("");
-    }
-  }
-
-  function handleDeleteAllTools() {
-    if (
-      toolTotalCount === 0 ||
-      activateAllTechStackMutation.isPending ||
-      archiveAllTechStackMutation.isPending ||
-      deleteAllTechStackMutation.isPending
-    ) {
-      return;
-    }
-
-    setIsDeleteAllToolsOpen(true);
-  }
-
-  function handleActivateAllTools() {
-    if (
-      toolTotalCount === 0 ||
-      activateAllTechStackMutation.isPending ||
-      archiveAllTechStackMutation.isPending ||
-      deleteAllTechStackMutation.isPending
-    ) {
-      return;
-    }
-
-    setIsActivateAllToolsOpen(true);
-  }
-
-  async function confirmActivateAllTools() {
-    if (
-      toolTotalCount === 0 ||
-      activateAllTechStackMutation.isPending ||
-      archiveAllTechStackMutation.isPending ||
-      deleteAllTechStackMutation.isPending
-    ) {
-      return;
-    }
-
-    try {
-      setDictionaryError("");
-      const { activatedCount, skippedCount } = await activateAllTechStackMutation.mutateAsync();
-      setIsActivateAllToolsOpen(false);
-      setToolPage(1);
-      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
-      setToolDeleteTarget(null);
-      handleCloseToolForm();
-
-      const message =
-        activatedCount > 0
-          ? `${activatedCount} ${activatedCount === 1 ? "tool" : "tools"} activated in Technology Stack Library`
-          : skippedCount > 0
-            ? "Duplicate archived tools remain inactive"
-            : "All technology tools are already active";
-      const description =
-        skippedCount > 0
-          ? `${skippedCount} duplicate ${skippedCount === 1 ? "tool was" : "tools were"} left archived`
-          : undefined;
-      showTechStackToast(message, "success", description);
-    } catch (error) {
-      const message = getErrorMessage(error);
-      setDictionaryError(message);
-      showTechStackToast(message, "error");
-    }
-  }
-
-  function handleArchiveAllTools() {
-    if (
-      toolTotalCount === 0 ||
-      activateAllTechStackMutation.isPending ||
-      archiveAllTechStackMutation.isPending ||
-      deleteAllTechStackMutation.isPending
-    ) {
-      return;
-    }
-
-    setIsArchiveAllToolsOpen(true);
-  }
-
-  async function confirmArchiveAllTools() {
-    if (
-      toolTotalCount === 0 ||
-      activateAllTechStackMutation.isPending ||
-      archiveAllTechStackMutation.isPending ||
-      deleteAllTechStackMutation.isPending
-    ) {
-      return;
-    }
-
-    try {
-      setDictionaryError("");
-      const archivedToolCount = await archiveAllTechStackMutation.mutateAsync();
-      setIsArchiveAllToolsOpen(false);
-      setToolPage(1);
-      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
-      setToolDeleteTarget(null);
-      handleCloseToolForm();
-      showTechStackToast(
-        archivedToolCount > 0
-          ? `${archivedToolCount} ${archivedToolCount === 1 ? "tool" : "tools"} archived in Technology Stack Library`
-          : "All technology tools are already archived",
-        "success",
-      );
-    } catch (error) {
-      const message = getErrorMessage(error);
-      setDictionaryError(message);
-      showTechStackToast(message, "error");
-    }
-  }
-
-  async function confirmDeleteAllTools() {
-    if (
-      toolTotalCount === 0 ||
-      activateAllTechStackMutation.isPending ||
-      archiveAllTechStackMutation.isPending ||
-      deleteAllTechStackMutation.isPending
-    ) {
-      return;
-    }
-
-    try {
-      setDictionaryError("");
-      const deletedToolCount = await deleteAllTechStackMutation.mutateAsync();
-      setIsDeleteAllToolsOpen(false);
-      setToolPage(1);
-      await queryClient.invalidateQueries({ queryKey: techStackQueryKey });
-      setToolDeleteTarget(null);
-      handleCloseToolForm();
-      showTechStackToast(
-        `${deletedToolCount} ${
-          deletedToolCount === 1 ? "tool" : "tools"
-        } deleted from Technology Stack Library`,
-        "success",
-      );
-    } catch (error) {
-      const message = getErrorMessage(error);
-      setDictionaryError(message);
-      showTechStackToast(message, "error");
-    }
-  }
-
   async function handleSaveCurrencyRate() {
     const nextRate = getDisplayToBaseCurrencyRate(currencyRateValue);
 
@@ -1445,20 +1080,12 @@ export function DataDictionaryPage() {
     setProcessPage(1);
     setProcessSearch(value);
   }, []);
-  const handleToolSearchChange = useCallback((value: string) => {
-    setToolPage(1);
-    setToolSearch(value);
-  }, []);
   const handleIndustryDomainVisible = useCallback(() => {
     setIsIndustryDomainReady(true);
   }, []);
   const handleProcessLibraryVisible = useCallback(() => {
     setIsProcessLibraryReady(true);
   }, []);
-  const handleTechnologyStackVisible = useCallback(() => {
-    setIsTechnologyStackReady(true);
-  }, []);
-
   return (
     <AdminShell activeItem="Data Dictionary">
       <div className="max-w-full overflow-hidden lg:pr-6">
@@ -1524,9 +1151,7 @@ export function DataDictionaryPage() {
             expandedProcessId={activeExpandedProcessId}
             filteredProcesses={processes}
             industries={industries}
-            isCatalogLoading={
-              isCatalogLoading || isProcessOptionsLoading || isProcessLoading
-            }
+            isCatalogLoading={isCatalogLoading || isProcessOptionsLoading || isProcessLoading}
             isDefaultDomainProcessesSaving={addDefaultIndustryDomainProcessesMutation.isPending}
             isDefaultProcessesSaving={addDefaultIndustryProcessesMutation.isPending}
             isProcessSaving={isProcessSaving}
@@ -1565,42 +1190,6 @@ export function DataDictionaryPage() {
             onToggleProcessStatus={handleToggleProcessStatus}
           />
         </LazyViewportSection>
-        <LazyViewportSection minHeight={535} onVisible={handleTechnologyStackVisible}>
-          <TechnologyStackCard
-            filteredTools={filteredTools}
-            isActivatingAllTools={activateAllTechStackMutation.isPending}
-            isArchivingAllTools={archiveAllTechStackMutation.isPending}
-            isCatalogLoading={isTechStackLoading}
-            isToolDeleting={
-              deleteTechStackMutation.isPending ||
-              activateAllTechStackMutation.isPending ||
-              archiveAllTechStackMutation.isPending ||
-              deleteAllTechStackMutation.isPending
-            }
-            isDeletingAllTools={deleteAllTechStackMutation.isPending}
-            isToolFormOpen={isToolFormOpen}
-            isToolSaving={isToolSaving}
-            isToolStatusSaving={updateTechStackStatusMutation.isPending}
-            setToolForm={setToolForm}
-            setToolPage={setToolPage}
-            setToolSearch={handleToolSearchChange}
-            toolForm={toolForm}
-            toolActionId={toolActionId}
-            toolPage={toolPage}
-            toolSearch={toolSearch}
-            toolTotalCount={toolTotalCount}
-            editingTool={editingTool}
-            onAddTool={handleAddTool}
-            onActivateAllTools={handleActivateAllTools}
-            onArchiveAllTools={handleArchiveAllTools}
-            onCloseToolForm={handleCloseToolForm}
-            onDeleteAllTools={handleDeleteAllTools}
-            onDeleteTool={handleDeleteTool}
-            onEditTool={handleEditTool}
-            onOpenNewToolForm={handleOpenNewToolForm}
-            onToggleToolStatus={handleToggleToolStatus}
-          />
-        </LazyViewportSection>
         {processDeleteTarget ? (
           <DeleteProcessConfirmationModal
             isDeleting={
@@ -1617,65 +1206,10 @@ export function DataDictionaryPage() {
             }}
           />
         ) : null}
-        {toolDeleteTarget ? (
-          <DeleteToolConfirmationModal
-            isDeleting={deleteTechStackMutation.isPending && toolActionId === toolDeleteTarget.id}
-            tool={toolDeleteTarget}
-            onCancel={() => {
-              if (!deleteTechStackMutation.isPending) {
-                setToolDeleteTarget(null);
-              }
-            }}
-            onConfirm={() => {
-              void confirmDeleteTool();
-            }}
-          />
-        ) : null}
-        {isDeleteAllToolsOpen ? (
-          <DeleteAllToolsConfirmationModal
-            isDeleting={deleteAllTechStackMutation.isPending}
-            toolCount={toolTotalCount}
-            onCancel={() => {
-              if (!deleteAllTechStackMutation.isPending) {
-                setIsDeleteAllToolsOpen(false);
-              }
-            }}
-            onConfirm={() => {
-              void confirmDeleteAllTools();
-            }}
-          />
-        ) : null}
-        {isActivateAllToolsOpen ? (
-          <ActivateAllToolsConfirmationModal
-            isActivating={activateAllTechStackMutation.isPending}
-            onCancel={() => {
-              if (!activateAllTechStackMutation.isPending) {
-                setIsActivateAllToolsOpen(false);
-              }
-            }}
-            onConfirm={() => {
-              void confirmActivateAllTools();
-            }}
-          />
-        ) : null}
-        {isArchiveAllToolsOpen ? (
-          <ArchiveAllToolsConfirmationModal
-            isArchiving={archiveAllTechStackMutation.isPending}
-            toolCount={toolTotalCount}
-            onCancel={() => {
-              if (!archiveAllTechStackMutation.isPending) {
-                setIsArchiveAllToolsOpen(false);
-              }
-            }}
-            onConfirm={() => {
-              void confirmArchiveAllTools();
-            }}
-          />
-        ) : null}
         <ReorderToastStack
           ariaLabel="Data dictionary notifications"
           onDismiss={dismissTechStackToast}
-          successDescription="Technology Stack Library"
+          successDescription="Data Dictionary"
           toasts={techStackToasts}
         />
       </div>
