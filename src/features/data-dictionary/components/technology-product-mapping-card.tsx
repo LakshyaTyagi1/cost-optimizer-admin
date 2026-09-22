@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Check, ChevronDown, Search, X } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Search, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { DataDictionaryPanel } from "@/features/data-dictionary/components/data-dictionary-panel";
@@ -41,6 +41,7 @@ export function TechnologyProductMappingCard({
   const [areSelectedSubCategoriesExpanded, setAreSelectedSubCategoriesExpanded] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState("");
+  const [isDomainMappingConfirmationOpen, setIsDomainMappingConfirmationOpen] = useState(false);
 
   const activeIndustryId = industries.some((industry) => industry.id === selectedIndustryId)
     ? selectedIndustryId
@@ -200,7 +201,7 @@ export function TechnologyProductMappingCard({
 
   async function saveDomainMapping() {
     if (!activeDomainId) {
-      return;
+      return false;
     }
 
     try {
@@ -214,9 +215,19 @@ export function TechnologyProductMappingCard({
         queryKey: [...technologyProductMappingQueryKey, "domain", activeDomainId],
       });
       setSaveSuccess("Domain subcategory mapping saved.");
+      return true;
     } catch (error) {
       setSaveSuccess("");
       setSaveError(getErrorMessage(error));
+      return false;
+    }
+  }
+
+  async function confirmDomainMappingSave() {
+    const didSave = await saveDomainMapping();
+
+    if (didSave) {
+      setIsDomainMappingConfirmationOpen(false);
     }
   }
 
@@ -688,7 +699,7 @@ export function TechnologyProductMappingCard({
               </p>
               <button
                 type="button"
-                onClick={() => void saveDomainMapping()}
+                onClick={() => setIsDomainMappingConfirmationOpen(true)}
                 disabled={
                   !activeDomainId ||
                   !isDomainMappingDirty ||
@@ -703,7 +714,218 @@ export function TechnologyProductMappingCard({
           </section>
         </div>
       </div>
+      {isDomainMappingConfirmationOpen ? (
+        <DomainMappingSaveConfirmationDialog
+          activity={`This maps the selected Cost Optimizer industry and domain to ${
+            selectedParentIndustry?.name || "the selected Zoftwarehub parent industry"
+          } and ${subCategoryIds.length} Zoftwarehub ${
+            subCategoryIds.length === 1 ? "subcategory" : "subcategories"
+          } for customer technology-stack product matching.`}
+          domainName={
+            mappedDomains.find((domain) => domain.domainId === activeDomainId)?.domainName ||
+            "Selected domain"
+          }
+          errorMessage={saveError}
+          industryName={
+            industries.find((industry) => industry.id === activeIndustryId)?.name ||
+            "Selected industry"
+          }
+          isSaving={updateDomainMappingMutation.isPending}
+          onCancel={() => setIsDomainMappingConfirmationOpen(false)}
+          onConfirm={() => void confirmDomainMappingSave()}
+          parentIndustryName={selectedParentIndustry?.name || "No parent industry selected"}
+          productCount={productPreview?.productCount ?? null}
+          productPreviewIsLoading={isProductPreviewLoading}
+          productPreviewIsUnavailable={Boolean(productPreviewError)}
+          subCategoryNames={selectedSubCategories.map((subCategory) => subCategory.name)}
+        />
+      ) : null}
     </DataDictionaryPanel>
+  );
+}
+
+function DomainMappingSaveConfirmationDialog({
+  activity,
+  domainName,
+  errorMessage,
+  industryName,
+  isSaving,
+  onCancel,
+  onConfirm,
+  parentIndustryName,
+  productCount,
+  productPreviewIsLoading,
+  productPreviewIsUnavailable,
+  subCategoryNames,
+}: {
+  activity: string;
+  domainName: string;
+  errorMessage: string;
+  industryName: string;
+  isSaving: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  parentIndustryName: string;
+  productCount: number | null;
+  productPreviewIsLoading: boolean;
+  productPreviewIsUnavailable: boolean;
+  subCategoryNames: string[];
+}) {
+  useEffect(() => {
+    function closeOnEscape(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape" && !isSaving) {
+        onCancel();
+      }
+    }
+
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [isSaving, onCancel]);
+
+  return (
+    <div
+      aria-describedby="confirm-domain-mapping-save-description"
+      aria-labelledby="confirm-domain-mapping-save-title"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 px-4 backdrop-blur-[2px]"
+      role="dialog"
+    >
+      <div className="w-full max-w-3xl rounded-lg bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.24)]">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold tracking-[0.08em] text-[#007AFF] uppercase">
+              Confirm activity
+            </p>
+            <h2
+              id="confirm-domain-mapping-save-title"
+              className="mt-1 text-lg font-bold text-[#1D1D1F]"
+            >
+              Save domain mapping?
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSaving}
+            aria-label="Close save domain mapping confirmation"
+            className="flex size-8 shrink-0 items-center justify-center rounded-md border border-black/[0.08] text-[#86868B] transition hover:bg-[#FAFAFA] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <X size={14} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="mt-4 rounded-lg border border-[#CFE3FF] bg-[#F7FBFF] p-3">
+          <p className="text-xs font-bold tracking-[0.06em] text-[#5F6368] uppercase">
+            Mapping summary
+          </p>
+          <div className="mt-3 grid items-stretch gap-3 sm:grid-cols-[minmax(0,1fr)_28px_minmax(0,1fr)]">
+            <section
+              aria-label="Mapping source"
+              className="rounded-md border border-black/[0.08] bg-white p-3"
+            >
+              <p className="text-xs font-bold tracking-[0.06em] text-[#5F6368] uppercase">
+                From · Cost Optimizer
+              </p>
+              <dl className="mt-3 space-y-2 text-sm">
+                <div>
+                  <dt className="text-xs text-[#5F6368]">Industry</dt>
+                  <dd className="mt-0.5 font-semibold text-[#1D1D1F]">{industryName}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-[#5F6368]">Domain</dt>
+                  <dd className="mt-0.5 font-semibold text-[#1D1D1F]">{domainName}</dd>
+                </div>
+              </dl>
+            </section>
+            <div className="flex items-center justify-center text-[#007AFF]" aria-hidden="true">
+              <ArrowRight size={20} strokeWidth={2.25} className="rotate-90 sm:rotate-0" />
+            </div>
+            <section
+              aria-label="Mapping target"
+              className="rounded-md border border-[#007AFF]/20 bg-white p-3"
+            >
+              <p className="text-xs font-bold tracking-[0.06em] text-[#005CC8] uppercase">
+                To · Zoftwarehub
+              </p>
+              <p className="mt-3 text-xs text-[#5F6368]">Parent industry</p>
+              <p className="mt-0.5 text-sm font-semibold text-[#1D1D1F]">{parentIndustryName}</p>
+              <p className="mt-3 text-xs text-[#5F6368]">Target subcategories</p>
+              <div className="mt-1.5 flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
+                {subCategoryNames.length > 0 ? (
+                  subCategoryNames.map((subCategoryName) => (
+                    <span
+                      key={subCategoryName}
+                      className="rounded-full border border-[#007AFF]/20 bg-[#F7FBFF] px-2 py-1 text-xs font-medium text-[#005CC8]"
+                    >
+                      {subCategoryName}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-[#5F6368]">No subcategories will be mapped.</span>
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
+        <div className="mt-3 rounded-md border border-black/[0.08] bg-[#FAFAFA] px-3 py-2.5">
+          <p className="text-xs font-bold tracking-[0.06em] text-[#5F6368] uppercase">
+            Product impact
+          </p>
+          {productPreviewIsLoading ? (
+            <p className="mt-1 text-sm text-[#5F6368]">Checking matching products…</p>
+          ) : productPreviewIsUnavailable ? (
+            <p className="mt-1 text-sm text-[#9A6700]">
+              Product impact is unavailable right now. You can retry the preview before saving.
+            </p>
+          ) : productCount !== null ? (
+            <p className="mt-1 text-sm font-semibold text-[#1D1D1F]">
+              {productCount} matching {productCount === 1 ? "product" : "products"}
+            </p>
+          ) : null}
+        </div>
+        <p className="mt-3 rounded-md bg-[#FFF7E8] px-3 py-2 text-xs leading-4 text-[#9A6700]">
+          Saving replaces the currently saved Zoftwarehub subcategory mapping for this Cost
+          Optimizer domain.
+        </p>
+        {productCount === 0 && !productPreviewIsLoading ? (
+          <p className="mt-3 rounded-md bg-[#FFF1F0] px-3 py-2 text-xs leading-4 text-[#C5221F]">
+            No active Zoftwarehub products match this draft mapping. Update the mapping before
+            saving if matching products are expected.
+          </p>
+        ) : null}
+        <p
+          id="confirm-domain-mapping-save-description"
+          className="mt-4 text-sm leading-5 text-[#5F6368]"
+        >
+          {activity}
+        </p>
+        {errorMessage ? (
+          <p
+            role="alert"
+            className="mt-3 rounded-md bg-[#FFF1F0] px-3 py-2 text-sm font-medium text-[#C5221F]"
+          >
+            {errorMessage}
+          </p>
+        ) : null}
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSaving}
+            className="rounded-md border border-black/[0.12] bg-white px-3 py-2 text-sm font-bold text-[#3C4043] transition hover:bg-[#F8F9FA] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isSaving}
+            className="rounded-md bg-[#007AFF] px-3 py-2 text-sm font-bold text-white transition hover:bg-[#006FE6] disabled:cursor-wait disabled:bg-[#A1A1AA]"
+          >
+            {isSaving ? "Saving..." : "Confirm and save"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
