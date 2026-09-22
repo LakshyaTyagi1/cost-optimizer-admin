@@ -241,9 +241,11 @@ export type TechnologyProductMappingPreview = {
   productCount: number;
   sampleProducts: Array<{
     company: string;
+    features: string[];
     id: string;
     logoUrl: string;
     name: string;
+    otherFeatures: string[];
   }>;
 };
 
@@ -693,13 +695,26 @@ export async function previewTechnologyProductMapping(payload: {
   parentIndustryIds: string[];
   subCategoryIds: string[];
 }) {
-  return fetchApi<TechnologyProductMappingPreview>(
+  const preview = await fetchApi<TechnologyProductMappingPreview>(
     `${adminBasePath}/technology-product-mapping/preview`,
     {
       body: JSON.stringify(payload),
       method: "POST",
     },
   );
+
+  return {
+    ...preview,
+    sampleProducts: (preview.sampleProducts ?? []).map((product) => ({
+      ...product,
+      features: Array.isArray(product.features)
+        ? product.features.map((feature) => feature.trim()).filter(Boolean)
+        : [],
+      otherFeatures: Array.isArray(product.otherFeatures)
+        ? product.otherFeatures.map((feature) => feature.trim()).filter(Boolean)
+        : [],
+    })),
+  };
 }
 
 export async function fetchTechnologyProductDomainMapping(domainId: string) {

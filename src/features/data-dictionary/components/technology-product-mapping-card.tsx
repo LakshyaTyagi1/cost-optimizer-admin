@@ -154,7 +154,6 @@ export function TechnologyProductMappingCard({
     parentIndustryId: parentIndustryIds[0] || "",
     subCategoryIds,
   });
-
   function clearSaveFeedback() {
     setSaveError("");
     setSaveSuccess("");
@@ -539,7 +538,7 @@ export function TechnologyProductMappingCard({
                       />
                     </div>
                   </div>
-                  <div className="max-h-52 overflow-y-auto p-2 text-sm text-[#171717]">
+                  <div className="h-44 overflow-y-auto p-2 text-sm text-[#171717]">
                     {visibleSubCategories.map((subCategory) => (
                       <label
                         key={subCategory.id}
@@ -564,7 +563,7 @@ export function TechnologyProductMappingCard({
                 </div>
               </fieldset>
               <div
-                className="rounded-lg border border-[#007AFF]/15 bg-[#F7FBFF] p-4"
+                className="relative z-10 h-full rounded-lg border border-[#007AFF]/15 bg-[#F7FBFF] p-4"
                 aria-live="polite"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -605,21 +604,13 @@ export function TechnologyProductMappingCard({
                   </div>
                 ) : productPreview ? (
                   <>
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      <div className="rounded-md bg-white p-3 ring-1 ring-black/[0.06]">
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2.5 ring-1 ring-black/[0.06]">
                         <p className="text-[11px] font-semibold tracking-[0.04em] text-[#5F6368] uppercase">
                           Products
                         </p>
-                        <p className="mt-1 text-xl font-bold text-[#1D1D1F]">
+                        <p className="text-xl leading-none font-bold text-[#1D1D1F]">
                           {productPreview.productCount}
-                        </p>
-                      </div>
-                      <div className="rounded-md bg-white p-3 ring-1 ring-black/[0.06]">
-                        <p className="text-[11px] font-semibold tracking-[0.04em] text-[#5F6368] uppercase">
-                          Features
-                        </p>
-                        <p className="mt-1 text-xl font-bold text-[#1D1D1F]">
-                          {productPreview.featureCount}
                         </p>
                       </div>
                     </div>
@@ -633,12 +624,51 @@ export function TechnologyProductMappingCard({
                         <p className="text-[11px] font-semibold tracking-[0.04em] text-[#5F6368] uppercase">
                           Sample products
                         </p>
-                        <p className="mt-1 text-xs leading-4 text-[#5F6368]">
-                          {productPreview.sampleProducts
-                            .map((product) => product.name)
-                            .filter(Boolean)
-                            .join(", ")}
-                        </p>
+                        <div className="mt-1 h-44 space-y-3 overflow-x-hidden overflow-y-auto pr-1">
+                          {productPreview.sampleProducts.map((product) => {
+                            const featureItems = Array.from(
+                              new Map(
+                                [...product.features, ...product.otherFeatures].map((feature) => [
+                                  feature.toLowerCase(),
+                                  { id: feature, label: feature },
+                                ]),
+                              ).values(),
+                            );
+                            const structuredFeatureCount = new Set(
+                              product.features.map((feature) => feature.toLowerCase()),
+                            ).size;
+                            const otherFeatureCount = new Set(
+                              product.otherFeatures.map((feature) => feature.toLowerCase()),
+                            ).size;
+
+                            return (
+                              <div key={product.id}>
+                                <p className="text-xs leading-4 font-semibold text-[#1D1D1F]">
+                                  {product.name}
+                                </p>
+                                <p className="mt-0.5 text-[11px] leading-4 text-[#5F6368]">
+                                  {structuredFeatureCount} structured{" "}
+                                  {structuredFeatureCount === 1 ? "feature" : "features"} +{" "}
+                                  {otherFeatureCount} other{" "}
+                                  {otherFeatureCount === 1 ? "feature" : "features"} ={" "}
+                                  {featureItems.length} unique{" "}
+                                  {featureItems.length === 1 ? "chip" : "chips"}
+                                </p>
+                                {featureItems.length > 0 ? (
+                                  <ExpandableChipPanel
+                                    detailItems={featureItems}
+                                    items={featureItems}
+                                    detailLabel={`Features for ${product.name}`}
+                                  />
+                                ) : (
+                                  <p className="mt-1 text-xs leading-4 text-[#5F6368]">
+                                    No product feature metadata is available for this product.
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     ) : null}
                   </>
@@ -674,6 +704,103 @@ export function TechnologyProductMappingCard({
         </div>
       </div>
     </DataDictionaryPanel>
+  );
+}
+
+type ExpandableChipItem = {
+  id: string;
+  label: string;
+};
+
+function ExpandableChipPanel({
+  detailItems,
+  detailLabel,
+  items,
+}: {
+  detailItems: ExpandableChipItem[];
+  detailLabel: string;
+  items: ExpandableChipItem[];
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const visibleItems = items.slice(0, 2);
+  const additionalItemCount = Math.max(0, items.length - visibleItems.length);
+
+  useEffect(() => {
+    if (!isExpanded) {
+      return;
+    }
+
+    function closeOnOutsidePointerDown(event: PointerEvent) {
+      if (event.target instanceof Node && !containerRef.current?.contains(event.target)) {
+        setIsExpanded(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsidePointerDown);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointerDown);
+  }, [isExpanded]);
+
+  return (
+    <div ref={containerRef} className="relative mt-1 rounded-md border border-black/[0.14] p-2">
+      <div className="flex items-start gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-wrap content-start gap-1.5">
+          {visibleItems.map((item) => (
+            <span
+              key={item.id}
+              className="inline-flex max-w-full items-center gap-1 rounded-full bg-white px-2 py-1 text-xs font-medium text-[#005CC8] shadow-sm ring-1 ring-[#007AFF]/20"
+            >
+              <span className="truncate">{item.label}</span>
+            </span>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsExpanded((expanded) => !expanded)}
+          disabled={detailItems.length === 0}
+          aria-expanded={isExpanded}
+          aria-label={
+            isExpanded ? `Hide ${detailLabel.toLowerCase()}` : `Show ${detailLabel.toLowerCase()}`
+          }
+          className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-xs font-semibold text-[#005CC8] hover:bg-[#EAF4FF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {additionalItemCount > 0 ? `+${additionalItemCount}` : null}
+          <ChevronDown
+            aria-hidden="true"
+            size={16}
+            className={`transition-transform ${isExpanded ? "rotate-180" : ""}`}
+          />
+        </button>
+      </div>
+      {isExpanded ? (
+        <div
+          role="region"
+          aria-label={detailLabel}
+          className="absolute inset-x-0 top-0 z-30 rounded-md border border-[#8CC5FF] bg-[#F7FBFF] p-2 shadow-[0_12px_28px_rgba(15,23,42,0.18)]"
+        >
+          <div className="flex items-start gap-1.5">
+            <div className="flex min-w-0 flex-1 flex-wrap content-start gap-1.5">
+              {detailItems.map((item) => (
+                <span
+                  key={item.id}
+                  className="inline-flex max-w-full items-center gap-1 rounded-full bg-white px-2 py-1 text-xs font-medium text-[#005CC8] shadow-sm ring-1 ring-[#007AFF]/20"
+                >
+                  <span className="truncate">{item.label}</span>
+                </span>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsExpanded(false)}
+              aria-label={`Hide ${detailLabel.toLowerCase()}`}
+              className="inline-flex h-7 shrink-0 items-center rounded-md px-1.5 text-[#005CC8] hover:bg-[#EAF4FF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:outline-none"
+            >
+              <ChevronDown aria-hidden="true" size={16} className="rotate-180" />
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
