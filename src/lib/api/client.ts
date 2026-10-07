@@ -21,7 +21,7 @@ export type AdminApiPagination = {
   totalPages?: number;
 };
 
-type AdminApiRequestOptions = Omit<RequestInit, "body" | "headers"> & {
+export type AdminApiRequestOptions = Omit<RequestInit, "body" | "headers"> & {
   authErrorMessage?: string;
   body?: BodyInit | null;
   emptyDataErrorMessage?: string;

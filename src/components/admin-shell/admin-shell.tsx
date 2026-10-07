@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Archive,
   BookOpen,
+  PackageSearch,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -34,6 +35,7 @@ type NavigationLabel =
   | "Dashboard"
   | "Assessments"
   | "Data Dictionary"
+  | "Missing Features"
   | "Experts"
   | "Team"
   | "Archive"
@@ -52,6 +54,7 @@ const navigationItems: readonly NavigationItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Assessments", href: "/assessments", icon: ClipboardCheck },
   { label: "Data Dictionary", href: "/data-dictionary", icon: BookOpen },
+  { label: "Missing Features", href: "/missing-features", icon: PackageSearch },
   { label: "Experts", href: "/experts", icon: Users },
   { label: "Team", href: "#team", icon: UserRound },
   { label: "Archive", href: "/archive", icon: Archive },
