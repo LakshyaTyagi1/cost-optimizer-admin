@@ -32,6 +32,24 @@ export const missingFeatureStatusLabels: Record<MissingFeatureStatus, string> = 
   "declined-at-admin-review": "Declined",
 };
 
+/** Short badge-style labels for the `history` transition trail. */
+export const missingFeatureHistoryLabels: Record<string, string> = {
+  "captured-to-organization": "Captured",
+  "organization-to-admin-review": "Under review",
+  "admin-review-to-zoftwarehub-catalog": "Accepted",
+  "declined-at-admin-review": "Declined",
+};
+
+export function formatMissingFeatureHistory(history: MissingFeatureHistoryEntry[]) {
+  if (!Array.isArray(history) || history.length === 0) {
+    return "";
+  }
+
+  return history
+    .map((entry) => missingFeatureHistoryLabels[entry.event] ?? entry.event)
+    .join(" → ");
+}
+
 export type MissingFeatureHistoryEntry = {
   event: string;
   at?: string;
@@ -41,17 +59,21 @@ export type MissingFeatureReview = {
   acceptedAt?: string;
   acceptedBy?: string;
   acceptedByEmail?: string;
+  /**
+   * Whether accepting this report added the feature to the ZOftwarehub product.
+   * Absent means "not recorded", which is why the backend refuses to undo those
+   * rather than guessing at the catalog entry's origin.
+   */
+  injected?: boolean;
   reason?: string;
 };
 
 /**
- * One row of the admin review list.
- *
- * Declares only the fields the missing-features page actually renders or needs
- * to address an action. The endpoint also returns `assessmentTitle`,
- * `assessmentStatus`, `toolKey`, `toolId`, `toolCompany`, `category` and
- * `audit`, but nothing here reads them, so they are left off the type rather
- * than carried as dead weight.
+ * One row of the admin review list. Mirrors the backend's
+ * `serializeAdminMissingFeatureListRow` exactly: identity, display fields, queue
+ * state, and the report date. `review` carries only the decline reason and the
+ * accept-origin flag - the accept actor/timestamp are stored server-side but are
+ * not part of this response.
  */
 export type MissingFeatureCandidate = {
   assessmentId: string;
@@ -96,17 +118,30 @@ type MissingFeatureListEnvelope = AdminApiResponse<MissingFeatureCandidate[]> & 
   counts?: Partial<MissingFeatureCounts>;
 };
 
+/**
+ * The exact request contract for the list endpoint. Only `limit`, `page`,
+ * `search` and `status` are sent - the backend also accepts an optional
+ * `productId` filter, but this page has no product filter UI so it is never
+ * included on the wire.
+ */
 export type MissingFeatureQuery = {
   limit?: number;
   page?: number;
-  productId?: string;
   search?: string;
   status?: MissingFeatureStatus | "";
+};
+
+export type MissingFeatureRemoval = {
+  reason?: string;
+  removed: boolean;
+  target: string;
+  feature?: string;
 };
 
 export type MissingFeatureActionResult = {
   candidate: MissingFeatureCandidate;
   injection?: MissingFeatureInjection;
+  removal?: MissingFeatureRemoval;
 };
 
 async function requestMissingFeatures<T>(
@@ -156,7 +191,6 @@ export async function fetchMissingFeatures(
     {
       limit: query.limit === undefined ? undefined : String(query.limit),
       page: query.page === undefined ? undefined : String(query.page),
-      productId: query.productId?.trim() || undefined,
       search: query.search?.trim() || undefined,
       status: query.status || undefined,
     },
@@ -189,7 +223,7 @@ export async function fetchMissingFeatures(
 function candidatePath(
   assessmentId: string,
   candidateId: string,
-  action: "accept" | "decline" | "review",
+  action: "accept" | "decline" | "review" | "revert",
 ) {
   return `${adminBasePath}/${encodeURIComponent(assessmentId)}/${encodeURIComponent(candidateId)}/${action}`;
 }
@@ -219,6 +253,26 @@ export async function acceptMissingFeatureCandidate(
   });
 
   return { candidate: data, injection: data.injection };
+}
+
+/**
+ * Undoes an accepted report: the backend removes the feature this accept added
+ * to the ZOftwarehub product and returns the report to the review queue.
+ *
+ * `removal` explains the outcome because the catalog entry may not have been
+ * deleted - see `MissingFeatureRemoval`.
+ */
+export async function revertMissingFeatureCandidate(
+  candidate: MissingFeatureCandidate,
+): Promise<MissingFeatureActionResult> {
+  const data = await requestMissingFeatures<
+    MissingFeatureCandidate & { removal?: MissingFeatureRemoval }
+  >(candidatePath(candidate.assessmentId, candidate.candidateId, "revert"), {
+    method: "PATCH",
+    json: {},
+  });
+
+  return { candidate: data, removal: data.removal };
 }
 
 export async function declineMissingFeatureCandidate(

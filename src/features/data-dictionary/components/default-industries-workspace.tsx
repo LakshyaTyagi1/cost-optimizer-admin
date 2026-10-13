@@ -119,7 +119,7 @@ export function DefaultIndustriesWorkspace({
       descriptionId="default-industries-workspace-description"
       description={
         <>
-          Review the seven industries defined by the Cost Cutting Tool Process Library, then add one
+          Review the industries defined by the Cost Cutting Tool Process Library, then add one
           selected industry or all missing industries to the catalog.
         </>
       }

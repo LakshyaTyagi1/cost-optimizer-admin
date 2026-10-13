@@ -5,6 +5,7 @@ import {
   declineMissingFeatureCandidate,
   fetchMissingFeatures,
   reviewMissingFeatureCandidate,
+  revertMissingFeatureCandidate,
   type MissingFeatureActionResult,
   type MissingFeatureCandidate,
   type MissingFeatureQuery,
@@ -49,6 +50,21 @@ export function useAcceptMissingFeatureMutation() {
   return useMutation({
     mutationFn: (candidate: MissingFeatureCandidate) => acceptMissingFeatureCandidate(candidate),
     onSuccess: invalidate,
+  });
+}
+
+export function useRevertMissingFeatureMutation() {
+  const invalidate = useInvalidateMissingFeatures();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (candidate: MissingFeatureCandidate) => revertMissingFeatureCandidate(candidate),
+    onSuccess: () => {
+      invalidate();
+      // Undo removes a feature from the ZOftwarehub product, so every
+      // Data Dictionary view that renders a product's features is now stale.
+      void queryClient.invalidateQueries({ queryKey: ["data-dictionary"] });
+    },
   });
 }
 

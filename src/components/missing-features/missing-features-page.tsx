@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/admin-shell/admin-shell";
 import {
+  formatMissingFeatureHistory,
   missingFeatureStatusLabels,
-  missingFeatureStatuses,
   type MissingFeatureCandidate,
   type MissingFeatureStatus,
 } from "@/features/missing-features/api";
@@ -14,6 +14,7 @@ import {
   useDeclineMissingFeatureMutation,
   useMissingFeaturesQuery,
   useReviewMissingFeatureMutation,
+  useRevertMissingFeatureMutation,
 } from "@/features/missing-features/queries";
 
 const pageSize = 20;
@@ -72,20 +73,77 @@ function formatWeekday(value?: string) {
 }
 
 /**
- * Only a captured report can still be claimed for review. Once it reaches the
- * catalog or is declined the decision is final, so the action set narrows
- * rather than offering an action the backend would reject.
+ * Only a captured report can still be claimed for review, and only an accepted
+ * one can be undone. The action set narrows rather than offering an action the
+ * backend would reject.
+ *
+ * `revert` is additionally gated on `review.injected`: accept is idempotent, so
+ * when it did not create the catalog entry the backend refuses to delete it and
+ * the button would only ever produce an error.
  */
 function availableActions(candidate: MissingFeatureCandidate) {
   if (candidate.status === "captured-to-organization") {
-    return { review: true, accept: false, decline: true };
+    return { review: true, accept: false, decline: true, revert: false };
   }
 
   if (candidate.status === "organization-to-admin-review") {
-    return { review: false, accept: true, decline: true };
+    return { review: false, accept: true, decline: true, revert: false };
   }
 
-  return { review: false, accept: false, decline: false };
+  if (candidate.status === "admin-review-to-zoftwarehub-catalog") {
+    return {
+      review: false,
+      accept: false,
+      decline: false,
+      revert: candidate.review?.injected === true,
+    };
+  }
+
+  return { review: false, accept: false, decline: false, revert: false };
+}
+
+/**
+ * One status count rendered as a filter pill.
+ *
+ * The pills and the status dropdown write to the same `status` state, so they
+ * can never disagree: the active pill always matches the dropdown value, and
+ * the counts always describe the whole queue (the backend computes them before
+ * filtering). The "Showing X of Y" note appears only while a filter or search
+ * is active, which is when the two numbers can differ.
+ */
+function StatusCountPill({
+  active,
+  count,
+  label,
+  onSelect,
+  tone,
+}: {
+  active: boolean;
+  count: number;
+  label: string;
+  onSelect: () => void;
+  tone: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onSelect}
+      className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium whitespace-nowrap transition outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/40 ${
+        active ? `ring-2 ring-[#007AFF]/50 ${tone}` : `${tone} hover:brightness-[0.97]`
+      }`}
+    >
+      {label}
+      <span
+        aria-label={`${count} ${label} reports`}
+        className={`inline-flex min-w-5 items-center justify-center rounded-full bg-white/70 px-1 text-[10px] font-bold ${
+          active ? "text-[#1D1D1F]" : ""
+        }`}
+      >
+        {count}
+      </span>
+    </button>
+  );
 }
 
 export function MissingFeaturesPage() {
@@ -94,6 +152,8 @@ export function MissingFeaturesPage() {
   const [status, setStatus] = useState<MissingFeatureStatus | "">("");
   const [declineTarget, setDeclineTarget] = useState<MissingFeatureCandidate | null>(null);
   const [declineReason, setDeclineReason] = useState("");
+  const [revertTarget, setRevertTarget] = useState<MissingFeatureCandidate | null>(null);
+  const [acceptTarget, setAcceptTarget] = useState<MissingFeatureCandidate | null>(null);
   const [notice, setNotice] = useState("");
 
   const query = useMemo(() => ({ limit: pageSize, page, search, status }), [page, search, status]);
@@ -102,21 +162,38 @@ export function MissingFeaturesPage() {
   const reviewMutation = useReviewMissingFeatureMutation();
   const acceptMutation = useAcceptMissingFeatureMutation();
   const declineMutation = useDeclineMissingFeatureMutation();
+  const revertMutation = useRevertMissingFeatureMutation();
 
   const isMutating =
-    reviewMutation.isPending || acceptMutation.isPending || declineMutation.isPending;
+    reviewMutation.isPending ||
+    acceptMutation.isPending ||
+    declineMutation.isPending ||
+    revertMutation.isPending;
   const candidates = candidatesQuery.data?.data ?? [];
   const counts = candidatesQuery.data?.counts;
   const pagination = candidatesQuery.data?.pagination;
 
   function handleAccept(candidate: MissingFeatureCandidate) {
+    // Accepting writes to the shared ZOftwarehub catalog, so it is confirmed
+    // rather than applied on a single click.
+    setNotice("");
+    setAcceptTarget(candidate);
+  }
+
+  function handleConfirmAccept() {
+    if (!acceptTarget) {
+      return;
+    }
+
+    const target = acceptTarget;
     setNotice("");
 
-    acceptMutation.mutate(candidate, {
+    acceptMutation.mutate(target, {
       onSuccess: (result) => {
+        setAcceptTarget(null);
         setNotice(
           result.injection?.injected
-            ? `Added "${candidate.name}" to the ZOftwarehub catalog.`
+            ? `Added "${target.name}" to the ZOftwarehub catalog.`
             : (result.injection?.reason ??
                 "The review was recorded, but the catalog was not updated."),
         );
@@ -158,6 +235,30 @@ export function MissingFeaturesPage() {
     );
   }
 
+  function handleConfirmRevert() {
+    if (!revertTarget) {
+      return;
+    }
+
+    const target = revertTarget;
+    setNotice("");
+
+    revertMutation.mutate(target, {
+      onSuccess: (result) => {
+        setRevertTarget(null);
+        setNotice(
+          result.removal?.removed
+            ? `Removed "${target.name}" from the catalog and returned the report to review.`
+            : `The report is back in review, but the catalog was unchanged. ${
+                result.removal?.reason ?? "The feature was not removed."
+              }`,
+        );
+      },
+      onError: (error) =>
+        setNotice(error instanceof Error ? error.message : "The accept could not be undone."),
+    });
+  }
+
   return (
     <AdminShell activeItem="Missing Features">
       <div className="flex max-w-full flex-col gap-6 overflow-hidden lg:pr-6">
@@ -171,7 +272,7 @@ export function MissingFeaturesPage() {
           </p>
         </header>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-3">
           <input
             type="search"
             value={search}
@@ -181,31 +282,71 @@ export function MissingFeaturesPage() {
             }}
             placeholder="Search feature, tool or product"
             aria-label="Search reported features"
-            className="h-9 w-full max-w-[320px] rounded-lg border border-black/10 px-3 text-[12px] outline-none focus:border-black/25"
+            className="h-9 w-full rounded-lg border border-black/10 px-3 text-[12px] outline-none focus:border-black/25"
           />
 
-          <select
-            value={status}
-            onChange={(event) => {
-              setStatus(event.target.value as MissingFeatureStatus | "");
-              setPage(1);
-            }}
-            aria-label="Filter by review status"
-            className="h-9 rounded-lg border border-black/10 bg-white px-3 text-[12px] outline-none focus:border-black/25"
-          >
-            <option value="">All statuses</option>
-            {missingFeatureStatuses.map((value) => (
-              <option key={value} value={value}>
-                {missingFeatureStatusLabels[value]}
-              </option>
-            ))}
-          </select>
-
           {counts ? (
-            <p className="text-[12px] text-[#86868B]">
-              {counts.total} total &middot; {counts.captured} captured &middot; {counts.underReview}{" "}
-              under review &middot; {counts.published} accepted &middot; {counts.declined} declined
-            </p>
+            <div
+              role="group"
+              aria-label="Filter reports by status"
+              className="flex flex-wrap items-center gap-2"
+            >
+              <StatusCountPill
+                active={status === ""}
+                label="All"
+                count={counts.total}
+                tone="bg-[#F2F2F7] text-[#1D1D1F]"
+                onSelect={() => {
+                  setStatus("");
+                  setPage(1);
+                }}
+              />
+              <StatusCountPill
+                active={status === "captured-to-organization"}
+                label={missingFeatureStatusLabels["captured-to-organization"]}
+                count={counts.captured}
+                tone={statusTone["captured-to-organization"]}
+                onSelect={() => {
+                  setStatus("captured-to-organization");
+                  setPage(1);
+                }}
+              />
+              <StatusCountPill
+                active={status === "organization-to-admin-review"}
+                label={missingFeatureStatusLabels["organization-to-admin-review"]}
+                count={counts.underReview}
+                tone={statusTone["organization-to-admin-review"]}
+                onSelect={() => {
+                  setStatus("organization-to-admin-review");
+                  setPage(1);
+                }}
+              />
+              <StatusCountPill
+                active={status === "admin-review-to-zoftwarehub-catalog"}
+                label={missingFeatureStatusLabels["admin-review-to-zoftwarehub-catalog"]}
+                count={counts.published}
+                tone={statusTone["admin-review-to-zoftwarehub-catalog"]}
+                onSelect={() => {
+                  setStatus("admin-review-to-zoftwarehub-catalog");
+                  setPage(1);
+                }}
+              />
+              <StatusCountPill
+                active={status === "declined-at-admin-review"}
+                label={missingFeatureStatusLabels["declined-at-admin-review"]}
+                count={counts.declined}
+                tone={statusTone["declined-at-admin-review"]}
+                onSelect={() => {
+                  setStatus("declined-at-admin-review");
+                  setPage(1);
+                }}
+              />
+              {pagination && (status !== "" || search.trim() !== "") ? (
+                <span className="text-[11px] text-[#86868B]">
+                  Showing {pagination.totalCount} of {counts.total}
+                </span>
+              ) : null}
+            </div>
           ) : null}
         </div>
 
@@ -305,7 +446,7 @@ export function MissingFeaturesPage() {
                         </span>
                         {candidate.history.length > 0 ? (
                           <p className="mt-1 text-[11px] text-[#86868B]">
-                            {candidate.history.map((entry) => entry.event).join(" → ")}
+                            {formatMissingFeatureHistory(candidate.history)}
                           </p>
                         ) : null}
                       </td>
@@ -359,7 +500,24 @@ export function MissingFeaturesPage() {
                             </button>
                           ) : null}
 
-                          {!actions.review && !actions.accept && !actions.decline ? (
+                          {actions.revert ? (
+                            <button
+                              type="button"
+                              disabled={isMutating}
+                              onClick={() => {
+                                setNotice("");
+                                setRevertTarget(candidate);
+                              }}
+                              className="h-7 rounded-lg border border-black/10 px-2.5 text-[11px] font-medium disabled:opacity-50"
+                            >
+                              Undo accept
+                            </button>
+                          ) : null}
+
+                          {!actions.review &&
+                          !actions.accept &&
+                          !actions.decline &&
+                          !actions.revert ? (
                             <span className="text-[11px] text-[#86868B]">Settled</span>
                           ) : null}
                         </div>
@@ -436,6 +594,82 @@ export function MissingFeaturesPage() {
                   className="h-8 rounded-lg bg-[#B3261E] px-3 text-[12px] font-medium text-white disabled:opacity-50"
                 >
                   Decline report
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {acceptTarget ? (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="w-full max-w-[420px] rounded-xl bg-white p-5 shadow-lg">
+              <h2 className="text-[15px] font-semibold text-[#171717]">Accept report</h2>
+              <p className="mt-1 text-[12px] text-[#86868B]">
+                &quot;{acceptTarget.name}&quot; will be added to the other-features list of &quot;
+                {acceptTarget.parentProductName || acceptTarget.toolName}&quot;. It becomes
+                selectable for customers whose industry and domain are mapped to that product.
+              </p>
+              {acceptTarget.description ? (
+                <p className="mt-3 rounded-lg border border-black/10 bg-[#FAFAFA] px-3 py-2 text-[12px] text-[#1D1D1F]">
+                  {acceptTarget.description}
+                </p>
+              ) : null}
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAcceptTarget(null)}
+                  className="h-8 rounded-lg border border-black/10 px-3 text-[12px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={acceptMutation.isPending}
+                  onClick={handleConfirmAccept}
+                  className="h-8 rounded-lg bg-[#007AFF] px-3 text-[12px] font-medium text-white disabled:opacity-50"
+                >
+                  Accept report
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {revertTarget ? (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="w-full max-w-[420px] rounded-xl bg-white p-5 shadow-lg">
+              <h2 className="text-[15px] font-semibold text-[#171717]">Undo accept</h2>
+              <p className="mt-1 text-[12px] text-[#86868B]">
+                &quot;{revertTarget.name}&quot; will be removed from &quot;
+                {revertTarget.parentProductName || revertTarget.toolName}&quot; and the report
+                returned to review. Customers who already selected this feature will no longer see
+                it.
+              </p>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRevertTarget(null)}
+                  className="h-8 rounded-lg border border-black/10 px-3 text-[12px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={revertMutation.isPending}
+                  onClick={handleConfirmRevert}
+                  className="h-8 rounded-lg bg-[#B3261E] px-3 text-[12px] font-medium text-white disabled:opacity-50"
+                >
+                  Undo accept
                 </button>
               </div>
             </div>
