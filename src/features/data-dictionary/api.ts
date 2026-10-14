@@ -249,6 +249,31 @@ export type TechnologyProductMappingPreview = {
   }>;
 };
 
+export type MasterInventoryIndustryMapping = {
+  industryId: string;
+  industries: string[];
+};
+
+export type MasterInventoryDomainMapping = {
+  industryDomainId: string;
+  industryId: string;
+  subCategories: string[];
+};
+
+export type MasterInventoryMappingPreview = {
+  featureCount: number;
+  productCount: number;
+  sampleProducts: Array<{
+    company: string;
+    features: string[];
+    id: string;
+    logoUrl: string;
+    name: string;
+    otherFeatures: string[];
+  }>;
+  truncated?: boolean;
+};
+
 export type DataDictionaryProcessPage = {
   pagination: DataDictionaryPagination;
   processes: DictionaryProcess[];
@@ -746,6 +771,102 @@ export async function updateTechnologyProductDomainMapping(payload: {
   };
 }
 
+export async function fetchMasterInventoryClassifications() {
+  const classifications = await fetchApi<{
+    industries: string[];
+    subCategories: string[];
+  }>(`${adminBasePath}/master-inventory/classifications`);
+
+  return {
+    industries: mapMasterInventoryNames(classifications.industries),
+    subCategories: mapMasterInventoryNames(classifications.subCategories),
+  };
+}
+
+export async function fetchMasterInventoryIndustryMapping(industryId: string) {
+  const mapping = await fetchApi<MasterInventoryIndustryMapping>(
+    `${adminBasePath}/industries/${industryId}/master-inventory-mapping`,
+  );
+
+  return {
+    ...mapping,
+    industries: mapMasterInventoryNames(mapping.industries),
+  };
+}
+
+export async function updateMasterInventoryIndustryMapping(payload: {
+  industries: string[];
+  industryId: string;
+}) {
+  const mapping = await fetchApi<MasterInventoryIndustryMapping>(
+    `${adminBasePath}/industries/${payload.industryId}/master-inventory-mapping`,
+    {
+      body: JSON.stringify({ industries: payload.industries }),
+      method: "PUT",
+    },
+  );
+
+  return {
+    ...mapping,
+    industries: mapMasterInventoryNames(mapping.industries),
+  };
+}
+
+export async function previewMasterInventoryMapping(payload: {
+  industries: string[];
+  subCategories: string[];
+}) {
+  const preview = await fetchApi<MasterInventoryMappingPreview>(
+    `${adminBasePath}/master-inventory-mapping/preview`,
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+  );
+
+  return {
+    ...preview,
+    sampleProducts: (preview.sampleProducts ?? []).map((product) => ({
+      ...product,
+      features: Array.isArray(product.features)
+        ? product.features.map((feature) => feature.trim()).filter(Boolean)
+        : [],
+      otherFeatures: Array.isArray(product.otherFeatures)
+        ? product.otherFeatures.map((feature) => feature.trim()).filter(Boolean)
+        : [],
+    })),
+  };
+}
+
+export async function fetchMasterInventoryDomainMapping(domainId: string) {
+  const mapping = await fetchApi<MasterInventoryDomainMapping>(
+    `${adminBasePath}/domains/${domainId}/master-inventory-mapping`,
+  );
+
+  return {
+    ...mapping,
+    subCategories: mapMasterInventoryNames(mapping.subCategories),
+  };
+}
+
+export async function updateMasterInventoryDomainMapping(payload: {
+  domainId: string;
+  subCategories: string[];
+}) {
+  const mapping = await fetchApi<MasterInventoryDomainMapping>(
+    `${adminBasePath}/domains/${payload.domainId}/master-inventory-mapping`,
+    {
+      body: JSON.stringify({ subCategories: payload.subCategories }),
+      method: "PUT",
+    },
+  );
+
+  return {
+    ...mapping,
+    subCategories: mapMasterInventoryNames(mapping.subCategories),
+  };
+}
+
 export async function fetchDataDictionaryDefaultIndustries() {
   return fetchApi<DefaultIndustryGrid>(`${adminBasePath}/industries/defaults`);
 }
@@ -1189,6 +1310,27 @@ function mapZoftwarehubTaxonomyOptions(items: Array<ApiEntity | ZoftwarehubTaxon
       name: item.name?.trim() || "",
     }))
     .filter((item) => Boolean(item.id && item.name));
+}
+
+function mapMasterInventoryNames(items: Array<string> = []) {
+  const seen = new Set<string>();
+
+  return items
+    .map((item) => String(item ?? "").trim().replace(/\s+/g, " "))
+    .filter((name) => {
+      if (!name) {
+        return false;
+      }
+
+      const key = name.toLowerCase();
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
 }
 
 function flattenDataDictionaryCatalog(payload: ApiDataDictionaryPayload): ApiCatalogPayload {

@@ -10,6 +10,10 @@ import {
   previewTechnologyProductMapping,
   fetchTechnologyProductDomainMapping,
   fetchTechnologyProductIndustryMapping,
+  fetchMasterInventoryClassifications,
+  fetchMasterInventoryDomainMapping,
+  fetchMasterInventoryIndustryMapping,
+  previewMasterInventoryMapping,
   fetchMappedTechStackPage,
   fetchZoftwarehubParentIndustries,
   fetchZoftwarehubSubCategories,
@@ -21,6 +25,9 @@ import {
   type TechnologyProductDomainMapping,
   type TechnologyProductIndustryMapping,
   type TechnologyProductMappingPreview,
+  type MasterInventoryDomainMapping,
+  type MasterInventoryIndustryMapping,
+  type MasterInventoryMappingPreview,
   type ZoftwarehubTaxonomyOption,
 } from "@/features/data-dictionary/api";
 import type { DictionaryProcess } from "@/features/data-dictionary/model";
@@ -41,6 +48,10 @@ export const technologyProductMappingQueryKey = [
   "technology-product-mapping",
 ] as const;
 export const zoftwarehubTaxonomyQueryKey = ["data-dictionary", "zoftwarehub-taxonomy"] as const;
+export const masterInventoryMappingQueryKey = [
+  "data-dictionary",
+  "master-inventory-mapping",
+] as const;
 
 const dataDictionaryCacheTime = 5 * 60_000;
 const dataDictionaryGcTime = 30 * 60_000;
@@ -280,5 +291,93 @@ export function useZoftwarehubSubCategories({
     queryFn: fetchZoftwarehubSubCategories,
     enabled,
     staleTime: dataDictionaryCacheTime,
+  });
+}
+
+export type MasterInventoryIndustryMappingQuery = UseQueryResult<
+  MasterInventoryIndustryMapping,
+  Error
+>;
+
+export type MasterInventoryDomainMappingQuery = UseQueryResult<
+  MasterInventoryDomainMapping,
+  Error
+>;
+
+export type MasterInventoryMappingPreviewQuery = UseQueryResult<
+  MasterInventoryMappingPreview,
+  Error
+>;
+
+export function useMasterInventoryClassifications({ enabled }: { enabled: boolean }) {
+  return useQuery<{ industries: string[]; subCategories: string[] }, Error>({
+    queryKey: [...masterInventoryMappingQueryKey, "classifications"],
+    queryFn: fetchMasterInventoryClassifications,
+    enabled,
+    staleTime: dataDictionaryCacheTime,
+  });
+}
+
+export function useMasterInventoryIndustryMapping({
+  enabled,
+  industryId,
+}: {
+  enabled: boolean;
+  industryId: string;
+}): MasterInventoryIndustryMappingQuery {
+  return useQuery<MasterInventoryIndustryMapping, Error>({
+    queryKey: [...masterInventoryMappingQueryKey, "industry", industryId],
+    queryFn: () => fetchMasterInventoryIndustryMapping(industryId),
+    enabled: enabled && Boolean(industryId),
+    staleTime: dataDictionaryCacheTime,
+  });
+}
+
+export function useMasterInventoryDomainMapping({
+  domainId,
+  enabled,
+}: {
+  domainId: string;
+  enabled: boolean;
+}): MasterInventoryDomainMappingQuery {
+  return useQuery<MasterInventoryDomainMapping, Error>({
+    queryKey: [...masterInventoryMappingQueryKey, "domain", domainId],
+    queryFn: () => fetchMasterInventoryDomainMapping(domainId),
+    enabled: enabled && Boolean(domainId),
+    staleTime: dataDictionaryCacheTime,
+  });
+}
+
+export function useMasterInventoryMappingPreview({
+  enabled,
+  industries,
+  subCategories,
+}: {
+  enabled: boolean;
+  industries: string[];
+  subCategories: string[];
+}): MasterInventoryMappingPreviewQuery {
+  const normalizedIndustries = Array.from(
+    new Set(industries.map((name) => name.trim()).filter(Boolean)),
+  ).sort();
+  const normalizedSubCategories = Array.from(
+    new Set(subCategories.map((name) => name.trim()).filter(Boolean)),
+  ).sort();
+
+  return useQuery<MasterInventoryMappingPreview, Error>({
+    queryKey: [
+      ...masterInventoryMappingQueryKey,
+      "preview",
+      normalizedIndustries,
+      normalizedSubCategories,
+    ],
+    queryFn: () =>
+      previewMasterInventoryMapping({
+        industries: normalizedIndustries,
+        subCategories: normalizedSubCategories,
+      }),
+    enabled: enabled && normalizedIndustries.length > 0 && normalizedSubCategories.length > 0,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
   });
 }
