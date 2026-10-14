@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { RefreshCw } from "lucide-react";
 
 import { AdminShell } from "@/components/admin-shell/admin-shell";
 import {
@@ -235,6 +236,26 @@ export function MissingFeaturesPage() {
     );
   }
 
+  /**
+   * Re-reads the queue from the backend on demand.
+   *
+   * Reports are raised by customers in a different app, so an admin can sit on
+   * a stale list. `refetch` keeps the current search, status and page rather than
+   * resetting them, and the row list is already re-read after every action, so
+   * this is the same path with a manual trigger.
+   */
+  async function handleSync() {
+    setNotice("");
+    const result = await candidatesQuery.refetch();
+
+    if (result.error) {
+      setNotice("The reported features could not be synced. Try again.");
+      return;
+    }
+
+    setNotice("Synced with the latest reported features.");
+  }
+
   function handleConfirmRevert() {
     if (!revertTarget) {
       return;
@@ -273,17 +294,34 @@ export function MissingFeaturesPage() {
         </header>
 
         <div className="flex flex-col gap-3">
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
-            placeholder="Search feature, tool or product"
-            aria-label="Search reported features"
-            className="h-9 w-full rounded-lg border border-black/10 px-3 text-[12px] outline-none focus:border-black/25"
-          />
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Search feature, tool or product"
+              aria-label="Search reported features"
+              className="h-9 w-full rounded-lg border border-black/10 px-3 text-[12px] outline-none focus:border-black/25 sm:w-auto sm:flex-1"
+            />
+
+            <button
+              type="button"
+              disabled={candidatesQuery.isFetching}
+              onClick={() => void handleSync()}
+              aria-label="Sync reported features"
+              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-[12px] font-medium text-[#1D1D1F] transition-colors hover:bg-[#F5F5F7] focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:outline-none disabled:cursor-wait disabled:opacity-60"
+            >
+              <RefreshCw
+                size={14}
+                aria-hidden="true"
+                className={candidatesQuery.isFetching ? "animate-spin" : undefined}
+              />
+              Sync
+            </button>
+          </div>
 
           {counts ? (
             <div
