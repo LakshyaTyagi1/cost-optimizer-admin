@@ -52,7 +52,6 @@ import { assessmentsQueryKey } from "@/features/assessments/queries";
 
 import { BenchmarkCard } from "@/features/data-dictionary/components/benchmark-card";
 import { IndustryDomainManager } from "@/features/data-dictionary/components/industry-domain-manager";
-import { TechnologyProductMappingCard } from "@/features/data-dictionary/components/technology-product-mapping-card";
 import { MasterInventoryMappingCard } from "@/features/data-dictionary/components/master-inventory-mapping-card";
 import { LazyViewportSection } from "@/features/data-dictionary/components/lazy-viewport-section";
 import { ProcessLibraryCard } from "@/features/data-dictionary/components/process-library-card";
@@ -1186,11 +1185,6 @@ export function DataDictionaryPage() {
             onToggleProcessStatus={handleToggleProcessStatus}
           />
         </LazyViewportSection>
-        <TechnologyProductMappingCard
-          enabled={isIndustryDomainReady && !isCatalogLoading}
-          industries={industries}
-          libraries={libraries}
-        />
         <MasterInventoryMappingCard
           enabled={isIndustryDomainReady && !isCatalogLoading}
           industries={industries}
