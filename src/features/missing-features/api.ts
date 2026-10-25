@@ -289,3 +289,100 @@ export async function declineMissingFeatureCandidate(
 
   return { candidate: data };
 }
+
+/**
+ * What customers added to their technology stack that the catalog does not have: the
+ * tools they created, the plans they created and the features they added or reported
+ * as missing. Read-only: it exists so QA can see what to add to the Master Inventory
+ * catalog, and nothing here is written back.
+ */
+export type StackAdditionBase = {
+  assessmentId: string;
+  assessmentTitle: string;
+  createdAt: string;
+  customerCompany: string;
+  customerEmail: string;
+  customerName: string;
+  domain: string;
+  industry: string;
+  toolKey: string;
+  toolName: string;
+  /** `created-tool` when the customer created the tool, else a `catalog-tool`. */
+  toolOrigin: "catalog-tool" | "created-tool";
+  toolSource: string;
+};
+
+export type StackAdditionTool = StackAdditionBase & {
+  additionalCostCount: number;
+  category: string;
+  company: string;
+  description: string;
+  featureCount: number;
+  planCount: number;
+  productId: string;
+  reportedFeatureCount: number;
+  subCategory: string;
+};
+
+export type StackAdditionPlan = StackAdditionBase & {
+  currency: string;
+  featureNames: string[];
+  planId: string;
+  planKind: string;
+  planName: string;
+  selected: boolean;
+  unitPrice: string;
+};
+
+export type StackAdditionFeatureKind = "added-feature" | "plan-feature" | "reported-feature";
+
+export type StackAdditionFeature = StackAdditionBase & {
+  category: string;
+  description: string;
+  featureKind: StackAdditionFeatureKind;
+  name: string;
+  planId: string;
+  planKind: string;
+  planName: string;
+  /** Set on reported features only. */
+  status: MissingFeatureStatus | "";
+};
+
+export type StackAdditionsSummary = {
+  addedFeatures: number;
+  plans: number;
+  reportedFeatures: number;
+  tools: number;
+};
+
+export type StackAdditions = {
+  features: StackAdditionFeature[];
+  plans: StackAdditionPlan[];
+  summary: StackAdditionsSummary;
+  tools: StackAdditionTool[];
+};
+
+export async function fetchStackAdditions(signal?: AbortSignal): Promise<StackAdditions> {
+  const data = await fetchAdminApiData<Partial<StackAdditions>>(
+    `${adminBasePath}/stack-additions`,
+    {
+      authErrorMessage: "Admin access token is required to view stack additions",
+      emptyDataErrorMessage: "Stack additions response is empty",
+      errorMessage: "Unable to load stack additions",
+      includeJsonContentType: true,
+      signal,
+    },
+  );
+
+  return {
+    features: Array.isArray(data.features) ? data.features : [],
+    plans: Array.isArray(data.plans) ? data.plans : [],
+    tools: Array.isArray(data.tools) ? data.tools : [],
+    summary: {
+      addedFeatures: data.summary?.addedFeatures ?? 0,
+      plans: data.summary?.plans ?? 0,
+      reportedFeatures: data.summary?.reportedFeatures ?? 0,
+      tools: data.summary?.tools ?? 0,
+    },
+  };
+}

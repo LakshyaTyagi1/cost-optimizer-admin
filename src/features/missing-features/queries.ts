@@ -3,6 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import {
   acceptMissingFeatureCandidate,
   declineMissingFeatureCandidate,
+  fetchStackAdditions,
   fetchMissingFeatures,
   reviewMissingFeatureCandidate,
   revertMissingFeatureCandidate,
@@ -33,6 +34,17 @@ function useInvalidateMissingFeatures() {
   const queryClient = useQueryClient();
 
   return () => queryClient.invalidateQueries({ queryKey: missingFeaturesQueryKey });
+}
+
+export const stackAdditionsQueryKey = [...missingFeaturesQueryKey, "stack-additions"] as const;
+
+/** Read-only: what customers added to their stack, for QA to grow the Master Inventory catalog. */
+export function useStackAdditionsQuery() {
+  return useQuery({
+    queryKey: stackAdditionsQueryKey,
+    queryFn: ({ signal }) => fetchStackAdditions(signal),
+    staleTime: missingFeaturesCacheTime,
+  });
 }
 
 export function useReviewMissingFeatureMutation() {

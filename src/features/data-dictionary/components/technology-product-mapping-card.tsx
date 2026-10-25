@@ -934,7 +934,7 @@ type ExpandableChipItem = {
   label: string;
 };
 
-function ExpandableChipPanel({
+export function ExpandableChipPanel({
   detailItems,
   detailLabel,
   items,
@@ -1057,15 +1057,23 @@ type ParentIndustrySearchSelectProps = {
   onChange: (value: string) => void;
   options: ParentIndustryOption[];
   value: string;
+  emptyLabel?: string;
+  placeholder?: string;
+  searchLabel?: string;
+  searchPlaceholder?: string;
 };
 
-function ParentIndustrySearchSelect({
+export function ParentIndustrySearchSelect({
   ariaDescribedBy,
   ariaLabelledBy,
   disabled,
   onChange,
   options,
   value,
+  emptyLabel = "Zoftwarehub parent industry",
+  placeholder = "Select a parent industry",
+  searchLabel = "Search Zoftwarehub parent industries",
+  searchPlaceholder = "Search parent industries",
 }: ParentIndustrySearchSelectProps) {
   const dropdownId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1160,9 +1168,7 @@ function ParentIndustrySearchSelect({
         onKeyDown={handleTriggerKeyDown}
         className="flex h-10 w-full items-center gap-2 rounded-md border border-black/[0.14] bg-white px-3 text-left text-sm text-[#171717] transition hover:border-[#007AFF]/60 focus-visible:border-[#007AFF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/20 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-[#F8F9FA]"
       >
-        <span className="min-w-0 flex-1 truncate">
-          {selectedOption?.name || "Select a parent industry"}
-        </span>
+        <span className="min-w-0 flex-1 truncate">{selectedOption?.name || placeholder}</span>
         <ChevronDown
           aria-hidden="true"
           size={16}
@@ -1173,7 +1179,7 @@ function ParentIndustrySearchSelect({
         <div
           id={dropdownId}
           role="dialog"
-          aria-label="Search Zoftwarehub parent industries"
+          aria-label={searchLabel}
           className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-[#BFD9F6] bg-white p-2 shadow-[0_12px_28px_rgba(15,23,42,0.16)]"
         >
           <div className="relative">
@@ -1188,8 +1194,8 @@ function ParentIndustrySearchSelect({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               onKeyDown={handleSearchKeyDown}
-              placeholder="Search parent industries"
-              aria-label="Search Zoftwarehub parent industries"
+              placeholder={searchPlaceholder}
+              aria-label={searchLabel}
               className="h-9 w-full rounded-md border border-black/[0.14] bg-white pr-9 pl-9 text-sm text-[#171717] placeholder:text-[#86868B] focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20 focus:outline-none"
             />
             {search ? (
@@ -1226,7 +1232,7 @@ function ParentIndustrySearchSelect({
               })
             ) : (
               <p className="px-2 py-3 text-sm text-[#5F6368]">
-                No Zoftwarehub parent industry matches “{search.trim()}”.
+                No {emptyLabel} matches “{search.trim()}”.
               </p>
             )}
           </div>

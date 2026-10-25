@@ -299,10 +299,7 @@ export type MasterInventoryIndustryMappingQuery = UseQueryResult<
   Error
 >;
 
-export type MasterInventoryDomainMappingQuery = UseQueryResult<
-  MasterInventoryDomainMapping,
-  Error
->;
+export type MasterInventoryDomainMappingQuery = UseQueryResult<MasterInventoryDomainMapping, Error>;
 
 export type MasterInventoryMappingPreviewQuery = UseQueryResult<
   MasterInventoryMappingPreview,
@@ -357,8 +354,14 @@ export function useMasterInventoryMappingPreview({
   industries: string[];
   subCategories: string[];
 }): MasterInventoryMappingPreviewQuery {
+  // The industry mapping is advisory and the backend rejects the upstream "Industry"
+  // placeholder, so only real industry names are sent with the preview.
   const normalizedIndustries = Array.from(
-    new Set(industries.map((name) => name.trim()).filter(Boolean)),
+    new Set(
+      industries
+        .map((name) => name.trim())
+        .filter((name) => name && name.toLowerCase() !== "industry"),
+    ),
   ).sort();
   const normalizedSubCategories = Array.from(
     new Set(subCategories.map((name) => name.trim()).filter(Boolean)),
@@ -376,7 +379,7 @@ export function useMasterInventoryMappingPreview({
         industries: normalizedIndustries,
         subCategories: normalizedSubCategories,
       }),
-    enabled: enabled && normalizedIndustries.length > 0 && normalizedSubCategories.length > 0,
+    enabled: enabled && normalizedSubCategories.length > 0,
     refetchOnWindowFocus: false,
     staleTime: 30_000,
   });

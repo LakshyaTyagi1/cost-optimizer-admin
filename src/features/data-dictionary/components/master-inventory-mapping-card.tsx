@@ -1,10 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { ChevronDown, Search, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { DataDictionaryPanel } from "@/features/data-dictionary/components/data-dictionary-panel";
+import {
+  ExpandableChipPanel,
+  ParentIndustrySearchSelect,
+} from "@/features/data-dictionary/components/technology-product-mapping-card";
 import type { DictionaryIndustry, DictionaryLibrary } from "@/features/data-dictionary/model";
 import {
   dataDictionaryCatalogQueryKey,
@@ -32,6 +36,29 @@ function haveSameNames(left: string[], right: string[]) {
   );
 }
 
+function SelectedSubCategoryChip({
+  disabled,
+  name,
+  onRemove,
+}: {
+  disabled: boolean;
+  name: string;
+  onRemove: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onRemove}
+      disabled={disabled}
+      className="inline-flex max-w-full items-center gap-1 rounded-full bg-white px-2 py-1 text-xs font-medium text-[#005CC8] shadow-sm ring-1 ring-[#007AFF]/20 transition hover:bg-[#EAF4FF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+      aria-label={`Remove ${name}`}
+    >
+      <span className="truncate">{name}</span>
+      <X aria-hidden="true" size={13} className="shrink-0" />
+    </button>
+  );
+}
+
 export function MasterInventoryMappingCard({
   enabled,
   industries,
@@ -53,6 +80,7 @@ export function MasterInventoryMappingCard({
     scopeId: string;
   } | null>(null);
   const [subCategorySearch, setSubCategorySearch] = useState("");
+  const [areSelectedSubCategoriesExpanded, setAreSelectedSubCategoriesExpanded] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState("");
 
@@ -122,6 +150,8 @@ export function MasterInventoryMappingCard({
       !normalizedSubCategorySearch || name.toLowerCase().includes(normalizedSubCategorySearch),
   );
 
+  const hasAdditionalSelectedSubCategories = selectedSubCategories.length > 2;
+  const displayedSelectedSubCategories = selectedSubCategories.slice(0, 2);
   const isIndustryMappingDirty = !haveSameNames(selectedIndustries, persistedIndustries);
   const isDomainMappingDirty = !haveSameNames(selectedSubCategories, persistedSubCategories);
   const hasUnsavedChanges = isIndustryMappingDirty || isDomainMappingDirty;
@@ -157,9 +187,26 @@ export function MasterInventoryMappingCard({
 
     setSelection({ ids: next, scopeId });
 
-    if (kind === "subCategory" && next.length === 0) {
-      setSubCategorySearch("");
+    if (kind === "subCategory") {
+      if (next.length <= 2) {
+        setAreSelectedSubCategoriesExpanded(false);
+      }
+
+      if (next.length === 0) {
+        setSubCategorySearch("");
+      }
     }
+  }
+
+  function removeSubCategory(name: string) {
+    toggleName(
+      "subCategory",
+      name,
+      false,
+      selectedSubCategories,
+      activeDomainId,
+      setSubCategorySelection,
+    );
   }
 
   async function saveIndustryMapping() {
@@ -186,7 +233,7 @@ export function MasterInventoryMappingCard({
   }
 
   async function saveDomainMapping() {
-    if (!activeDomainId || selectedSubCategories.length === 0) {
+    if (!activeDomainId) {
       return;
     }
 
@@ -300,47 +347,38 @@ export function MasterInventoryMappingCard({
                 </option>
               ))}
             </select>
-            <fieldset disabled={!activeIndustryId || isLoading} className="mt-4">
-              <legend className="text-xs font-bold tracking-[0.06em] text-[#5F6368] uppercase">
-                Master Inventory industries
-              </legend>
-              <p className="mt-1 text-xs text-[#86868B]" aria-live="polite">
-                {selectedIndustries.length} selected · {industryOptions.length} available
-              </p>
-              <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-black/[0.14] bg-white p-2 text-sm text-[#171717]">
-                {industryOptions.map((name) => (
-                  <label
-                    key={name}
-                    className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 hover:bg-[#F8F9FA] has-[:disabled]:cursor-not-allowed has-[:disabled]:text-[#86868B]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedIndustries.some(
-                        (item) => item.toLowerCase() === name.toLowerCase(),
-                      )}
-                      onChange={(event) =>
-                        toggleName(
-                          "industry",
-                          name,
-                          event.target.checked,
-                          selectedIndustries,
-                          activeIndustryId,
-                          setIndustrySelection,
-                        )
-                      }
-                      disabled={!activeIndustryId || isLoading}
-                      className="size-4 rounded border-black/[0.25] accent-[#007AFF]"
-                    />
-                    <span>{name}</span>
-                  </label>
-                ))}
-                {industryOptions.length === 0 && !isLoading ? (
-                  <p className="px-1 py-2 text-xs text-[#86868B]">
-                    No Master Inventory industries available.
-                  </p>
-                ) : null}
-              </div>
-            </fieldset>
+            <span
+              id="master-inventory-industries-label"
+              className="mt-4 block text-xs font-bold tracking-[0.06em] text-[#5F6368] uppercase"
+            >
+              Master Inventory industries
+            </span>
+            <ParentIndustrySearchSelect
+              key={activeIndustryId}
+              ariaDescribedBy="master-inventory-industries-help"
+              ariaLabelledBy="master-inventory-industries-label"
+              disabled={!activeIndustryId || isLoading}
+              emptyLabel="Master Inventory industry"
+              onChange={(name) => {
+                clearSaveFeedback();
+                setIndustrySelection({
+                  ids: name ? [name] : [],
+                  scopeId: activeIndustryId,
+                });
+              }}
+              options={industryOptions.map((name) => ({ id: name, name }))}
+              placeholder="Select a Master Inventory industry"
+              searchLabel="Search Master Inventory industries"
+              searchPlaceholder="Search industries"
+              value={selectedIndustries[0] ?? ""}
+            />
+            <p
+              id="master-inventory-industries-help"
+              className="mt-2 text-xs leading-4 text-[#86868B]"
+            >
+              {industryOptions.length} available · Select the Master Inventory industry for this
+              Cost Optimizer industry.
+            </p>
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.08] pt-4">
               <p className="max-w-44 text-xs leading-4 text-[#5F6368]">
                 Save this selection before moving to another Cost Optimizer industry.
@@ -382,6 +420,7 @@ export function MasterInventoryMappingCard({
               onChange={(event) => {
                 clearSaveFeedback();
                 setSubCategorySearch("");
+                setAreSelectedSubCategoriesExpanded(false);
                 setSelectedDomainId(event.target.value);
               }}
               disabled={!activeIndustryId || mappedDomains.length === 0}
@@ -393,151 +432,259 @@ export function MasterInventoryMappingCard({
                 </option>
               ))}
             </select>
-            <fieldset
-              disabled={!activeDomainId || isLoading}
-              aria-describedby="master-inventory-sub-categories-help"
-              className="mt-4"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <legend className="text-xs font-bold tracking-[0.06em] text-[#5F6368] uppercase">
-                  Master Inventory sub-categories
-                </legend>
-                <p className="text-xs font-medium text-[#5F6368]" aria-live="polite">
-                  {selectedSubCategories.length} selected · {visibleSubCategories.length} visible
-                </p>
-              </div>
-              <div className="relative mt-2">
-                <Search
-                  aria-hidden="true"
-                  size={15}
-                  className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#86868B]"
-                />
-                <input
-                  type="search"
-                  value={subCategorySearch}
-                  onChange={(event) => setSubCategorySearch(event.target.value)}
-                  disabled={!activeDomainId || isLoading}
-                  placeholder="Search sub-categories"
-                  aria-label="Search Master Inventory sub-categories"
-                  className="h-9 w-full rounded-md border border-black/[0.14] bg-white pr-3 pl-9 text-sm text-[#171717] placeholder:text-[#86868B] focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20 focus:outline-none disabled:cursor-not-allowed disabled:bg-[#F8F9FA]"
-                />
-              </div>
-              <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-black/[0.14] bg-white p-2 text-sm text-[#171717]">
-                {visibleSubCategories.map((name) => (
-                  <label
-                    key={name}
-                    className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 hover:bg-[#F8F9FA] has-[:disabled]:cursor-not-allowed has-[:disabled]:text-[#86868B]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedSubCategories.some(
-                        (item) => item.toLowerCase() === name.toLowerCase(),
-                      )}
-                      onChange={(event) =>
-                        toggleName(
-                          "subCategory",
-                          name,
-                          event.target.checked,
-                          selectedSubCategories,
-                          activeDomainId,
-                          setSubCategorySelection,
-                        )
-                      }
-                      disabled={!activeDomainId || isLoading}
-                      className="size-4 rounded border-black/[0.25] accent-[#007AFF]"
-                    />
-                    <span>{name}</span>
-                  </label>
-                ))}
-                {visibleSubCategories.length === 0 ? (
-                  <p className="px-1 py-2 text-xs text-[#86868B]">No matching sub-categories.</p>
-                ) : null}
-              </div>
-            </fieldset>
-            <div
-              className="relative z-10 mt-4 rounded-lg border border-[#007AFF]/15 bg-[#F7FBFF] p-4"
-              aria-live="polite"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold tracking-[0.06em] text-[#5F6368] uppercase">
-                    Product impact
-                  </p>
-                  <p className="mt-1 text-xs leading-4 text-[#5F6368]">
-                    Live coverage for this draft mapping.
+            <div className="mt-5 grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(250px,0.72fr)]">
+              <fieldset
+                disabled={!activeDomainId || isLoading}
+                aria-describedby="master-inventory-sub-categories-help"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <legend className="text-xs font-bold tracking-[0.06em] text-[#5F6368] uppercase">
+                    Master Inventory sub-categories
+                  </legend>
+                  <p className="text-xs font-medium text-[#5F6368]" aria-live="polite">
+                    {selectedSubCategories.length} selected · {visibleSubCategories.length} visible
                   </p>
                 </div>
-                <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-[#005CC8] ring-1 ring-[#007AFF]/20">
-                  Preview
-                </span>
-              </div>
-              {selectedIndustries.length === 0 ? (
-                <p className="mt-1 text-xs leading-4 text-[#5F6368]">
-                  Select one or more Master Inventory industries to preview matching products.
-                </p>
-              ) : selectedSubCategories.length === 0 ? (
-                <p className="mt-1 text-xs leading-4 text-[#5F6368]">
-                  Select one or more sub-categories to preview matching products and features.
-                </p>
-              ) : isProductPreviewLoading ? (
-                <p className="mt-1 text-xs leading-4 text-[#5F6368]">
-                  Checking product coverage...
-                </p>
-              ) : productPreviewError ? (
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs leading-4 text-[#B42318]">
-                  <span>Unable to preview product coverage.</span>
-                  <button
-                    type="button"
-                    onClick={() => void refetchProductPreview()}
-                    className="font-semibold text-[#007AFF] hover:underline focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:outline-none"
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : productPreview ? (
-                <>
-                  <div className="mt-4 flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2.5 ring-1 ring-black/[0.06]">
-                    <p className="text-[11px] font-semibold tracking-[0.04em] text-[#5F6368] uppercase">
-                      Products
-                    </p>
-                    <p className="text-xl leading-none font-bold text-[#1D1D1F]">
-                      {productPreview.productCount}
-                    </p>
-                  </div>
-                  {productPreview.truncated ? (
-                    <p className="mt-2 text-xs leading-4 text-[#5F6368]">
-                      Coverage is capped while the catalog is large; counts reflect the first fetch
-                      window.
-                    </p>
-                  ) : null}
-                  {productPreview.productCount === 0 ? (
-                    <p className="mt-3 rounded-md bg-[#FFF7E8] px-2 py-2 text-xs leading-4 text-[#9A6700]">
-                      No active Master Inventory products match this draft mapping. Update it before
-                      saving.
-                    </p>
-                  ) : productPreview.sampleProducts.length > 0 ? (
-                    <div className="mt-3">
-                      <p className="text-[11px] font-semibold tracking-[0.04em] text-[#5F6368] uppercase">
-                        Sample products
-                      </p>
-                      <ul className="mt-1 max-h-44 space-y-1 overflow-y-auto pr-1">
-                        {productPreview.sampleProducts.map((product) => (
-                          <li
-                            key={product.id}
-                            className="text-xs leading-4 font-semibold text-[#1D1D1F]"
+                <div className="relative z-0 mt-2 overflow-visible rounded-md border border-black/[0.14] bg-white">
+                  {selectedSubCategories.length > 0 ? (
+                    <div className="border-b border-black/[0.08] bg-[#F7FBFF] p-2">
+                      <div className="flex items-start gap-1.5">
+                        <div
+                          className="flex min-w-0 flex-1 flex-wrap content-start gap-1.5"
+                          aria-label="Selected Master Inventory sub-categories"
+                        >
+                          {displayedSelectedSubCategories.map((name) => (
+                            <SelectedSubCategoryChip
+                              key={name}
+                              name={name}
+                              disabled={isLoading}
+                              onRemove={() => removeSubCategory(name)}
+                            />
+                          ))}
+                        </div>
+                        {hasAdditionalSelectedSubCategories ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAreSelectedSubCategoriesExpanded((isExpanded) => !isExpanded)
+                            }
+                            className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-xs font-semibold text-[#005CC8] hover:bg-[#EAF4FF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:outline-none"
+                            aria-expanded={areSelectedSubCategoriesExpanded}
+                            aria-label={
+                              areSelectedSubCategoriesExpanded
+                                ? "Collapse selected sub-categories"
+                                : `Show ${selectedSubCategories.length - 2} more selected sub-categories`
+                            }
                           >
-                            {product.name}
-                            <span className="ml-1 font-normal text-[#5F6368]">
-                              · {product.features.length}{" "}
-                              {product.features.length === 1 ? "feature" : "features"}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
+                            {!areSelectedSubCategoriesExpanded
+                              ? `+${selectedSubCategories.length - 2}`
+                              : null}
+                            <ChevronDown
+                              aria-hidden="true"
+                              size={16}
+                              className={`transition-transform ${
+                                areSelectedSubCategoriesExpanded ? "rotate-180" : ""
+                              }`}
+                            />
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   ) : null}
-                </>
-              ) : null}
+                  {areSelectedSubCategoriesExpanded ? (
+                    <div className="absolute inset-x-0 top-0 z-30 rounded-md border border-[#8CC5FF] bg-[#F7FBFF] p-2 shadow-[0_12px_28px_rgba(15,23,42,0.18)]">
+                      <div className="flex items-start gap-1.5">
+                        <div
+                          className="flex min-w-0 flex-1 flex-wrap content-start gap-1.5"
+                          aria-label="Expanded selected Master Inventory sub-categories"
+                        >
+                          {selectedSubCategories.map((name) => (
+                            <SelectedSubCategoryChip
+                              key={name}
+                              name={name}
+                              disabled={isLoading}
+                              onRemove={() => removeSubCategory(name)}
+                            />
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setAreSelectedSubCategoriesExpanded(false)}
+                          className="inline-flex h-7 shrink-0 items-center rounded-md px-1.5 text-[#005CC8] hover:bg-[#EAF4FF] focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:outline-none"
+                          aria-label="Collapse selected sub-categories"
+                        >
+                          <ChevronDown aria-hidden="true" size={16} className="rotate-180" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="border-b border-black/[0.08] p-2">
+                    <div className="relative">
+                      <Search
+                        aria-hidden="true"
+                        size={15}
+                        className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#86868B]"
+                      />
+                      <input
+                        type="search"
+                        value={subCategorySearch}
+                        onChange={(event) => setSubCategorySearch(event.target.value)}
+                        disabled={!activeDomainId || isLoading}
+                        placeholder="Search sub-categories"
+                        aria-label="Search Master Inventory sub-categories"
+                        className="h-9 w-full rounded-md border border-transparent bg-[#F8F9FA] pr-3 pl-9 text-sm text-[#171717] placeholder:text-[#86868B] focus:border-[#007AFF] focus:bg-white focus:ring-2 focus:ring-[#007AFF]/20 focus:outline-none disabled:cursor-not-allowed disabled:bg-[#F8F9FA]"
+                      />
+                    </div>
+                  </div>
+                  <div className="h-44 overflow-y-auto p-2 text-sm text-[#171717]">
+                    {visibleSubCategories.map((name) => (
+                      <label
+                        key={name}
+                        className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 hover:bg-[#F8F9FA] has-[:disabled]:cursor-not-allowed has-[:disabled]:text-[#86868B]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedSubCategories.some(
+                            (item) => item.toLowerCase() === name.toLowerCase(),
+                          )}
+                          onChange={(event) =>
+                            toggleName(
+                              "subCategory",
+                              name,
+                              event.target.checked,
+                              selectedSubCategories,
+                              activeDomainId,
+                              setSubCategorySelection,
+                            )
+                          }
+                          disabled={!activeDomainId || isLoading}
+                          className="size-4 rounded border-black/[0.25] accent-[#007AFF]"
+                        />
+                        <span>{name}</span>
+                      </label>
+                    ))}
+                    {visibleSubCategories.length === 0 ? (
+                      <p className="px-1 py-2 text-xs text-[#86868B]">
+                        No matching sub-categories.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </fieldset>
+              <div
+                className="relative z-10 h-full rounded-lg border border-[#007AFF]/15 bg-[#F7FBFF] p-4"
+                aria-live="polite"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold tracking-[0.06em] text-[#5F6368] uppercase">
+                      Product impact
+                    </p>
+                    <p className="mt-1 text-xs leading-4 text-[#5F6368]">
+                      Live coverage for this draft mapping.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-[#005CC8] ring-1 ring-[#007AFF]/20">
+                    Preview
+                  </span>
+                </div>
+                {selectedSubCategories.length === 0 ? (
+                  <p className="mt-1 text-xs leading-4 text-[#5F6368]">
+                    Select one or more sub-categories to preview matching products and features.
+                  </p>
+                ) : isProductPreviewLoading ? (
+                  <p className="mt-1 text-xs leading-4 text-[#5F6368]">
+                    Checking product coverage...
+                  </p>
+                ) : productPreviewError ? (
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs leading-4 text-[#B42318]">
+                    <span>Unable to preview product coverage.</span>
+                    <button
+                      type="button"
+                      onClick={() => void refetchProductPreview()}
+                      className="font-semibold text-[#007AFF] hover:underline focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:outline-none"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : productPreview ? (
+                  <>
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2.5 ring-1 ring-black/[0.06]">
+                        <p className="text-[11px] font-semibold tracking-[0.04em] text-[#5F6368] uppercase">
+                          Products
+                        </p>
+                        <p className="text-xl leading-none font-bold text-[#1D1D1F]">
+                          {productPreview.productCount}
+                        </p>
+                      </div>
+                    </div>
+                    {productPreview.truncated ? (
+                      <p className="mt-2 text-xs leading-4 text-[#5F6368]">
+                        Coverage is capped while the catalog is large; counts reflect the first
+                        fetch window.
+                      </p>
+                    ) : null}
+                    {productPreview.productCount === 0 ? (
+                      <p className="mt-3 rounded-md bg-[#FFF7E8] px-2 py-2 text-xs leading-4 text-[#9A6700]">
+                        No active Master Inventory products match this draft mapping. Update it
+                        before saving.
+                      </p>
+                    ) : productPreview.sampleProducts.length > 0 ? (
+                      <div className="mt-3">
+                        <p className="text-[11px] font-semibold tracking-[0.04em] text-[#5F6368] uppercase">
+                          Sample products
+                        </p>
+                        <div className="mt-1 h-44 space-y-3 overflow-x-hidden overflow-y-auto pr-1">
+                          {productPreview.sampleProducts.map((product) => {
+                            const featureItems = Array.from(
+                              new Map(
+                                [...product.features, ...product.otherFeatures].map((feature) => [
+                                  feature.toLowerCase(),
+                                  { id: feature, label: feature },
+                                ]),
+                              ).values(),
+                            );
+                            const structuredFeatureCount = new Set(
+                              product.features.map((feature) => feature.toLowerCase()),
+                            ).size;
+                            const otherFeatureCount = new Set(
+                              product.otherFeatures.map((feature) => feature.toLowerCase()),
+                            ).size;
+
+                            return (
+                              <div key={product.id}>
+                                <p className="text-xs leading-4 font-semibold text-[#1D1D1F]">
+                                  {product.name}
+                                </p>
+                                <p className="mt-0.5 text-[11px] leading-4 text-[#5F6368]">
+                                  {structuredFeatureCount} structured{" "}
+                                  {structuredFeatureCount === 1 ? "feature" : "features"} +{" "}
+                                  {otherFeatureCount} other{" "}
+                                  {otherFeatureCount === 1 ? "feature" : "features"} ={" "}
+                                  {featureItems.length} unique{" "}
+                                  {featureItems.length === 1 ? "chip" : "chips"}
+                                </p>
+                                {featureItems.length > 0 ? (
+                                  <ExpandableChipPanel
+                                    detailItems={featureItems}
+                                    items={featureItems}
+                                    detailLabel={`Features for ${product.name}`}
+                                  />
+                                ) : (
+                                  <p className="mt-1 text-xs leading-4 text-[#5F6368]">
+                                    No product feature metadata is available for this product.
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
             </div>
             <p
               id="master-inventory-sub-categories-help"
@@ -555,7 +702,6 @@ export function MasterInventoryMappingCard({
                 onClick={() => void saveDomainMapping()}
                 disabled={
                   !activeDomainId ||
-                  selectedSubCategories.length === 0 ||
                   !isDomainMappingDirty ||
                   isLoading ||
                   updateDomainMappingMutation.isPending
