@@ -329,6 +329,8 @@ export type StackSelectionReport = {
   createdAt: string;
   description: string;
   name: string;
+  /** The plan the report was made against. Absent from an older response, which means Custom. */
+  planId?: string;
   planName: string;
   status: MissingFeatureStatus;
 };
