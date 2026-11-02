@@ -344,12 +344,6 @@ export type StackSelectionCost = {
   name: string;
 };
 
-/** An amount as the customer entered it, in the currency they used. */
-export type StackSelectionAmount = {
-  amount: string;
-  currency: string;
-};
-
 export type StackSelection = {
   additionalCosts: StackSelectionCost[];
   assessmentId: string;
@@ -363,13 +357,6 @@ export type StackSelection = {
   plans: StackSelectionPlan[];
   reportedFeatures: StackSelectionReport[];
   selectedAt: string;
-  /**
-   * The Tech Cost / yr the customer typed, in USD. Null when they left it blank: the
-   * customer app then calculates it from the selected plans, and that figure is not stored.
-   */
-  techCost: StackSelectionAmount | null;
-  /** The total annual IT expenditure the customer entered; null when they did not. */
-  totalAnnualItExpenditure: StackSelectionAmount | null;
 };
 
 export type StackProductOrigin = "catalog-tool" | "created-tool";

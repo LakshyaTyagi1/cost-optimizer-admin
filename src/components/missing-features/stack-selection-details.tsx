@@ -26,48 +26,6 @@ function Section({ children, title }: { children: ReactNode; title: string }) {
   );
 }
 
-/**
- * The two figures from the customer's Technology Stack step. They belong to the customer's
- * assessment, so every tool they chose shows the same pair. A blank Tech Cost is calculated
- * by the customer app from the selected plans and never stored, so none is shown for it.
- */
-function ItSpendCell({ selection }: { selection: StackSelection }) {
-  const { techCost, totalAnnualItExpenditure } = selection;
-
-  return (
-    <dl className="flex flex-col gap-2">
-      <div>
-        <dt className="text-[11px] text-[#86868B]">Total annual IT expenditure / yr</dt>
-        <dd className="font-medium text-[#1D1D1F]">
-          {totalAnnualItExpenditure ? (
-            <Money
-              amount={totalAnnualItExpenditure.amount}
-              currency={totalAnnualItExpenditure.currency}
-            />
-          ) : (
-            <span className="font-normal text-[#86868B]">Not entered</span>
-          )}
-        </dd>
-      </div>
-      <div>
-        <dt className="text-[11px] text-[#86868B]">Tech Cost / yr</dt>
-        <dd className="font-medium text-[#1D1D1F]">
-          {techCost ? (
-            <Money amount={techCost.amount} currency={techCost.currency} />
-          ) : (
-            <span
-              className="font-normal text-[#86868B]"
-              title="Left blank by the customer, so the app calculates it from their selected plans. That figure is not stored."
-            >
-              Not entered
-            </span>
-          )}
-        </dd>
-      </div>
-    </dl>
-  );
-}
-
 function CostLine({ cost }: { cost: StackSelection["additionalCosts"][number] }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-x-1">
@@ -180,10 +138,6 @@ function SelectionRow({ selection }: { selection: StackSelection }) {
         )}
       </td>
 
-      <td className="px-3 py-2">
-        <ItSpendCell selection={selection} />
-      </td>
-
       <td className="px-3 py-2 whitespace-nowrap text-[#5F6368]">
         {formatShortDate(selection.selectedAt) || "—"}
       </td>
@@ -194,7 +148,7 @@ function SelectionRow({ selection }: { selection: StackSelection }) {
 function SelectionsTable({ product }: { product: StackProduct }) {
   return (
     <div className="overflow-x-auto rounded-md border border-black/[0.08] bg-white">
-      <table className="w-full min-w-[980px] text-left text-[12px]">
+      <table className="w-full min-w-[820px] text-left text-[12px]">
         <thead className={headRow}>
           <tr>
             <th scope="col" className={headerCell}>
@@ -208,9 +162,6 @@ function SelectionsTable({ product }: { product: StackProduct }) {
             </th>
             <th scope="col" className={headerCell}>
               Additional costs
-            </th>
-            <th scope="col" className={headerCell}>
-              Annual IT spend
             </th>
             <th scope="col" className={headerCell}>
               Selected on
