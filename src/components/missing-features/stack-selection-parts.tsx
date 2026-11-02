@@ -7,10 +7,7 @@ import {
   type MissingFeatureStatus,
   type StackFeatureOrigin,
 } from "@/features/missing-features/api";
-import type {
-  PlanSummary,
-  ReportSummary,
-} from "@/features/missing-features/utils/stack-selection-view";
+import type { PlanSummary } from "@/features/missing-features/utils/stack-selection-view";
 
 /**
  * The badges and colour code shared by every part of the technology stack view, so one
@@ -28,7 +25,7 @@ export const statusTone: Record<MissingFeatureStatus, string> = {
 
 const addedTone = "border-[#B9D6FF] bg-[#E8F1FF] text-[#005CC8]";
 const catalogTone = "border-black/10 bg-[#F2F2F7] text-[#5F6368]";
-const reportedTone = "border-[#F5D9A8] bg-[#FFF4E5] text-[#B26B00]";
+export const reportedTone = "border-[#F5D9A8] bg-[#FFF4E5] text-[#B26B00]";
 const customTone = "border-[#D9C9F5] bg-[#F3EDFF] text-[#5B35B0]";
 
 export const featureOriginTone: Record<StackFeatureOrigin, string> = {
@@ -157,28 +154,6 @@ export function PlanCard({
             />
           </button>
         ) : null}
-      </div>
-    </li>
-  );
-}
-
-export function ReportCard({ report }: { report: ReportSummary }) {
-  return (
-    <li className={`flex flex-col gap-1.5 rounded-lg border px-3 py-2 ${reportedTone}`}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="text-[12px] font-semibold">{report.name}</p>
-        <span className="text-[11px] opacity-80">{plural(report.customerCount, "customer")}</span>
-      </div>
-      {report.description ? (
-        <p className="text-[11px] text-[#1D1D1F]/80">{report.description}</p>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-        {report.statuses.map((status) => (
-          <StatusPill key={status} status={status} />
-        ))}
-        {report.planNames.length > 0 ? <span>Plan: {report.planNames.join(", ")}</span> : null}
-        {report.category ? <span>· {report.category}</span> : null}
-        {report.latestAt ? <span>· latest {formatShortDate(report.latestAt)}</span> : null}
       </div>
     </li>
   );
