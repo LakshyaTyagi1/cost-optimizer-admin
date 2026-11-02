@@ -7,28 +7,19 @@ import {
   fetchDataDictionaryOptions,
   fetchDataDictionaryPageCatalog,
   fetchDataDictionaryProcessPage,
-  previewTechnologyProductMapping,
-  fetchTechnologyProductDomainMapping,
-  fetchTechnologyProductIndustryMapping,
   fetchMasterInventoryClassifications,
   fetchMasterInventoryDomainMapping,
   fetchMasterInventoryIndustryMapping,
   previewMasterInventoryMapping,
   fetchMappedTechStackPage,
-  fetchZoftwarehubParentIndustries,
-  fetchZoftwarehubSubCategories,
   type DataDictionaryCatalog,
   type DataDictionaryOptions,
   type DataDictionaryPayload,
   type DataDictionaryProcessPage,
   type DataDictionaryTechStackPage,
-  type TechnologyProductDomainMapping,
-  type TechnologyProductIndustryMapping,
-  type TechnologyProductMappingPreview,
   type MasterInventoryDomainMapping,
   type MasterInventoryIndustryMapping,
   type MasterInventoryMappingPreview,
-  type ZoftwarehubTaxonomyOption,
 } from "@/features/data-dictionary/api";
 import type { DictionaryProcess } from "@/features/data-dictionary/model";
 
@@ -43,11 +34,6 @@ export const dataDictionaryProcessesQueryKey = ["data-dictionary", "processes"] 
 export const dataDictionaryOptionsQueryKey = ["data-dictionary", "options"] as const;
 export const archiveProcessesQueryKey = ["data-dictionary", "archive", "processes"] as const;
 export const techStackQueryKey = ["data-dictionary", "tech-stack"] as const;
-export const technologyProductMappingQueryKey = [
-  "data-dictionary",
-  "technology-product-mapping",
-] as const;
-export const zoftwarehubTaxonomyQueryKey = ["data-dictionary", "zoftwarehub-taxonomy"] as const;
 export const masterInventoryMappingQueryKey = [
   "data-dictionary",
   "master-inventory-mapping",
@@ -62,19 +48,6 @@ export type DataDictionaryOptionsQuery = UseQueryResult<DataDictionaryOptions, E
 export type DataDictionaryProcessPageQuery = UseQueryResult<DataDictionaryProcessPage, Error>;
 export type ArchivedDataDictionaryProcessesQuery = UseQueryResult<DictionaryProcess[], Error>;
 export type DataDictionaryTechStackPageQuery = UseQueryResult<DataDictionaryTechStackPage, Error>;
-export type TechnologyProductIndustryMappingQuery = UseQueryResult<
-  TechnologyProductIndustryMapping,
-  Error
->;
-export type TechnologyProductDomainMappingQuery = UseQueryResult<
-  TechnologyProductDomainMapping,
-  Error
->;
-export type TechnologyProductMappingPreviewQuery = UseQueryResult<
-  TechnologyProductMappingPreview,
-  Error
->;
-export type ZoftwarehubTaxonomyQuery = UseQueryResult<ZoftwarehubTaxonomyOption[], Error>;
 
 export function useDataDictionary(): DataDictionaryQuery {
   return useQuery<DataDictionaryPayload, Error>({
@@ -209,91 +182,6 @@ export function useMappedTechStackPage({
   });
 }
 
-export function useTechnologyProductIndustryMapping({
-  enabled,
-  industryId,
-}: {
-  enabled: boolean;
-  industryId: string;
-}): TechnologyProductIndustryMappingQuery {
-  return useQuery<TechnologyProductIndustryMapping, Error>({
-    queryKey: [...technologyProductMappingQueryKey, "industry", industryId],
-    queryFn: () => fetchTechnologyProductIndustryMapping(industryId),
-    enabled: enabled && Boolean(industryId),
-    staleTime: dataDictionaryCacheTime,
-  });
-}
-
-export function useTechnologyProductDomainMapping({
-  domainId,
-  enabled,
-}: {
-  domainId: string;
-  enabled: boolean;
-}): TechnologyProductDomainMappingQuery {
-  return useQuery<TechnologyProductDomainMapping, Error>({
-    queryKey: [...technologyProductMappingQueryKey, "domain", domainId],
-    queryFn: () => fetchTechnologyProductDomainMapping(domainId),
-    enabled: enabled && Boolean(domainId),
-    staleTime: dataDictionaryCacheTime,
-  });
-}
-
-export function useTechnologyProductMappingPreview({
-  enabled,
-  parentIndustryId,
-  subCategoryIds,
-}: {
-  enabled: boolean;
-  parentIndustryId: string;
-  subCategoryIds: string[];
-}): TechnologyProductMappingPreviewQuery {
-  const normalizedSubCategoryIds = Array.from(new Set(subCategoryIds)).sort();
-
-  return useQuery<TechnologyProductMappingPreview, Error>({
-    queryKey: [
-      ...technologyProductMappingQueryKey,
-      "preview",
-      parentIndustryId,
-      normalizedSubCategoryIds,
-    ],
-    queryFn: () =>
-      previewTechnologyProductMapping({
-        parentIndustryIds: [parentIndustryId],
-        subCategoryIds: normalizedSubCategoryIds,
-      }),
-    enabled: enabled && Boolean(parentIndustryId) && normalizedSubCategoryIds.length > 0,
-    refetchOnWindowFocus: false,
-    staleTime: 30_000,
-  });
-}
-
-export function useZoftwarehubParentIndustries({
-  enabled,
-}: {
-  enabled: boolean;
-}): ZoftwarehubTaxonomyQuery {
-  return useQuery<ZoftwarehubTaxonomyOption[], Error>({
-    queryKey: [...zoftwarehubTaxonomyQueryKey, "parent-industries"],
-    queryFn: fetchZoftwarehubParentIndustries,
-    enabled,
-    staleTime: dataDictionaryCacheTime,
-  });
-}
-
-export function useZoftwarehubSubCategories({
-  enabled,
-}: {
-  enabled: boolean;
-}): ZoftwarehubTaxonomyQuery {
-  return useQuery<ZoftwarehubTaxonomyOption[], Error>({
-    queryKey: [...zoftwarehubTaxonomyQueryKey, "sub-categories"],
-    queryFn: fetchZoftwarehubSubCategories,
-    enabled,
-    staleTime: dataDictionaryCacheTime,
-  });
-}
-
 export type MasterInventoryIndustryMappingQuery = UseQueryResult<
   MasterInventoryIndustryMapping,
   Error
@@ -379,6 +267,9 @@ export function useMasterInventoryMappingPreview({
         industries: normalizedIndustries,
         subCategories: normalizedSubCategories,
       }),
+    // Only the sub-category mapping is required. The Master Inventory industry
+    // column is sparse (every child is currently "Industry"), so requiring an
+    // industry selection would block preview entirely.
     enabled: enabled && normalizedSubCategories.length > 0,
     refetchOnWindowFocus: false,
     staleTime: 30_000,
