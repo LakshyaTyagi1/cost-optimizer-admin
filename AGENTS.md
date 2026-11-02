@@ -21,7 +21,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - This is a browser-based administration console built with Next.js 16 App Router, React 19, strict TypeScript, Tailwind CSS 4, TanStack Query, TanStack Virtual, Recharts, and Lucide icons.
 - The browser calls an external admin backend directly. `NEXT_PUBLIC_API_URL` is required and must be an absolute HTTP(S) URL.
 - `/login` is guest-only. All routes in `src/app/(dashboard)` are wrapped by the client-side `ProtectedRoute`.
-- Live workflows include dashboard analytics, assessment review, Data Dictionary management, archive restore/permanent deletion, currency configuration, and profile display.
+- Live workflows include dashboard analytics, assessment review, the read-only technology stack view, Data Dictionary management, archive restore/permanent deletion, currency configuration, and profile display.
 
 ## Routes and current capability status
 
@@ -30,6 +30,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `/assessments/[assessmentId]`: read-only Overview, Activity, Processes, Due Diligence, Results, Strategy/RFP, Expert, and Notes tabs.
 - `/data-dictionary`: the primary write surface for industries, domains, mappings, process libraries, technology tools, defaults, ordering, status, and currency settings.
 - `/archive`: restore archived processes or permanently delete one/all archived process records.
+- `/missing-features`: the read-only **Technology stack** view, and nothing else. It lists every tool or product customers selected, one row each, from `GET /adm/cos-process-management/missing-features/stack-selections` (server-side search, filters, sort and paging). A row opens to a card per plan (price, type, feature counts, a drawer with the plan's features and reports) and each customer's own selection. Reports are shown on the plan they were made against. Amounts show in AED with an AED/USD toggle. It is for QA to read before updating the Master Inventory catalog; there is no catalog write API yet. The reported-features review queue (review, accept, decline, revert) was removed from this page, so the console offers no way to act on a report; the backend endpoints and the unused data layer in `src/features/missing-features/api.ts` and `queries.ts` remain.
 - `/experts`: currently displays hard-coded experts; Add Expert is not connected.
 - `/profile`: read-only identity and access-role information.
 - `/settings`: mostly informational/planned; only linked Data Dictionary settings are live.
@@ -40,7 +41,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## Repository ownership
 
 - `src/app/`: thin App Router pages, layouts, metadata, and route-level error boundaries.
-- `src/features/<feature>/`: authoritative feature models, APIs, queries, utilities, and extracted feature UI for `auth`, `dashboard`, `assessments`, and `data-dictionary`.
+- `src/features/<feature>/`: authoritative feature models, APIs, queries, utilities, and extracted feature UI for `auth`, `dashboard`, `assessments`, `data-dictionary`, and `missing-features` (grouping and currency logic in `utils/`, UI in `src/components/missing-features/`).
 - `src/components/`: page coordinators, the admin shell, authentication UI, feature UI that has not yet migrated, and small shared UI atoms.
 - `src/lib/api/`: canonical URL construction, request headers, response-envelope handling, and list/data helpers.
 - `src/lib/auth/storage.ts`: canonical browser-session storage helpers and admin-user shape.
@@ -107,6 +108,8 @@ npm run build
 - Preserve stable IDs/slugs/domain keys, display order, active/inactive/archive/deleted distinctions, and the process scopes `industry-default` and `industry-domain`.
 - API adapters intentionally tolerate backend `id`/`_id` and nested entity variants. Normalize through the existing adapters instead of leaking backend variants into UI code.
 - Use the existing currency and process-metric helpers. The canonical base is AED, USD is a display/input currency, and the configured backend conversion rate takes precedence over fallback values. Never inline a new exchange rate or double-convert normalized amounts.
+- The technology stack view converts for display only, and always from the amount as the customer entered it (`utils/stack-money.ts`). The rate is the configured one read through the Data Dictionary options query, so saving a rate there refreshes this view; the existing default is used and labelled until it loads. A currency other than AED or USD is shown as entered. The AED mark is the official Dirham glyph copied from the MIT `dirham` package (as the customer app uses it), not installed, so `package.json` and the lockfile stay unchanged.
+- A customer's Tech Cost / yr is calculated in the customer app when left blank and is not stored, so the admin must not recompute it or show it as if it were stored. The stack-selections endpoint returns `techCost` and `totalAnnualItExpenditure` per selection, but this view deliberately does not show them.
 - Technology benchmark prices are USD and non-negative. Preserve source metadata and validation; do not replace backend data with hard-coded `initial*` fixtures or expert/reference display data.
 - Permanent deletion is irreversible. Preserve confirmation dialogs, busy guards, exact target identity, and all backend preconditions:
   - deactivate a domain before permanent deletion;
