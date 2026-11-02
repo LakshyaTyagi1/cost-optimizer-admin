@@ -242,8 +242,14 @@ export function useMasterInventoryMappingPreview({
   industries: string[];
   subCategories: string[];
 }): MasterInventoryMappingPreviewQuery {
+  // The industry mapping is advisory and the backend rejects the upstream "Industry"
+  // placeholder, so only real industry names are sent with the preview.
   const normalizedIndustries = Array.from(
-    new Set(industries.map((name) => name.trim()).filter(Boolean)),
+    new Set(
+      industries
+        .map((name) => name.trim())
+        .filter((name) => name && name.toLowerCase() !== "industry"),
+    ),
   ).sort();
   const normalizedSubCategories = Array.from(
     new Set(subCategories.map((name) => name.trim()).filter(Boolean)),
