@@ -3,12 +3,14 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import {
   acceptMissingFeatureCandidate,
   declineMissingFeatureCandidate,
+  fetchStackSelections,
   fetchMissingFeatures,
   reviewMissingFeatureCandidate,
   revertMissingFeatureCandidate,
   type MissingFeatureActionResult,
   type MissingFeatureCandidate,
   type MissingFeatureQuery,
+  type StackSelectionsQuery,
 } from "@/features/missing-features/api";
 
 export const missingFeaturesQueryKey = ["missing-features"] as const;
@@ -33,6 +35,22 @@ function useInvalidateMissingFeatures() {
   const queryClient = useQueryClient();
 
   return () => queryClient.invalidateQueries({ queryKey: missingFeaturesQueryKey });
+}
+
+export const stackSelectionsQueryKey = [...missingFeaturesQueryKey, "stack-selections"] as const;
+
+/**
+ * Read-only: the technology stack customers selected, for QA to read before updating the
+ * Master Inventory catalog. It sits under the missing-features key, so accepting,
+ * declining or undoing a report refreshes the report statuses shown here.
+ */
+export function useStackSelectionsQuery(query: StackSelectionsQuery) {
+  return useQuery({
+    queryKey: [...stackSelectionsQueryKey, query],
+    queryFn: ({ signal }) => fetchStackSelections(query, signal),
+    placeholderData: keepPreviousData,
+    staleTime: missingFeaturesCacheTime,
+  });
 }
 
 export function useReviewMissingFeatureMutation() {

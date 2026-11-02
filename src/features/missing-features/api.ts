@@ -289,3 +289,166 @@ export async function declineMissingFeatureCandidate(
 
   return { candidate: data };
 }
+
+/**
+ * The technology stack customers selected: every tool or product, with one `selections`
+ * entry for each assessment that chose it. Each selection carries the plans the customer
+ * picked with their prices and features, the features they ticked, the features they
+ * reported as missing and the additional costs they recorded. Read-only: it exists so QA
+ * can see what to add to or change in the Master Inventory catalog, and nothing here is
+ * written back.
+ *
+ * A feature's `origin` is `added` when the customer made it up and `catalog` when it came
+ * from the catalog. A catalog plan has no "not selected" state; only a plan the customer
+ * created can be saved unticked.
+ */
+export type StackFeatureOrigin = "added" | "catalog";
+
+export type StackSelectionPlanKind = "catalog" | "created" | "custom";
+
+export type StackSelectionFeature = {
+  featureId: string;
+  name: string;
+  origin: StackFeatureOrigin;
+};
+
+export type StackSelectionPlan = {
+  currency: string;
+  features: StackSelectionFeature[];
+  kind: StackSelectionPlanKind | string;
+  name: string;
+  planId: string;
+  selected: boolean;
+  /** Empty when the customer did not enter a price for the plan. */
+  unitPrice: string;
+};
+
+export type StackSelectionReport = {
+  candidateId: string;
+  category: string;
+  createdAt: string;
+  description: string;
+  name: string;
+  planName: string;
+  status: MissingFeatureStatus;
+};
+
+export type StackSelectionCost = {
+  amount: string;
+  costId: string;
+  costType: string;
+  currency: string;
+  description: string;
+  enabled: boolean;
+  frequency: string;
+  name: string;
+};
+
+export type StackSelection = {
+  additionalCosts: StackSelectionCost[];
+  assessmentId: string;
+  assessmentTitle: string;
+  customerCompany: string;
+  customerEmail: string;
+  customerName: string;
+  domain: string;
+  featuresInUse: Array<{ name: string; origin: StackFeatureOrigin }>;
+  industry: string;
+  plans: StackSelectionPlan[];
+  reportedFeatures: StackSelectionReport[];
+  selectedAt: string;
+};
+
+export type StackProductOrigin = "catalog-tool" | "created-tool";
+
+export type StackProduct = {
+  category: string;
+  company: string;
+  customerCount: number;
+  description: string;
+  key: string;
+  latestAt: string;
+  origin: StackProductOrigin;
+  productId: string;
+  reportedFeatureCount: number;
+  selectionCount: number;
+  selections: StackSelection[];
+  source: string;
+  subCategory: string;
+  toolName: string;
+};
+
+export type StackSelectionsSummary = {
+  createdTools: number;
+  customers: number;
+  products: number;
+  reportedFeatures: number;
+  selections: number;
+};
+
+export type StackSelectionSort = "most-selected" | "name" | "newest";
+
+export type StackSelectionsQuery = {
+  hasReports?: boolean;
+  limit?: number;
+  origin?: "catalog" | "created" | "";
+  page?: number;
+  reportStatus?: MissingFeatureStatus | "";
+  search?: string;
+  sort?: StackSelectionSort;
+};
+
+export type StackSelectionsPage = {
+  data: StackProduct[];
+  pagination: { limit: number; page: number; totalCount: number; totalPages: number };
+  summary: StackSelectionsSummary;
+};
+
+type StackSelectionsEnvelope = AdminApiResponse<StackProduct[]> & {
+  summary?: Partial<StackSelectionsSummary>;
+};
+
+export async function fetchStackSelections(
+  query: StackSelectionsQuery = {},
+  signal?: AbortSignal,
+): Promise<StackSelectionsPage> {
+  // The list comes with `pagination` and `summary` as siblings of `data`, so the whole
+  // envelope is read, as for the reported-features list.
+  const payload = (await fetchAdminApiResponse<StackProduct[]>(
+    `${adminBasePath}/stack-selections`,
+    {
+      authErrorMessage: "Admin access token is required to view the technology stack",
+      errorMessage: "Unable to load the technology stack",
+      includeJsonContentType: true,
+      params: {
+        hasReports: query.hasReports ? "true" : undefined,
+        limit: query.limit === undefined ? undefined : String(query.limit),
+        origin: query.origin || undefined,
+        page: query.page === undefined ? undefined : String(query.page),
+        reportStatus: query.reportStatus || undefined,
+        search: query.search?.trim() || undefined,
+        sort: query.sort,
+      },
+      signal,
+    },
+  )) as StackSelectionsEnvelope | null;
+  const pagination = payload?.pagination;
+  const summary = payload?.summary;
+
+  return {
+    data: Array.isArray(payload?.data) ? payload.data : [],
+    pagination: {
+      limit: pagination?.limit ?? query.limit ?? 20,
+      page: pagination?.page ?? query.page ?? 1,
+      totalCount: pagination?.totalCount ?? 0,
+      totalPages: pagination?.totalPages ?? 1,
+    },
+    summary: {
+      createdTools: summary?.createdTools ?? 0,
+      customers: summary?.customers ?? 0,
+      products: summary?.products ?? 0,
+      reportedFeatures: summary?.reportedFeatures ?? 0,
+      selections: summary?.selections ?? 0,
+    },
+  };
+}

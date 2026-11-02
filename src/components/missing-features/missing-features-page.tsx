@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
 import { AdminShell } from "@/components/admin-shell/admin-shell";
+import { StackSelectionsSection } from "@/components/missing-features/stack-selections-section";
 import {
   formatMissingFeatureHistory,
   missingFeatureStatusLabels,
@@ -637,6 +638,8 @@ export function MissingFeaturesPage() {
             </div>
           </div>
         ) : null}
+
+        <StackSelectionsSection />
 
         {acceptTarget ? (
           <div
