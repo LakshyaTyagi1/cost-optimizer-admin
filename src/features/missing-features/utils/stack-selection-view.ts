@@ -199,15 +199,28 @@ export function summarizeProduct(product: StackProduct): ProductSummary {
         addFeature(features, feature, customer);
       }
 
-      // The features a customer ticked and reported belong to their Custom plan, so that
-      // plan's panel lists them: it has no features of its own.
+      // The features a customer ticked belong to their Custom plan, so that plan's panel
+      // lists them: it has no features of its own.
       if (plan.kind === "custom") {
         for (const feature of selection.featuresInUse) {
           addFeature(entry.features, feature, customer);
         }
+      }
+    }
 
-        for (const report of selection.reportedFeatures) {
-          addReport(entry.reports, report, customer);
+    for (const report of selection.reportedFeatures) {
+      // A report is listed on the plan it was made against, so the drawer of an existing
+      // plan shows what customers say it lacks. One that names no plan, or whose plan the
+      // customer no longer has, is the Custom plan's.
+      const own =
+        selection.plans.find((plan) => report.planId && plan.planId === report.planId) ??
+        selection.plans.find((plan) => plan.kind === "custom");
+
+      if (own) {
+        const planEntry = plans.get(`${own.kind}::${normalized(own.name)}`);
+
+        if (planEntry) {
+          addReport(planEntry.reports, report, customer);
         }
       }
     }

@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { Users, X } from "lucide-react";
 
 import { PriceList } from "@/components/missing-features/stack-currency";
 import {
   Pill,
-  ReportCard,
+  StatusPill,
   featureOriginTone,
+  formatShortDate,
   plural,
   planKindBadge,
+  reportedTone,
 } from "@/components/missing-features/stack-selection-parts";
 import type { PlanSummary } from "@/features/missing-features/utils/stack-selection-view";
 
@@ -20,14 +22,63 @@ const filterThreshold = 8;
 const focusableSelector =
   'button:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 
+type FeatureKind = "reported" | "added" | "catalog";
+
+/** One colour per kind, the same ones used for the badges across the section. */
+const kinds: Record<FeatureKind, { dot: string; label: string; tile: string }> = {
+  reported: { dot: "bg-[#B26B00]", label: "Reported", tile: reportedTone },
+  added: { dot: "bg-[#005CC8]", label: "Added", tile: featureOriginTone.added },
+  catalog: { dot: "bg-[#8E8E93]", label: "Catalog", tile: featureOriginTone.catalog },
+};
+
 function matchesTerm(term: string, ...values: string[]) {
   return !term || values.some((value) => value.toLowerCase().includes(term));
 }
 
+/** How many customers chose something, as a small count that reads the same on every row. */
+function CustomerCount({ count }: { count: number }) {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 text-[11px] text-[#86868B] tabular-nums"
+      title={plural(count, "customer")}
+    >
+      <Users aria-hidden="true" size={12} />
+      {count}
+      <span className="sr-only">{count === 1 ? "customer" : "customers"}</span>
+    </span>
+  );
+}
+
+/** A titled group of rows in one bordered card, so a long list reads as one block. */
+function FeatureGroup({
+  children,
+  count,
+  kind,
+  title,
+}: {
+  children: ReactNode;
+  count: number;
+  kind: FeatureKind;
+  title: string;
+}) {
+  return (
+    <section aria-label={title} className="flex flex-col gap-2">
+      <h4 className="flex items-center gap-2 text-[12px] font-semibold text-[#171717]">
+        <span aria-hidden="true" className={`size-2 rounded-full ${kinds[kind].dot}`} />
+        {title}
+        <span className="font-normal text-[#86868B] tabular-nums">{count}</span>
+      </h4>
+      <ul className="divide-y divide-black/[0.06] overflow-hidden rounded-xl border border-black/[0.08] bg-white">
+        {children}
+      </ul>
+    </section>
+  );
+}
+
 /**
- * The features of one plan in a side panel: what the customers who chose it ticked or
+ * The features of one plan in a side drawer: what the customers who chose it ticked or
  * added, where each came from, how many customers chose it, and the features reported as
- * missing with their review status. A Custom plan has no features of its own, so its panel
+ * missing with their review status. A Custom plan has no features of its own, so its drawer
  * lists the ones customers ticked and reported.
  *
  * Read-only. Closes on Escape, on the backdrop and on the close button, keeps keyboard
@@ -43,12 +94,18 @@ export function PlanFeaturesPanel({
   productName: string;
 }) {
   const [filter, setFilter] = useState("");
+  const [kind, setKind] = useState<FeatureKind | "">("");
   const panelRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const titleId = useId();
   const term = filter.trim().toLowerCase();
   const badge = planKindBadge(plan.kind, plan.isNew);
-  const total = plan.features.length + plan.reports.length;
+  const counts: Record<FeatureKind, number> = {
+    added: plan.features.filter((feature) => feature.origin === "added").length,
+    catalog: plan.features.filter((feature) => feature.origin === "catalog").length,
+    reported: plan.reports.length,
+  };
+  const total = counts.added + counts.catalog + counts.reported;
   const added = plan.features.filter(
     (feature) => feature.origin === "added" && matchesTerm(term, feature.name),
   );
@@ -58,7 +115,11 @@ export function PlanFeaturesPanel({
   const reports = plan.reports.filter((report) =>
     matchesTerm(term, report.name, report.description, report.category),
   );
-  const shown = added.length + catalog.length + reports.length;
+  const isShown = (group: FeatureKind) => kind === "" || kind === group;
+  const shown =
+    (isShown("reported") ? reports.length : 0) +
+    (isShown("added") ? added.length : 0) +
+    (isShown("catalog") ? catalog.length : 0);
 
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -106,7 +167,7 @@ export function PlanFeaturesPanel({
     <div className="fixed inset-0 z-50 flex justify-end" onKeyDown={handleKeyDown}>
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-black/30 transition-opacity duration-200 starting:opacity-0"
+        className="absolute inset-0 bg-black/30 backdrop-blur-[1px] transition-opacity duration-200 starting:opacity-0"
         onClick={onClose}
       />
       <div
@@ -114,19 +175,23 @@ export function PlanFeaturesPanel({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative flex h-full w-full max-w-[460px] flex-col bg-white shadow-xl transition duration-200 ease-out starting:translate-x-6 starting:opacity-0"
+        className="relative flex h-full w-full max-w-[480px] flex-col bg-white shadow-2xl transition duration-200 ease-out sm:rounded-l-2xl starting:translate-x-6 starting:opacity-0"
       >
         <header className="flex items-start justify-between gap-3 border-b border-black/[0.08] px-5 py-4">
           <div className="flex min-w-0 flex-col gap-1">
-            <p className="truncate text-[11px] text-[#86868B]">{productName}</p>
-            <h3 id={titleId} className="text-[16px] leading-6 font-semibold text-[#171717]">
+            <p className="truncate text-[11px] font-medium tracking-[0.04em] text-[#86868B] uppercase">
+              {productName}
+            </p>
+            <h3 id={titleId} className="text-[18px] leading-6 font-semibold text-[#171717]">
               {plan.name}
             </h3>
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-[#86868B]">
               <Pill tone={badge.tone}>{badge.label}</Pill>
-              <span className="text-[11px] text-[#86868B]">
-                Chosen by {plural(plan.customerCount, "customer")}
+              <span className="inline-flex items-center gap-1">
+                <Users aria-hidden="true" size={12} />
+                {plural(plan.customerCount, "customer")}
               </span>
+              {plan.unselectedCount > 0 ? <span>Unticked by {plan.unselectedCount}</span> : null}
             </div>
           </div>
           <button
@@ -134,98 +199,145 @@ export function PlanFeaturesPanel({
             type="button"
             onClick={onClose}
             aria-label="Close the features panel"
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-[#5F6368] hover:bg-[#F5F5F7] focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:outline-none"
+            className="-mt-1 -mr-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-[#5F6368] transition-colors hover:bg-[#F5F5F7] focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:outline-none"
           >
             <X aria-hidden="true" size={18} />
           </button>
         </header>
 
-        <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">
-          <div className="text-[12px]">
-            <PriceList label={`Prices for ${plan.name}`} prices={plan.prices} />
-          </div>
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+          <div className="flex flex-col gap-5">
+            <section
+              aria-label="Price"
+              className="rounded-xl border border-black/[0.08] bg-[#FAFAFA] px-4 py-3"
+            >
+              <p className="text-[11px] font-medium text-[#86868B]">Price</p>
+              <div className="mt-1 text-[12px]">
+                <PriceList label={`Prices for ${plan.name}`} prices={plan.prices} size="hero" />
+              </div>
+            </section>
 
-          {total === 0 ? (
-            <p className="text-[12px] text-[#86868B]">No features are listed on this plan.</p>
-          ) : (
-            <>
-              {total > filterThreshold ? (
-                <input
-                  type="search"
-                  value={filter}
-                  onChange={(event) => setFilter(event.target.value)}
-                  placeholder="Filter features"
-                  aria-label={`Filter the features of ${plan.name}`}
-                  className="h-9 w-full rounded-lg border border-black/10 px-3 text-[12px] outline-none focus:border-black/25"
-                />
-              ) : null}
+            {total === 0 ? (
+              <p className="rounded-xl border border-dashed border-black/10 px-4 py-8 text-center text-[12px] text-[#86868B]">
+                No features are listed on this plan.
+              </p>
+            ) : (
+              <>
+                <div
+                  role="group"
+                  aria-label="Show features by kind"
+                  className="grid grid-cols-3 gap-2"
+                >
+                  {(Object.keys(kinds) as FeatureKind[]).map((group) => {
+                    const isActive = kind === group;
 
-              {shown === 0 ? (
-                <p className="text-[12px] text-[#86868B]">No feature matches this filter.</p>
-              ) : null}
+                    return (
+                      <button
+                        key={group}
+                        type="button"
+                        disabled={counts[group] === 0}
+                        aria-pressed={isActive}
+                        onClick={() => setKind(isActive ? "" : group)}
+                        className={`flex flex-col items-start rounded-xl border px-3 py-2 text-left transition outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/40 disabled:cursor-not-allowed disabled:opacity-40 ${
+                          kinds[group].tile
+                        } ${isActive ? "ring-2 ring-current" : "hover:brightness-[0.97]"}`}
+                      >
+                        <span className="text-[18px] leading-6 font-semibold tabular-nums">
+                          {counts[group]}
+                        </span>
+                        <span className="text-[11px] font-medium">{kinds[group].label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
 
-              {reports.length > 0 ? (
-                <section aria-label="Reported missing" className="flex flex-col gap-1.5">
-                  <h4 className="text-[12px] font-semibold text-[#B26B00]">
-                    Reported missing ({reports.length})
-                  </h4>
-                  <ul className="flex flex-col gap-2">
+                {total > filterThreshold ? (
+                  <input
+                    type="search"
+                    value={filter}
+                    onChange={(event) => setFilter(event.target.value)}
+                    placeholder="Filter features"
+                    aria-label={`Filter the features of ${plan.name}`}
+                    className="h-9 w-full rounded-lg border border-black/10 px-3 text-[12px] transition-colors outline-none focus:border-black/25"
+                  />
+                ) : null}
+
+                {shown === 0 ? (
+                  <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-black/10 px-4 py-8 text-center">
+                    <p className="text-[12px] text-[#86868B]">No feature matches this filter.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilter("");
+                        setKind("");
+                      }}
+                      className="rounded-md text-[12px] font-medium text-[#007AFF] hover:text-[#005CC8] focus-visible:ring-2 focus-visible:ring-[#007AFF]/30 focus-visible:outline-none"
+                    >
+                      Clear filter
+                    </button>
+                  </div>
+                ) : null}
+
+                {isShown("reported") && reports.length > 0 ? (
+                  <FeatureGroup count={reports.length} kind="reported" title="Reported missing">
                     {reports.map((report) => (
-                      <ReportCard key={report.key} report={report} />
+                      <li
+                        key={report.key}
+                        className="flex flex-col gap-1.5 border-l-[3px] border-l-[#F5A524] bg-[#FFFBF5] px-3.5 py-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-[13px] font-semibold text-[#1D1D1F]">{report.name}</p>
+                          <CustomerCount count={report.customerCount} />
+                        </div>
+                        {report.description ? (
+                          <p className="text-[12px] leading-[18px] text-[#5F6368]">
+                            {report.description}
+                          </p>
+                        ) : null}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[#86868B]">
+                          {report.statuses.map((status) => (
+                            <StatusPill key={status} status={status} />
+                          ))}
+                          {report.category ? <span>{report.category}</span> : null}
+                          {report.latestAt ? (
+                            <span>Latest {formatShortDate(report.latestAt)}</span>
+                          ) : null}
+                        </div>
+                      </li>
                     ))}
-                  </ul>
-                </section>
-              ) : null}
+                  </FeatureGroup>
+                ) : null}
 
-              {added.length > 0 ? (
-                <section aria-label="Added by customers" className="flex flex-col gap-1.5">
-                  <h4 className="text-[12px] font-semibold text-[#005CC8]">
-                    Added by customers ({added.length})
-                  </h4>
-                  <ul className="flex flex-col gap-1.5">
+                {isShown("added") && added.length > 0 ? (
+                  <FeatureGroup count={added.length} kind="added" title="Added by customers">
                     {added.map((feature) => (
                       <li
                         key={feature.name}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-black/[0.08] px-3 py-2 text-[12px]"
+                        className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-[13px] text-[#1D1D1F]"
                       >
-                        <span className="font-medium text-[#1D1D1F]">{feature.name}</span>
-                        <span className="flex shrink-0 items-center gap-2">
-                          <span className="text-[11px] text-[#86868B]">
-                            {plural(feature.customerCount, "customer")}
-                          </span>
-                          <Pill tone={`border ${featureOriginTone.added}`}>Added</Pill>
-                        </span>
+                        <span className="min-w-0 font-medium">{feature.name}</span>
+                        <CustomerCount count={feature.customerCount} />
                       </li>
                     ))}
-                  </ul>
-                </section>
-              ) : null}
+                  </FeatureGroup>
+                ) : null}
 
-              {catalog.length > 0 ? (
-                <section aria-label="From the catalog" className="flex flex-col gap-1.5">
-                  <h4 className="text-[12px] font-semibold text-[#5F6368]">
-                    From the catalog ({catalog.length})
-                  </h4>
-                  <ul className="flex flex-col gap-1.5">
+                {isShown("catalog") && catalog.length > 0 ? (
+                  <FeatureGroup count={catalog.length} kind="catalog" title="From the catalog">
                     {catalog.map((feature) => (
                       <li
                         key={feature.name}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-black/[0.08] px-3 py-2 text-[12px]"
+                        className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-[13px] text-[#1D1D1F]"
                       >
-                        <span className="font-medium text-[#1D1D1F]">{feature.name}</span>
-                        <span className="flex shrink-0 items-center gap-2">
-                          <span className="text-[11px] text-[#86868B]">
-                            {plural(feature.customerCount, "customer")}
-                          </span>
-                          <Pill tone={`border ${featureOriginTone.catalog}`}>Catalog</Pill>
-                        </span>
+                        <span className="min-w-0 font-medium">{feature.name}</span>
+                        <CustomerCount count={feature.customerCount} />
                       </li>
                     ))}
-                  </ul>
-                </section>
-              ) : null}
-            </>
-          )}
+                  </FeatureGroup>
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>,

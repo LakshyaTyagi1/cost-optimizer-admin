@@ -115,6 +115,9 @@ function SelectionRow({ selection }: { selection: StackSelection }) {
                     className="flex flex-wrap items-center gap-1.5"
                   >
                     <span className="font-medium text-[#B26B00]">{report.name}</span>
+                    {report.planName ? (
+                      <span className="text-[11px] text-[#86868B]">on {report.planName}</span>
+                    ) : null}
                     <StatusPill status={report.status} />
                   </li>
                 ))}

@@ -183,12 +183,12 @@ export function StackSelectionsSection() {
         <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2
+              <h1
                 id="stack-selections-heading"
-                className="text-[18px] leading-7 font-semibold text-[#171717]"
+                className="text-[26px] leading-[39px] font-semibold tracking-[0.22px] text-[#171717]"
               >
                 Technology stack
-              </h2>
+              </h1>
               <Pill tone="bg-[#F2F2F7] text-[#5F6368]">Read-only</Pill>
             </div>
             <p className="text-[13px] leading-[19.5px] text-[#86868B]">
@@ -207,7 +207,7 @@ export function StackSelectionsSection() {
                 {pluralize(summary.customers, "customer")}
                 <span className="text-[#C7C7CC]"> · </span>
                 <span className={summary.reportedFeatures > 0 ? "font-medium text-[#B26B00]" : ""}>
-                  {summary.reportedFeatures} reported missing
+                  {pluralize(summary.reportedFeatures, "report")}
                 </span>
               </p>
             ) : null}
