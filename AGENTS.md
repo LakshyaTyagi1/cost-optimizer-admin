@@ -123,4 +123,5 @@ npm run build
 - Do not edit `.env*`, generated `.next/` or `out/` content, `next-env.d.ts`, `*.tsbuildinfo`, or `package-lock.json` unless the task specifically requires it.
 - Do not silently substitute live API data with mocks, seed arrays, or hard-coded production values.
 - Keep compatibility re-exports until all imports are deliberately migrated and verified.
+- When you add or change an admin screen, an endpoint it calls, or a route's capability status, update the Routes section here and `docs/optimizer-docs/guides/system-architecture-walkthrough-and-handover.md` in the `cost-optimization-platform` repo in the same change. Skip doc edits for refactors, styling and wording no document quotes.
 - Confirm `git status --short` at handoff and report changed files, checks run, manual verification, and any pre-existing or environment-blocked checks.
