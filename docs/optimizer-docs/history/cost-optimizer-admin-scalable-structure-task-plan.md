@@ -1,5 +1,10 @@
 # Cost Optimizer Admin Scalable Structure Task Plan
 
+Status: historical
+Last verified: 2026-07-09
+
+The phased refactor plan, kept for context. The code and `AGENTS.md` are authoritative where they differ.
+
 ## Purpose
 
 This document defines the safe, phased refactor plan for the `cost-optimizer-admin` Next.js App Router application.
